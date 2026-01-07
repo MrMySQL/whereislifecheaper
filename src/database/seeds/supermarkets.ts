@@ -49,9 +49,9 @@ export const supermarketsData: SupermarketSeedData[] = [
   {
     country_code: 'ME',
     name: 'Voli',
-    website_url: 'https://www.voli.me',
+    website_url: 'https://voli.me',
     scraper_class: 'VoliScraper',
-    is_active: false,
+    is_active: true,
   },
   {
     country_code: 'ME',

@@ -1,32 +1,61 @@
-import { migrosConfig } from '../src/config/scrapers';
+import { migrosConfig, voliConfig } from '../src/config/scrapers';
 import { MigrosScraper } from '../src/scrapers/turkey/MigrosScraper';
+import { VoliScraper } from '../src/scrapers/montenegro/VoliScraper';
 import { ScraperConfig } from '../src/types/scraper.types';
+import { BaseScraper } from '../src/scrapers/base/BaseScraper';
 import { logger } from '../src/utils/logger';
 
 /**
  * Test script for running scrapers manually
- * Usage: npm run scraper:test
+ * Usage: npx ts-node scripts/test-scraper.ts [MigrosScraper|VoliScraper]
  */
 
-async function testMigrosScraper() {
-  logger.info('='.repeat(60));
-  logger.info('Starting Migros Scraper Test');
-  logger.info('='.repeat(60));
+const scraperArg = process.argv[2] || 'MigrosScraper';
 
-  // Create config
-  const config: ScraperConfig = {
-    supermarketId: 1,
-    name: 'Migros',
-    baseUrl: migrosConfig.baseUrl!,
-    categoryUrls: [migrosConfig.categoryUrls![0]], // Test with just first category
-    selectors: migrosConfig.selectors!,
-    waitTimes: migrosConfig.waitTimes!,
-    maxRetries: migrosConfig.maxRetries!,
-    concurrentPages: migrosConfig.concurrentPages!,
-    userAgents: migrosConfig.userAgents,
-  };
+interface ScraperSetup {
+  config: ScraperConfig;
+  scraper: BaseScraper;
+}
 
-  const scraper = new MigrosScraper(config);
+function getScraperSetup(scraperName: string): ScraperSetup {
+  switch (scraperName) {
+    case 'VoliScraper':
+      const voliCfg: ScraperConfig = {
+        supermarketId: 'test-voli-id',
+        name: 'Voli',
+        baseUrl: voliConfig.baseUrl!,
+        categoryUrls: voliConfig.categoryUrls || [],
+        selectors: voliConfig.selectors!,
+        waitTimes: voliConfig.waitTimes!,
+        maxRetries: voliConfig.maxRetries!,
+        concurrentPages: voliConfig.concurrentPages!,
+        userAgents: voliConfig.userAgents,
+      };
+      return { config: voliCfg, scraper: new VoliScraper(voliCfg) };
+
+    case 'MigrosScraper':
+    default:
+      const migrosCfg: ScraperConfig = {
+        supermarketId: 'test-migros-id',
+        name: 'Migros',
+        baseUrl: migrosConfig.baseUrl!,
+        categoryUrls: [migrosConfig.categoryUrls![0]], // Test with just first category
+        selectors: migrosConfig.selectors!,
+        waitTimes: migrosConfig.waitTimes!,
+        maxRetries: migrosConfig.maxRetries!,
+        concurrentPages: migrosConfig.concurrentPages!,
+        userAgents: migrosConfig.userAgents,
+      };
+      return { config: migrosCfg, scraper: new MigrosScraper(migrosCfg) };
+  }
+}
+
+async function testScraper() {
+  const { config, scraper } = getScraperSetup(scraperArg);
+
+  logger.info('='.repeat(60));
+  logger.info(`Starting ${config.name} Scraper Test`);
+  logger.info('='.repeat(60));
 
   try {
     // Initialize scraper
@@ -42,10 +71,10 @@ async function testMigrosScraper() {
     logger.info(`Total products found: ${products.length}`);
     logger.info('='.repeat(60));
 
-    // Display first 5 products as sample
+    // Display first 10 products as sample
     if (products.length > 0) {
-      logger.info('\nSample Products (first 5):');
-      products.slice(0, 5).forEach((product, index) => {
+      logger.info('\nSample Products (first 10):');
+      products.slice(0, 10).forEach((product, index) => {
         logger.info(`\n${index + 1}. ${product.name}`);
         logger.info(`   Price: ${product.price} ${product.currency}`);
         if (product.originalPrice) {
@@ -80,7 +109,7 @@ async function testMigrosScraper() {
 }
 
 // Run the test
-testMigrosScraper()
+testScraper()
   .then(() => {
     logger.info('\nTest completed successfully!');
     process.exit(0);

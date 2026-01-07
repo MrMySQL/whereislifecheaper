@@ -9,7 +9,7 @@ import { MigrosScraper } from '../turkey/MigrosScraper';
 // import { A101Scraper } from '../turkey/A101Scraper';
 
 // Montenegro
-// import { VoliScraper } from '../montenegro/VoliScraper';
+import { VoliScraper } from '../montenegro/VoliScraper';
 
 // Spain
 // import { MercadonaScraper } from '../spain/MercadonaScraper';
@@ -115,8 +115,8 @@ export class ScraperFactory {
 
 // Register scrapers here as they're implemented
 ScraperFactory.register('MigrosScraper', MigrosScraper);
+ScraperFactory.register('VoliScraper', VoliScraper);
 // ScraperFactory.register('A101Scraper', A101Scraper);
-// ScraperFactory.register('VoliScraper', VoliScraper);
 // ScraperFactory.register('MercadonaScraper', MercadonaScraper);
 // ScraperFactory.register('KorzinkaScraper', KorzinkaScraper);
 

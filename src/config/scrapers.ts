@@ -10,12 +10,12 @@ export const migrosConfig: Partial<ScraperConfig> = {
   baseUrl: 'https://www.migros.com.tr',
   categoryUrls: [
     '/meyve-sebze-c-2',
-    // '/et-tavuk-balik-c-3',
-    // '/sut-kahvaltilik-c-4',
-    // '/temel-gida-c-5',
-    // '/icecek-c-6',
-    // '/atistirmalik-c-7',
-    // '/donuk-gida-c-8',
+    '/et-tavuk-balik-c-3',
+    '/sut-kahvaltilik-c-4',
+    '/temel-gida-c-5',
+    '/icecek-c-6',
+    '/atistirmalik-c-7',
+    '/donuk-gida-c-8',
   ],
   selectors: {
     productCard: 'mat-card',
@@ -69,26 +69,37 @@ export const a101Config: Partial<ScraperConfig> = {
 
 export const voliConfig: Partial<ScraperConfig> = {
   name: 'Voli',
-  baseUrl: 'https://www.voli.me',
+  baseUrl: 'https://voli.me',
   categoryUrls: [
-    '/voce-i-povrce',
-    '/meso-i-riba',
-    '/mljecni-proizvodi',
+    // Fresh fruits and vegetables subcategories
+    '/kategorije/146',  // Voće (Fruits)
+    '/kategorije/147',  // Povrće (Vegetables)
+    '/kategorije/148',  // Organsko voće i povrće
+    '/kategorije/149',  // Pečurke
+    '/kategorije/152',  // Zimnica
+    // Dairy
+    '/kategorije/5',    // Mliječni proizvodi
+    // Meat
+    '/kategorije/6',    // Meso
   ],
   selectors: {
-    productCard: '.product',
-    productName: '.product-name',
-    productPrice: '.product-price',
-    productImage: '.product-img img',
-    productUrl: 'a',
+    productCard: 'a[href*="/proizvod/"]',
+    productName: 'img',  // Use alt attribute for name
+    productPrice: '.price',
+    productImage: 'img',
+    productUrl: 'a[href*="/proizvod/"]',
   },
   waitTimes: {
     pageLoad: 5000,
-    dynamicContent: 2000,
-    betweenRequests: 1500,
+    dynamicContent: 3000,
+    betweenRequests: 2000,
   },
   maxRetries: 3,
-  concurrentPages: 2,
+  concurrentPages: 1,
+  userAgents: [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  ],
 };
 
 export const mercadonaConfig: Partial<ScraperConfig> = {

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Where Is Life Cheaper? - Grocery Price Comparison</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Where Is Life Cheaper?</h1>
+    <p class="subtitle">Compare grocery prices across countries</p>
+  </header>
+
+  <main>
+    <!-- Country Stats Section -->
+    <section id="country-stats" class="section">
+      <h2>Country Overview</h2>
+      <div id="country-cards" class="country-cards">
+        <p class="loading">Loading country data...</p>
+      </div>
+    </section>
+
+    <!-- Product Comparison Section -->
+    <section id="product-comparison" class="section">
+      <h2>Product Price Comparison</h2>
+
+      <div class="controls">
+        <input type="text" id="search-input" placeholder="Search products..." />
+        <select id="category-filter">
+          <option value="">All Categories</option>
+        </select>
+        <button id="refresh-btn" class="btn">Refresh Data</button>
+      </div>
+
+      <div id="comparison-table-container">
+        <table id="comparison-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Unit</th>
+              <th id="country1-header">Turkey (TRY)</th>
+              <th id="country2-header">Montenegro (EUR)</th>
+              <th>Difference</th>
+            </tr>
+          </thead>
+          <tbody id="comparison-tbody">
+            <tr>
+              <td colspan="5" class="loading">Loading price data...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Exchange Rate Info -->
+    <section id="exchange-info" class="section">
+      <h2>Currency Information</h2>
+      <div id="exchange-rates" class="exchange-rates">
+        <div class="exchange-rate">
+          <span class="currency">TRY</span>
+          <span class="rate" id="try-rate">Loading...</span>
+          <span class="label">Turkish Lira per EUR</span>
+        </div>
+      </div>
+      <p class="note">Note: Prices are shown in local currencies. Use the exchange rate to compare.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Data scraped from: Migros (Turkey), Voli (Montenegro)</p>
+    <p>Last updated: <span id="last-updated">Never</span></p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

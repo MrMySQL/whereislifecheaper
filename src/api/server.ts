@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import { config } from '../config/env';
 import { scraperLogger } from '../utils/logger';
 import { checkConnection, closePool } from '../config/database';
@@ -15,9 +16,14 @@ import scraperRouter from './routes/scraper';
 const app = express();
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable for development
+}));
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, '../../public')));
 
 // Request logging
 app.use((req, res, next) => {
@@ -54,12 +60,22 @@ app.use('/api/products', productsRouter);
 app.use('/api/prices', pricesRouter);
 app.use('/api/scraper', scraperRouter);
 
-// 404 handler
-app.use((req, res) => {
+// Serve frontend for non-API routes
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(__dirname, '../../public/index.html'));
+});
+
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
   res.status(404).json({
     error: 'Not Found',
-    message: `Route ${req.method} ${req.path} not found`,
+    message: `API route ${req.method} ${req.path} not found`,
   });
+});
+
+// Fallback to frontend for other routes
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(__dirname, '../../public/index.html'));
 });
 
 // Error handler
@@ -83,15 +99,18 @@ async function startServer() {
     }
 
     app.listen(PORT, () => {
-      console.log(`\n🚀 API server running on http://localhost:${PORT}`);
-      console.log(`   Health check: http://localhost:${PORT}/health`);
-      console.log(`   API endpoints:`);
-      console.log(`   - GET /api/countries`);
-      console.log(`   - GET /api/supermarkets`);
-      console.log(`   - GET /api/products`);
-      console.log(`   - GET /api/prices`);
+      console.log(`\n🚀 Server running on http://localhost:${PORT}`);
+      console.log(`\n📊 Dashboard: http://localhost:${PORT}/`);
+      console.log(`\n🔌 API Endpoints:`);
+      console.log(`   - GET  /api/countries`);
+      console.log(`   - GET  /api/supermarkets`);
+      console.log(`   - GET  /api/products`);
+      console.log(`   - GET  /api/prices/latest`);
+      console.log(`   - GET  /api/prices/stats`);
+      console.log(`   - GET  /api/prices/basket?products=...`);
       console.log(`   - POST /api/scraper/trigger`);
-      scraperLogger.info(`API server started on port ${PORT}`);
+      console.log(`\n❤️  Health check: http://localhost:${PORT}/health`);
+      scraperLogger.info(`Server started on port ${PORT}`);
     });
 
     // Handle graceful shutdown
