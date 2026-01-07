@@ -1,0 +1,48 @@
+{
+  "name": "whereislifecheaper",
+  "version": "1.0.0",
+  "description": "Compare grocery basket prices across countries by scraping supermarket websites",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "start": "node dist/index.ts",
+    "migrate": "ts-node scripts/migrate.ts",
+    "seed": "ts-node scripts/seed.ts",
+    "scraper:test": "ts-node scripts/test-scraper.ts",
+    "api": "ts-node src/api/server.ts",
+    "cron": "ts-node src/scheduler/index.ts"
+  },
+  "keywords": [
+    "price-comparison",
+    "web-scraping",
+    "grocery",
+    "cost-of-living"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "playwright": "^1.40.0",
+    "pg": "^8.11.3",
+    "node-cron": "^3.0.3",
+    "winston": "^3.11.0",
+    "dotenv": "^16.3.1",
+    "joi": "^17.11.0",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "@types/express": "^4.17.21",
+    "@types/pg": "^8.10.9",
+    "@types/node-cron": "^3.0.11",
+    "@types/cors": "^2.8.17",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "@types/jest": "^29.5.11",
+    "@types/supertest": "^6.0.2"
+  }
+}

@@ -1,0 +1,113 @@
+import { BaseScraper } from './BaseScraper';
+import { ScraperConfig } from '../../types/scraper.types';
+import { scraperLogger } from '../../utils/logger';
+
+// Import scrapers as they're created
+// Turkey
+import { MigrosScraper } from '../turkey/MigrosScraper';
+// import { A101Scraper } from '../turkey/A101Scraper';
+
+// Montenegro
+// import { VoliScraper } from '../montenegro/VoliScraper';
+
+// Spain
+// import { MercadonaScraper } from '../spain/MercadonaScraper';
+
+// Uzbekistan
+// import { KorzinkaScraper } from '../uzbekistan/KorzinkaScraper';
+
+/**
+ * Factory class for creating scraper instances
+ */
+export class ScraperFactory {
+  private static scraperMap: Map<string, new (config: ScraperConfig) => BaseScraper> = new Map();
+
+  /**
+   * Register a scraper class
+   */
+  static register(className: string, scraperClass: new (config: ScraperConfig) => BaseScraper): void {
+    ScraperFactory.scraperMap.set(className, scraperClass);
+    scraperLogger.info(`Registered scraper: ${className}`);
+  }
+
+  /**
+   * Create a scraper instance based on configuration
+   */
+  static create(config: ScraperConfig): BaseScraper {
+    const ScraperClass = ScraperFactory.scraperMap.get(config.name);
+
+    if (!ScraperClass) {
+      const error = `Scraper not found for: ${config.name}. Available scrapers: ${Array.from(ScraperFactory.scraperMap.keys()).join(', ')}`;
+      scraperLogger.error(error);
+      throw new Error(error);
+    }
+
+    scraperLogger.info(`Creating scraper instance for: ${config.name}`);
+    return new ScraperClass(config);
+  }
+
+  /**
+   * Create a scraper from database supermarket record
+   */
+  static createFromSupermarket(supermarket: {
+    id: number;
+    name: string;
+    website_url: string;
+    scraper_class: string;
+    scraper_config: any;
+  }): BaseScraper {
+    // Get the scraper class from the map
+    const ScraperClass = ScraperFactory.scraperMap.get(supermarket.scraper_class);
+
+    if (!ScraperClass) {
+      const error = `Scraper class not found: ${supermarket.scraper_class} for ${supermarket.name}`;
+      scraperLogger.error(error);
+      throw new Error(error);
+    }
+
+    // Merge database config with defaults
+    const config: ScraperConfig = {
+      supermarketId: supermarket.id,
+      name: supermarket.name,
+      baseUrl: supermarket.website_url,
+      categoryUrls: supermarket.scraper_config?.categoryUrls || [],
+      selectors: supermarket.scraper_config?.selectors || {},
+      waitTimes: supermarket.scraper_config?.waitTimes || {
+        pageLoad: 5000,
+        dynamicContent: 2000,
+        betweenRequests: 1000,
+      },
+      headers: supermarket.scraper_config?.headers,
+      cookies: supermarket.scraper_config?.cookies,
+      maxRetries: supermarket.scraper_config?.maxRetries || 3,
+      concurrentPages: supermarket.scraper_config?.concurrentPages || 2,
+      userAgents: supermarket.scraper_config?.userAgents,
+    };
+
+    scraperLogger.info(`Creating scraper for supermarket: ${supermarket.name}`);
+    return new ScraperClass(config);
+  }
+
+  /**
+   * Get list of registered scrapers
+   */
+  static getRegisteredScrapers(): string[] {
+    return Array.from(ScraperFactory.scraperMap.keys());
+  }
+
+  /**
+   * Check if a scraper is registered
+   */
+  static isRegistered(className: string): boolean {
+    return ScraperFactory.scraperMap.has(className);
+  }
+}
+
+// Register scrapers here as they're implemented
+ScraperFactory.register('MigrosScraper', MigrosScraper);
+// ScraperFactory.register('A101Scraper', A101Scraper);
+// ScraperFactory.register('VoliScraper', VoliScraper);
+// ScraperFactory.register('MercadonaScraper', MercadonaScraper);
+// ScraperFactory.register('KorzinkaScraper', KorzinkaScraper);
+
+export default ScraperFactory;
