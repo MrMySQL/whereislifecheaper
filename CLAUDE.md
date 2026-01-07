@@ -2,7 +2,7 @@
 
 ## WHY: Project Purpose
 
-This is a multi-country grocery price comparison system that scrapes supermarket websites daily to help users compare the cost of living across Turkey, Montenegro, Spain, and Uzbekistan. The system tracks prices over time, matches products across countries, and provides a web API for price comparisons.
+This is a multi-country grocery price comparison system that scrapes supermarket websites daily to help users compare the cost of living across countries, started from Turkey, Montenegro, Spain, and Uzbekistan and more to come. The system tracks prices over time, matches products across countries, and provides a web API for price comparisons.
 
 ## WHAT: Architecture & Stack
 
@@ -151,3 +151,6 @@ To verify the system works end-to-end:
 3. Test scraper: `npm run scraper:test`
 4. Check logs in `logs/` directory
 5. Query database to verify price data was saved
+
+## Miscellaneous rules
+- git commit often, after some reasonable amount of work
