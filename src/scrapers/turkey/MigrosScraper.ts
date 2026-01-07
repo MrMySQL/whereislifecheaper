@@ -74,8 +74,7 @@ export class MigrosScraper extends BaseScraper {
     let currentPage = 1;
     let hasNextPage = true;
 
-    while (hasNextPage && currentPage <= 5) {
-      // Limit to 5 pages per category for now
+    while (hasNextPage) {
       try {
         const pageUrl = currentPage === 1 ? url : `${url}?sayfa=${currentPage}`;
         await this.navigateToUrl(pageUrl);
