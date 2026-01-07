@@ -1,6 +1,7 @@
 import { BaseScraper } from './BaseScraper';
 import { ScraperConfig } from '../../types/scraper.types';
 import { scraperLogger } from '../../utils/logger';
+import { getScraperConfig } from '../../config/scrapers';
 
 // Import scrapers as they're created
 // Turkey
@@ -50,7 +51,7 @@ export class ScraperFactory {
    * Create a scraper from database supermarket record
    */
   static createFromSupermarket(supermarket: {
-    id: number;
+    id: string;
     name: string;
     website_url: string;
     scraper_class: string;
@@ -65,23 +66,32 @@ export class ScraperFactory {
       throw new Error(error);
     }
 
-    // Merge database config with defaults
+    // Get default config from file
+    const defaultConfig = getScraperConfig(supermarket.scraper_class) || {};
+    const dbConfig = supermarket.scraper_config || {};
+
+    // Merge database config with defaults (database overrides defaults)
     const config: ScraperConfig = {
       supermarketId: supermarket.id,
       name: supermarket.name,
-      baseUrl: supermarket.website_url,
-      categoryUrls: supermarket.scraper_config?.categoryUrls || [],
-      selectors: supermarket.scraper_config?.selectors || {},
-      waitTimes: supermarket.scraper_config?.waitTimes || {
+      baseUrl: supermarket.website_url || defaultConfig.baseUrl || '',
+      categoryUrls: dbConfig.categoryUrls || defaultConfig.categoryUrls || [],
+      selectors: {
+        ...defaultConfig.selectors,
+        ...dbConfig.selectors,
+      } as ScraperConfig['selectors'],
+      waitTimes: {
         pageLoad: 5000,
         dynamicContent: 2000,
         betweenRequests: 1000,
+        ...defaultConfig.waitTimes,
+        ...dbConfig.waitTimes,
       },
-      headers: supermarket.scraper_config?.headers,
-      cookies: supermarket.scraper_config?.cookies,
-      maxRetries: supermarket.scraper_config?.maxRetries || 3,
-      concurrentPages: supermarket.scraper_config?.concurrentPages || 2,
-      userAgents: supermarket.scraper_config?.userAgents,
+      headers: dbConfig.headers || defaultConfig.headers,
+      cookies: dbConfig.cookies || defaultConfig.cookies,
+      maxRetries: dbConfig.maxRetries || defaultConfig.maxRetries || 3,
+      concurrentPages: dbConfig.concurrentPages || defaultConfig.concurrentPages || 2,
+      userAgents: dbConfig.userAgents || defaultConfig.userAgents,
     };
 
     scraperLogger.info(`Creating scraper for supermarket: ${supermarket.name}`);

@@ -10,12 +10,12 @@ export const migrosConfig: Partial<ScraperConfig> = {
   baseUrl: 'https://www.migros.com.tr',
   categoryUrls: [
     '/meyve-sebze-c-2',
-    '/et-tavuk-balik-c-3',
-    '/sut-kahvaltilik-c-4',
-    '/temel-gida-c-5',
-    '/icecek-c-6',
-    '/atistirmalik-c-7',
-    '/donuk-gida-c-8',
+    // '/et-tavuk-balik-c-3',
+    // '/sut-kahvaltilik-c-4',
+    // '/temel-gida-c-5',
+    // '/icecek-c-6',
+    // '/atistirmalik-c-7',
+    // '/donuk-gida-c-8',
   ],
   selectors: {
     productCard: 'mat-card',

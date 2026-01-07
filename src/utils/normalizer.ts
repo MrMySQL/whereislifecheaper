@@ -130,22 +130,24 @@ export function extractBrand(name: string): BrandAndProduct {
 /**
  * Calculate price per unit (per kg or per liter)
  * @param price - Product price
- * @param quantity - Quantity information
- * @returns Price per standard unit or null
+ * @param unitQuantity - Unit quantity value
+ * @param unit - Unit type (kg, g, l, ml, etc.)
+ * @returns Price per standard unit or undefined
  */
 export function calculatePricePerUnit(
   price: number,
-  quantity: QuantityInfo | null
-): number | null {
-  if (!quantity || quantity.value === 0) return null;
+  unitQuantity?: number,
+  unit?: string
+): number | undefined {
+  if (!unitQuantity || !unit || unitQuantity === 0) return undefined;
 
-  let standardQuantity = quantity.value;
+  let standardQuantity = unitQuantity;
 
   // Convert to standard units (kg or l)
-  if (quantity.unit === 'g') {
-    standardQuantity = quantity.value / 1000; // Convert to kg
-  } else if (quantity.unit === 'ml') {
-    standardQuantity = quantity.value / 1000; // Convert to l
+  if (unit === 'g') {
+    standardQuantity = unitQuantity / 1000; // Convert to kg
+  } else if (unit === 'ml') {
+    standardQuantity = unitQuantity / 1000; // Convert to l
   }
 
   return price / standardQuantity;
@@ -153,16 +155,17 @@ export function calculatePricePerUnit(
 
 /**
  * Clean price string and convert to number
- * Handles various formats: "$1.99", "1,99 €", "1.999,99", etc.
+ * Handles various formats: "$1.99", "1,99 €", "1.999,99", "18,95 TL", etc.
  * @param priceString - Price as string
  * @returns Price as number or null
  */
 export function parsePrice(priceString: string): number | null {
   if (!priceString) return null;
 
-  // Remove currency symbols and extra spaces
+  // Remove currency symbols, currency codes, and extra spaces
   let cleaned = priceString
-    .replace(/[€$£¥₺₽]/g, '')
+    .replace(/[€$£¥₺₽]/g, '')           // Currency symbols
+    .replace(/\b(TL|TRY|EUR|USD|GBP|RUB|UZS)\b/gi, '')  // Currency codes
     .replace(/\s/g, '')
     .trim();
 
@@ -172,7 +175,7 @@ export function parsePrice(priceString: string): number | null {
     cleaned = cleaned.replace(/\./g, '').replace(',', '.');
   } else if (cleaned.includes(',')) {
     // Only comma, could be decimal or thousands separator
-    // If comma is followed by 2 digits, it's likely decimal
+    // If comma is followed by 2 digits at the end, it's likely decimal
     if (/,\d{2}$/.test(cleaned)) {
       cleaned = cleaned.replace(',', '.');
     } else {

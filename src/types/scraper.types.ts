@@ -3,7 +3,7 @@
  */
 
 export interface ScraperConfig {
-  supermarketId: number;
+  supermarketId: string;
   name: string;
   baseUrl: string;
   categoryUrls: string[];
@@ -60,7 +60,7 @@ export interface ScrapedProduct extends ProductData {
 }
 
 export interface ScrapeResult {
-  supermarketId: number;
+  supermarketId: string;
   products: ScrapedProduct[];
   scrapedAt: Date;
   duration: number;

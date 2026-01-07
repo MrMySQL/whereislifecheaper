@@ -10,6 +10,7 @@
     "migrate": "ts-node scripts/migrate.ts",
     "seed": "ts-node scripts/seed.ts",
     "scraper:test": "ts-node scripts/test-scraper.ts",
+    "scraper:run": "ts-node scripts/run-scraper.ts",
     "api": "ts-node src/api/server.ts",
     "cron": "ts-node src/scheduler/index.ts"
   },

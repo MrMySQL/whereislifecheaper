@@ -21,6 +21,12 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 
+# Compiled scripts (ts-node runs them directly)
+scripts/*.js
+scripts/*.js.map
+scripts/*.d.ts
+scripts/*.d.ts.map
+
 # OS files
 .DS_Store
 Thumbs.db
