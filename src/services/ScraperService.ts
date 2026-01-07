@@ -3,7 +3,7 @@ import { ScraperFactory, CreateScraperOptions } from '../scrapers/base/ScraperFa
 import { ProductService } from './ProductService';
 import { query } from '../config/database';
 import { scraperLogger } from '../utils/logger';
-import { ProductData, ScrapeResult, CategoryConfig } from '../types/scraper.types';
+import { ProductData, ScrapeResult, CategoryConfig, PageInfo } from '../types/scraper.types';
 import { calculatePricePerUnit } from '../utils/normalizer';
 import { getScraperCategories } from '../config/scrapers';
 
@@ -34,6 +34,7 @@ export class ScraperService {
     let scraper: BaseScraper | null = null;
     let scrapeLogId: string | null = null;
     const startTime = Date.now();
+    let totalStoredCount = 0;
 
     try {
       // Get supermarket configuration from database
@@ -57,26 +58,30 @@ export class ScraperService {
       };
       scraper = ScraperFactory.createFromSupermarket(supermarket, scraperOptions);
 
+      // Set up callback to save products after each page
+      scraper.setOnPageScrapedCallback(async (products: ProductData[], pageInfo: PageInfo): Promise<number> => {
+        const savedCount = await this.storeProducts(products, supermarketId);
+        totalStoredCount += savedCount;
+        scraperLogger.debug(
+          `Page callback: saved ${savedCount}/${products.length} products from ${pageInfo.categoryName} page ${pageInfo.pageNumber}`
+        );
+        return savedCount;
+      });
+
       // Initialize scraper
       await scraper.initialize();
 
-      // Scrape products
+      // Scrape products (products are saved incrementally via callback)
       const products = await scraper.scrapeProductList();
 
       scraperLogger.info(
-        `Scraped ${products.length} products from ${supermarket.name}`
-      );
-
-      // Store products and prices in database
-      const storedCount = await this.storeProducts(
-        products,
-        supermarketId
+        `Scraped ${products.length} products from ${supermarket.name}, stored ${totalStoredCount}`
       );
 
       // Update scrape log with success
       if (scrapeLogId) {
         await this.updateScrapeLog(scrapeLogId, 'success', {
-          productsScraped: storedCount,
+          productsScraped: totalStoredCount,
           duration: Date.now() - startTime,
         });
       }
@@ -95,13 +100,13 @@ export class ScraperService {
         })),
         scrapedAt: new Date(),
         duration: Date.now() - startTime,
-        productsScraped: storedCount,
-        productsFailed: products.length - storedCount,
+        productsScraped: totalStoredCount,
+        productsFailed: products.length - totalStoredCount,
         errors: [],
       };
 
       scraperLogger.info(
-        `Scraping completed for ${supermarket.name}: ${storedCount} products stored`
+        `Scraping completed for ${supermarket.name}: ${totalStoredCount} products stored`
       );
 
       return result;

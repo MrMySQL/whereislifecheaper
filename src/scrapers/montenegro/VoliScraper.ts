@@ -36,7 +36,11 @@ export class VoliScraper extends BaseScraper {
         const fullUrl = `${this.config.baseUrl}${category.url}`;
         scraperLogger.info(`Scraping category: ${category.name} (${category.id})`);
 
-        const categoryProducts = await this.scrapeCategoryPage(fullUrl);
+        const categoryProducts = await this.scrapeCategoryPage(
+          fullUrl,
+          category.id,
+          category.name
+        );
         allProducts.push(...categoryProducts);
 
         scraperLogger.info(
@@ -61,8 +65,13 @@ export class VoliScraper extends BaseScraper {
   /**
    * Scrape a single category page
    * Voli doesn't use traditional pagination - products are loaded all at once
+   * Saves products via callback after page is scraped
    */
-  private async scrapeCategoryPage(url: string): Promise<ProductData[]> {
+  private async scrapeCategoryPage(
+    url: string,
+    categoryId: string,
+    categoryName: string
+  ): Promise<ProductData[]> {
     const products: ProductData[] = [];
 
     try {
@@ -77,9 +86,23 @@ export class VoliScraper extends BaseScraper {
 
       // Get products from current page
       const pageProducts = await this.extractProductsFromPage();
-      products.push(...pageProducts);
 
       scraperLogger.debug(`Found ${pageProducts.length} products`);
+
+      // Save products via callback (Voli loads all products at once, so pageNumber is always 1)
+      if (this.onPageScraped && pageProducts.length > 0) {
+        const savedCount = await this.onPageScraped(pageProducts, {
+          categoryId,
+          categoryName,
+          pageNumber: 1,
+          totalProductsOnPage: pageProducts.length,
+        });
+        scraperLogger.info(
+          `${categoryName}: Saved ${savedCount}/${pageProducts.length} products`
+        );
+      }
+
+      products.push(...pageProducts);
     } catch (error) {
       this.logError(
         `Failed to scrape category ${url}`,

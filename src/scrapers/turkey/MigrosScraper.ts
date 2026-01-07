@@ -35,7 +35,11 @@ export class MigrosScraper extends BaseScraper {
         const fullUrl = `${this.config.baseUrl}${category.url}`;
         scraperLogger.info(`Scraping category: ${category.name} (${category.id})`);
 
-        const categoryProducts = await this.scrapeCategoryPage(fullUrl, category.name);
+        const categoryProducts = await this.scrapeCategoryPage(
+          fullUrl,
+          category.id,
+          category.name
+        );
         allProducts.push(...categoryProducts);
 
         scraperLogger.info(
@@ -59,8 +63,13 @@ export class MigrosScraper extends BaseScraper {
 
   /**
    * Scrape a single category page with pagination
+   * Saves products after each page via callback
    */
-  private async scrapeCategoryPage(url: string, _categoryName?: string): Promise<ProductData[]> {
+  private async scrapeCategoryPage(
+    url: string,
+    categoryId: string,
+    categoryName: string
+  ): Promise<ProductData[]> {
     const products: ProductData[] = [];
     let currentPage = 1;
     let hasNextPage = true;
@@ -68,7 +77,7 @@ export class MigrosScraper extends BaseScraper {
     while (hasNextPage && currentPage <= 5) {
       // Limit to 5 pages per category for now
       try {
-        const pageUrl = currentPage === 1 ? url : `${url}?page=${currentPage}`;
+        const pageUrl = currentPage === 1 ? url : `${url}?sayfa=${currentPage}`;
         await this.navigateToUrl(pageUrl);
         await this.waitForDynamicContent();
 
@@ -77,11 +86,25 @@ export class MigrosScraper extends BaseScraper {
 
         // Get products from current page
         const pageProducts = await this.extractProductsFromPage();
-        products.push(...pageProducts);
 
         scraperLogger.debug(
           `Page ${currentPage}: Found ${pageProducts.length} products`
         );
+
+        // Save products after each page via callback
+        if (this.onPageScraped && pageProducts.length > 0) {
+          const savedCount = await this.onPageScraped(pageProducts, {
+            categoryId,
+            categoryName,
+            pageNumber: currentPage,
+            totalProductsOnPage: pageProducts.length,
+          });
+          scraperLogger.info(
+            `Page ${currentPage} of ${categoryName}: Saved ${savedCount}/${pageProducts.length} products`
+          );
+        }
+
+        products.push(...pageProducts);
 
         // Check if there's a next page
         hasNextPage = await this.hasNextPage();

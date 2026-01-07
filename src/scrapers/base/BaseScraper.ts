@@ -7,6 +7,7 @@ import {
   ProductData,
   ScrapeResult,
   ScrapeError,
+  OnPageScrapedCallback,
 } from '../../types/scraper.types';
 import path from 'path';
 import fs from 'fs';
@@ -23,9 +24,18 @@ export abstract class BaseScraper {
   protected productsScraped: number = 0;
   protected productsFailed: number = 0;
   protected errors: ScrapeError[] = [];
+  protected onPageScraped?: OnPageScrapedCallback;
 
   constructor(config: ScraperConfig) {
     this.config = config;
+  }
+
+  /**
+   * Set callback to be called after each page is scraped
+   * This allows incremental saving of products
+   */
+  setOnPageScrapedCallback(callback: OnPageScrapedCallback): void {
+    this.onPageScraped = callback;
   }
 
   /**

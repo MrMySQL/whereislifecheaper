@@ -90,3 +90,16 @@ export enum ScrapeStatus {
   FAILED = 'failed',
   PARTIAL = 'partial',
 }
+
+/**
+ * Callback function called after each page is scraped
+ * Allows saving products incrementally instead of all at once
+ */
+export type OnPageScrapedCallback = (products: ProductData[], pageInfo: PageInfo) => Promise<number>;
+
+export interface PageInfo {
+  categoryId: string;
+  categoryName: string;
+  pageNumber: number;
+  totalProductsOnPage: number;
+}
