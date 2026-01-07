@@ -1,10 +1,15 @@
 import { BaseScraper } from '../scrapers/base/BaseScraper';
-import { ScraperFactory } from '../scrapers/base/ScraperFactory';
+import { ScraperFactory, CreateScraperOptions } from '../scrapers/base/ScraperFactory';
 import { ProductService } from './ProductService';
 import { query } from '../config/database';
 import { scraperLogger } from '../utils/logger';
-import { ProductData, ScrapeResult } from '../types/scraper.types';
+import { ProductData, ScrapeResult, CategoryConfig } from '../types/scraper.types';
 import { calculatePricePerUnit } from '../utils/normalizer';
+import { getScraperCategories } from '../config/scrapers';
+
+export interface RunScraperOptions {
+  categoryIds?: string[];  // Filter to specific category IDs
+}
 
 /**
  * Service for orchestrating scraping operations
@@ -20,8 +25,11 @@ export class ScraperService {
   /**
    * Run scraper for a specific supermarket
    */
-  async runScraper(supermarketId: string): Promise<ScrapeResult> {
-    scraperLogger.info(`Starting scraper for supermarket: ${supermarketId}`);
+  async runScraper(supermarketId: string, options?: RunScraperOptions): Promise<ScrapeResult> {
+    const categoryInfo = options?.categoryIds?.length
+      ? ` (categories: ${options.categoryIds.join(', ')})`
+      : '';
+    scraperLogger.info(`Starting scraper for supermarket: ${supermarketId}${categoryInfo}`);
 
     let scraper: BaseScraper | null = null;
     let scrapeLogId: string | null = null;
@@ -43,8 +51,11 @@ export class ScraperService {
       // Create scrape log entry
       scrapeLogId = await this.createScrapeLog(supermarketId, 'running');
 
-      // Create scraper instance
-      scraper = ScraperFactory.createFromSupermarket(supermarket);
+      // Create scraper instance with optional category filter
+      const scraperOptions: CreateScraperOptions = {
+        categoryIds: options?.categoryIds,
+      };
+      scraper = ScraperFactory.createFromSupermarket(supermarket, scraperOptions);
 
       // Initialize scraper
       await scraper.initialize();
@@ -361,5 +372,19 @@ export class ScraperService {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Get available categories for a supermarket
+   */
+  async getAvailableCategories(supermarketId: string): Promise<CategoryConfig[]> {
+    const supermarket = await this.getSupermarketConfig(supermarketId);
+
+    if (!supermarket) {
+      return [];
+    }
+
+    // Get categories from the scraper configuration
+    return getScraperCategories(supermarket.scraper_class);
   }
 }

@@ -7,7 +7,7 @@ const API_URL = '/api';
 
 // Exchange rate (hardcoded for now - TRY per EUR)
 // TODO: Fetch from an exchange rate API
-const EXCHANGE_RATE_TRY_EUR = 35.5;
+const EXCHANGE_RATE_TRY_EUR = 50.5;
 
 // Country flag emojis
 const FLAGS = {

@@ -7,14 +7,49 @@ const router = Router();
 const scraperService = new ScraperService();
 
 /**
+ * GET /api/scraper/categories/:supermarketId
+ * Get available categories for a supermarket
+ */
+router.get('/categories/:supermarketId', async (req, res, next) => {
+  try {
+    const { supermarketId } = req.params;
+
+    // Validate supermarket exists
+    const supermarket = await query(
+      'SELECT id, name, scraper_class FROM supermarkets WHERE id = $1',
+      [supermarketId]
+    );
+
+    if (supermarket.rows.length === 0) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Supermarket not found',
+      });
+      return;
+    }
+
+    const categories = await scraperService.getAvailableCategories(supermarketId);
+
+    res.json({
+      supermarket_id: supermarketId,
+      supermarket_name: supermarket.rows[0].name,
+      categories,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/scraper/trigger
  * Trigger a manual scrape
+ * Body: { supermarket_id: string, categories?: string[] }
  */
 router.post('/trigger', async (req, res, next) => {
   try {
-    const { supermarket_id } = req.body;
+    const { supermarket_id, categories } = req.body;
 
-    scraperLogger.info('Manual scrape triggered via API', { supermarket_id });
+    scraperLogger.info('Manual scrape triggered via API', { supermarket_id, categories });
 
     // Run scraper asynchronously
     if (supermarket_id) {
@@ -32,8 +67,26 @@ router.post('/trigger', async (req, res, next) => {
         return;
       }
 
+      // Validate categories if provided
+      let categoryIds: string[] | undefined;
+      if (categories && Array.isArray(categories) && categories.length > 0) {
+        const availableCategories = await scraperService.getAvailableCategories(supermarket_id);
+        const availableIds = availableCategories.map(c => c.id);
+
+        const invalidCategories = categories.filter(c => !availableIds.includes(c));
+        if (invalidCategories.length > 0) {
+          res.status(400).json({
+            error: 'Bad Request',
+            message: `Invalid category IDs: ${invalidCategories.join(', ')}`,
+            available_categories: availableCategories,
+          });
+          return;
+        }
+        categoryIds = categories;
+      }
+
       // Start scraper in background
-      scraperService.runScraper(supermarket_id).catch((err) => {
+      scraperService.runScraper(supermarket_id, { categoryIds }).catch((err) => {
         scraperLogger.error('Background scraper failed:', err);
       });
 
@@ -41,6 +94,7 @@ router.post('/trigger', async (req, res, next) => {
         message: 'Scraper triggered',
         supermarket_id,
         supermarket_name: supermarket.rows[0].name,
+        categories: categoryIds || 'all',
         status: 'running',
       });
     } else {

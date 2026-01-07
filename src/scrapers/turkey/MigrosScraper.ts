@@ -28,25 +28,25 @@ export class MigrosScraper extends BaseScraper {
   async scrapeProductList(): Promise<ProductData[]> {
     const allProducts: ProductData[] = [];
 
-    scraperLogger.info(`Starting to scrape Migros categories...`);
+    scraperLogger.info(`Starting to scrape Migros categories (${this.config.categories.length} categories)...`);
 
-    for (const categoryUrl of this.config.categoryUrls) {
+    for (const category of this.config.categories) {
       try {
-        const fullUrl = `${this.config.baseUrl}${categoryUrl}`;
-        scraperLogger.info(`Scraping category: ${categoryUrl}`);
+        const fullUrl = `${this.config.baseUrl}${category.url}`;
+        scraperLogger.info(`Scraping category: ${category.name} (${category.id})`);
 
-        const categoryProducts = await this.scrapeCategoryPage(fullUrl);
+        const categoryProducts = await this.scrapeCategoryPage(fullUrl, category.name);
         allProducts.push(...categoryProducts);
 
         scraperLogger.info(
-          `Scraped ${categoryProducts.length} products from ${categoryUrl}`
+          `Scraped ${categoryProducts.length} products from ${category.name}`
         );
 
         // Wait between categories
         await this.waitBetweenRequests();
       } catch (error) {
         this.logError(
-          `Failed to scrape category: ${categoryUrl}`,
+          `Failed to scrape category: ${category.name}`,
           undefined,
           error as Error
         );
@@ -60,7 +60,7 @@ export class MigrosScraper extends BaseScraper {
   /**
    * Scrape a single category page with pagination
    */
-  private async scrapeCategoryPage(url: string): Promise<ProductData[]> {
+  private async scrapeCategoryPage(url: string, _categoryName?: string): Promise<ProductData[]> {
     const products: ProductData[] = [];
     let currentPage = 1;
     let hasNextPage = true;

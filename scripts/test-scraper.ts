@@ -1,60 +1,141 @@
-import { migrosConfig, voliConfig } from '../src/config/scrapers';
+import {
+  migrosConfig,
+  voliConfig,
+  migrosCategories,
+  voliCategories,
+} from '../src/config/scrapers';
 import { MigrosScraper } from '../src/scrapers/turkey/MigrosScraper';
 import { VoliScraper } from '../src/scrapers/montenegro/VoliScraper';
-import { ScraperConfig } from '../src/types/scraper.types';
+import { ScraperConfig, CategoryConfig } from '../src/types/scraper.types';
 import { BaseScraper } from '../src/scrapers/base/BaseScraper';
 import { logger } from '../src/utils/logger';
 
 /**
  * Test script for running scrapers manually
- * Usage: npx ts-node scripts/test-scraper.ts [MigrosScraper|VoliScraper]
+ *
+ * Usage:
+ *   npx ts-node scripts/test-scraper.ts [ScraperName] [category1,category2,...]
+ *
+ * Examples:
+ *   npx ts-node scripts/test-scraper.ts MigrosScraper beverages
+ *   npx ts-node scripts/test-scraper.ts VoliScraper dairy,meat
+ *   npx ts-node scripts/test-scraper.ts MigrosScraper --list-categories
+ *   npx ts-node scripts/test-scraper.ts VoliScraper
  */
 
 const scraperArg = process.argv[2] || 'MigrosScraper';
+const categoryArg = process.argv[3];
 
 interface ScraperSetup {
   config: ScraperConfig;
   scraper: BaseScraper;
+  allCategories: CategoryConfig[];
 }
 
-function getScraperSetup(scraperName: string): ScraperSetup {
+function getAvailableCategories(scraperName: string): CategoryConfig[] {
   switch (scraperName) {
     case 'VoliScraper':
+      return voliCategories;
+    case 'MigrosScraper':
+    default:
+      return migrosCategories;
+  }
+}
+
+function getScraperSetup(scraperName: string, categoryIds?: string[]): ScraperSetup {
+  switch (scraperName) {
+    case 'VoliScraper': {
+      let categories = voliCategories;
+
+      // Filter categories if specified
+      if (categoryIds && categoryIds.length > 0) {
+        categories = categories.filter(c => categoryIds.includes(c.id));
+        if (categories.length === 0) {
+          logger.error(`No matching categories found. Available: ${voliCategories.map(c => c.id).join(', ')}`);
+          process.exit(1);
+        }
+      }
+
       const voliCfg: ScraperConfig = {
         supermarketId: 'test-voli-id',
         name: 'Voli',
         baseUrl: voliConfig.baseUrl!,
-        categoryUrls: voliConfig.categoryUrls || [],
+        categories,
         selectors: voliConfig.selectors!,
         waitTimes: voliConfig.waitTimes!,
         maxRetries: voliConfig.maxRetries!,
         concurrentPages: voliConfig.concurrentPages!,
         userAgents: voliConfig.userAgents,
       };
-      return { config: voliCfg, scraper: new VoliScraper(voliCfg) };
+      return { config: voliCfg, scraper: new VoliScraper(voliCfg), allCategories: voliCategories };
+    }
 
     case 'MigrosScraper':
-    default:
+    default: {
+      let categories = migrosCategories;
+
+      // Filter categories if specified
+      if (categoryIds && categoryIds.length > 0) {
+        categories = categories.filter(c => categoryIds.includes(c.id));
+        if (categories.length === 0) {
+          logger.error(`No matching categories found. Available: ${migrosCategories.map(c => c.id).join(', ')}`);
+          process.exit(1);
+        }
+      } else {
+        // Default to first category for testing if none specified
+        categories = [migrosCategories[0]];
+      }
+
       const migrosCfg: ScraperConfig = {
         supermarketId: 'test-migros-id',
         name: 'Migros',
         baseUrl: migrosConfig.baseUrl!,
-        categoryUrls: [migrosConfig.categoryUrls![0]], // Test with just first category
+        categories,
         selectors: migrosConfig.selectors!,
         waitTimes: migrosConfig.waitTimes!,
         maxRetries: migrosConfig.maxRetries!,
         concurrentPages: migrosConfig.concurrentPages!,
         userAgents: migrosConfig.userAgents,
       };
-      return { config: migrosCfg, scraper: new MigrosScraper(migrosCfg) };
+      return { config: migrosCfg, scraper: new MigrosScraper(migrosCfg), allCategories: migrosCategories };
+    }
   }
 }
 
+function listCategories(scraperName: string): void {
+  const categories = getAvailableCategories(scraperName);
+
+  console.log('\n' + '='.repeat(60));
+  console.log(`Available categories for ${scraperName}:`);
+  console.log('='.repeat(60));
+
+  categories.forEach(cat => {
+    console.log(`  ${cat.id.padEnd(20)} - ${cat.name}`);
+  });
+
+  console.log('\nUsage: npx ts-node scripts/test-scraper.ts ' + scraperName + ' <category-id>');
+  console.log('Example: npx ts-node scripts/test-scraper.ts ' + scraperName + ' ' + categories[0].id);
+  console.log('Multiple: npx ts-node scripts/test-scraper.ts ' + scraperName + ' ' + categories.slice(0, 2).map(c => c.id).join(','));
+  console.log('='.repeat(60) + '\n');
+}
+
 async function testScraper() {
-  const { config, scraper } = getScraperSetup(scraperArg);
+  // Handle --list-categories flag
+  if (categoryArg === '--list-categories' || categoryArg === '-l') {
+    listCategories(scraperArg);
+    process.exit(0);
+  }
+
+  // Parse category IDs from comma-separated string
+  const categoryIds = categoryArg ? categoryArg.split(',').map(c => c.trim()) : undefined;
+
+  const { config, scraper, allCategories } = getScraperSetup(scraperArg, categoryIds);
 
   logger.info('='.repeat(60));
   logger.info(`Starting ${config.name} Scraper Test`);
+  logger.info('='.repeat(60));
+  logger.info(`Categories to scrape: ${config.categories.map(c => c.name).join(', ')}`);
+  logger.info(`Available categories: ${allCategories.map(c => c.id).join(', ')}`);
   logger.info('='.repeat(60));
 
   try {

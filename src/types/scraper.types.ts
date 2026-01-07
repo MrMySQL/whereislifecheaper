@@ -2,11 +2,19 @@
  * Type definitions for scrapers
  */
 
+export interface CategoryConfig {
+  id: string;       // e.g., 'beverages', 'dairy', 'meat'
+  name: string;     // e.g., 'Beverages', 'Dairy Products', 'Meat & Fish'
+  url: string;      // e.g., '/icecek-c-6'
+}
+
 export interface ScraperConfig {
   supermarketId: string;
   name: string;
   baseUrl: string;
-  categoryUrls: string[];
+  categories: CategoryConfig[];
+  // Legacy support - will be converted to categories if present
+  categoryUrls?: string[];
   selectors: ScraperSelectors;
   waitTimes: WaitTimes;
   headers?: Record<string, string>;

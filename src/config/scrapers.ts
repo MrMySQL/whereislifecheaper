@@ -1,22 +1,24 @@
-import { ScraperConfig } from '../types/scraper.types';
+import { ScraperConfig, CategoryConfig } from '../types/scraper.types';
 
 /**
  * Default scraper configurations
  * These can be overridden by database configurations
  */
 
+export const migrosCategories: CategoryConfig[] = [
+  { id: 'fruits-vegetables', name: 'Fruits & Vegetables', url: '/meyve-sebze-c-2' },
+  { id: 'meat-fish', name: 'Meat, Chicken & Fish', url: '/et-tavuk-balik-c-3' },
+  { id: 'dairy', name: 'Dairy & Breakfast', url: '/sut-kahvaltilik-c-4' },
+  { id: 'staples', name: 'Staple Foods', url: '/temel-gida-c-5' },
+  { id: 'beverages', name: 'Beverages', url: '/icecek-c-6' },
+  { id: 'snacks', name: 'Snacks', url: '/atistirmalik-c-7' },
+  { id: 'frozen', name: 'Frozen Foods', url: '/donuk-gida-c-8' },
+];
+
 export const migrosConfig: Partial<ScraperConfig> = {
   name: 'Migros',
   baseUrl: 'https://www.migros.com.tr',
-  categoryUrls: [
-    '/meyve-sebze-c-2',
-    '/et-tavuk-balik-c-3',
-    '/sut-kahvaltilik-c-4',
-    '/temel-gida-c-5',
-    '/icecek-c-6',
-    '/atistirmalik-c-7',
-    '/donuk-gida-c-8',
-  ],
+  categories: migrosCategories,
   selectors: {
     productCard: 'mat-card',
     productName: 'img.product-image',  // Use alt attribute for name
@@ -43,14 +45,16 @@ export const migrosConfig: Partial<ScraperConfig> = {
   ],
 };
 
+export const a101Categories: CategoryConfig[] = [
+  { id: 'fruits-vegetables', name: 'Fruits & Vegetables', url: '/market/meyve-sebze' },
+  { id: 'meat-fish', name: 'Meat, Chicken & Fish', url: '/market/et-tavuk-balik' },
+  { id: 'dairy', name: 'Dairy Products', url: '/market/sut-urunleri' },
+];
+
 export const a101Config: Partial<ScraperConfig> = {
   name: 'A101',
   baseUrl: 'https://www.a101.com.tr',
-  categoryUrls: [
-    '/market/meyve-sebze',
-    '/market/et-tavuk-balik',
-    '/market/sut-urunleri',
-  ],
+  categories: a101Categories,
   selectors: {
     productCard: '.product-item',
     productName: '.product-title',
@@ -67,21 +71,20 @@ export const a101Config: Partial<ScraperConfig> = {
   concurrentPages: 2,
 };
 
+export const voliCategories: CategoryConfig[] = [
+  { id: 'fruits', name: 'Fruits', url: '/kategorije/146' },
+  { id: 'vegetables', name: 'Vegetables', url: '/kategorije/147' },
+  { id: 'organic', name: 'Organic Fruits & Vegetables', url: '/kategorije/148' },
+  { id: 'mushrooms', name: 'Mushrooms', url: '/kategorije/149' },
+  { id: 'preserved', name: 'Preserved Foods', url: '/kategorije/152' },
+  { id: 'dairy', name: 'Dairy Products', url: '/kategorije/5' },
+  { id: 'meat', name: 'Meat', url: '/kategorije/6' },
+];
+
 export const voliConfig: Partial<ScraperConfig> = {
   name: 'Voli',
   baseUrl: 'https://voli.me',
-  categoryUrls: [
-    // Fresh fruits and vegetables subcategories
-    '/kategorije/146',  // Voće (Fruits)
-    '/kategorije/147',  // Povrće (Vegetables)
-    '/kategorije/148',  // Organsko voće i povrće
-    '/kategorije/149',  // Pečurke
-    '/kategorije/152',  // Zimnica
-    // Dairy
-    '/kategorije/5',    // Mliječni proizvodi
-    // Meat
-    '/kategorije/6',    // Meso
-  ],
+  categories: voliCategories,
   selectors: {
     productCard: 'a[href*="/proizvod/"]',
     productName: 'img',  // Use alt attribute for name
@@ -102,14 +105,16 @@ export const voliConfig: Partial<ScraperConfig> = {
   ],
 };
 
+export const mercadonaCategories: CategoryConfig[] = [
+  { id: 'fruits-vegetables', name: 'Fruits & Vegetables', url: '/frutas-y-verduras' },
+  { id: 'meat-fish', name: 'Meat & Fish', url: '/carne-y-pescado' },
+  { id: 'dairy', name: 'Dairy', url: '/lacteos' },
+];
+
 export const mercadonaConfig: Partial<ScraperConfig> = {
   name: 'Mercadona',
   baseUrl: 'https://www.mercadona.es',
-  categoryUrls: [
-    '/frutas-y-verduras',
-    '/carne-y-pescado',
-    '/lacteos',
-  ],
+  categories: mercadonaCategories,
   selectors: {
     productCard: '.product-cell',
     productName: '.product-title',
@@ -126,14 +131,16 @@ export const mercadonaConfig: Partial<ScraperConfig> = {
   concurrentPages: 2,
 };
 
+export const korzinkaCategories: CategoryConfig[] = [
+  { id: 'fruits-vegetables', name: 'Fruits & Vegetables', url: '/mevalar-va-sabzavotlar' },
+  { id: 'meat-fish', name: 'Meat & Fish', url: '/go-sht-va-baliq' },
+  { id: 'dairy', name: 'Dairy Products', url: '/sut-mahsulotlari' },
+];
+
 export const korzinkaConfig: Partial<ScraperConfig> = {
   name: 'Korzinka',
   baseUrl: 'https://korzinka.uz',
-  categoryUrls: [
-    '/mevalar-va-sabzavotlar',
-    '/go-sht-va-baliq',
-    '/sut-mahsulotlari',
-  ],
+  categories: korzinkaCategories,
   selectors: {
     productCard: '.product-card',
     productName: '.product-name',
@@ -163,4 +170,19 @@ export function getScraperConfig(name: string): Partial<ScraperConfig> | undefin
   };
 
   return configs[name];
+}
+
+/**
+ * Get available categories for a scraper
+ */
+export function getScraperCategories(name: string): CategoryConfig[] {
+  const categories: Record<string, CategoryConfig[]> = {
+    MigrosScraper: migrosCategories,
+    A101Scraper: a101Categories,
+    VoliScraper: voliCategories,
+    MercadonaScraper: mercadonaCategories,
+    KorzinkaScraper: korzinkaCategories,
+  };
+
+  return categories[name] || [];
 }

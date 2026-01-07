@@ -29,25 +29,25 @@ export class VoliScraper extends BaseScraper {
   async scrapeProductList(): Promise<ProductData[]> {
     const allProducts: ProductData[] = [];
 
-    scraperLogger.info(`Starting to scrape Voli categories...`);
+    scraperLogger.info(`Starting to scrape Voli categories (${this.config.categories.length} categories)...`);
 
-    for (const categoryUrl of this.config.categoryUrls) {
+    for (const category of this.config.categories) {
       try {
-        const fullUrl = `${this.config.baseUrl}${categoryUrl}`;
-        scraperLogger.info(`Scraping category: ${categoryUrl}`);
+        const fullUrl = `${this.config.baseUrl}${category.url}`;
+        scraperLogger.info(`Scraping category: ${category.name} (${category.id})`);
 
         const categoryProducts = await this.scrapeCategoryPage(fullUrl);
         allProducts.push(...categoryProducts);
 
         scraperLogger.info(
-          `Scraped ${categoryProducts.length} products from ${categoryUrl}`
+          `Scraped ${categoryProducts.length} products from ${category.name}`
         );
 
         // Wait between categories
         await this.waitBetweenRequests();
       } catch (error) {
         this.logError(
-          `Failed to scrape category: ${categoryUrl}`,
+          `Failed to scrape category: ${category.name}`,
           undefined,
           error as Error
         );

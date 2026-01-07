@@ -1,7 +1,7 @@
 import { BaseScraper } from './BaseScraper';
-import { ScraperConfig } from '../../types/scraper.types';
+import { ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { scraperLogger } from '../../utils/logger';
-import { getScraperConfig } from '../../config/scrapers';
+import { getScraperConfig, getScraperCategories } from '../../config/scrapers';
 
 // Import scrapers as they're created
 // Turkey
@@ -16,6 +16,10 @@ import { VoliScraper } from '../montenegro/VoliScraper';
 
 // Uzbekistan
 // import { KorzinkaScraper } from '../uzbekistan/KorzinkaScraper';
+
+export interface CreateScraperOptions {
+  categoryIds?: string[];  // Filter to specific category IDs
+}
 
 /**
  * Factory class for creating scraper instances
@@ -50,13 +54,16 @@ export class ScraperFactory {
   /**
    * Create a scraper from database supermarket record
    */
-  static createFromSupermarket(supermarket: {
-    id: string;
-    name: string;
-    website_url: string;
-    scraper_class: string;
-    scraper_config: any;
-  }): BaseScraper {
+  static createFromSupermarket(
+    supermarket: {
+      id: string;
+      name: string;
+      website_url: string;
+      scraper_class: string;
+      scraper_config: any;
+    },
+    options?: CreateScraperOptions
+  ): BaseScraper {
     // Get the scraper class from the map
     const ScraperClass = ScraperFactory.scraperMap.get(supermarket.scraper_class);
 
@@ -70,12 +77,44 @@ export class ScraperFactory {
     const defaultConfig = getScraperConfig(supermarket.scraper_class) || {};
     const dbConfig = supermarket.scraper_config || {};
 
+    // Get categories - prioritize database config, then default config
+    let categories: CategoryConfig[] = dbConfig.categories || defaultConfig.categories || [];
+
+    // Legacy support: convert categoryUrls to categories if needed
+    if (categories.length === 0 && (dbConfig.categoryUrls || defaultConfig.categoryUrls)) {
+      const urls = dbConfig.categoryUrls || defaultConfig.categoryUrls || [];
+      categories = urls.map((url: string, index: number) => ({
+        id: `category-${index}`,
+        name: `Category ${index + 1}`,
+        url,
+      }));
+    }
+
+    // Filter categories if specified
+    if (options?.categoryIds && options.categoryIds.length > 0) {
+      const filteredCategories = categories.filter(cat =>
+        options.categoryIds!.includes(cat.id)
+      );
+
+      if (filteredCategories.length === 0) {
+        scraperLogger.warn(
+          `No matching categories found for IDs: ${options.categoryIds.join(', ')}. ` +
+          `Available: ${categories.map(c => c.id).join(', ')}`
+        );
+      } else {
+        scraperLogger.info(
+          `Filtering to categories: ${filteredCategories.map(c => c.name).join(', ')}`
+        );
+        categories = filteredCategories;
+      }
+    }
+
     // Merge database config with defaults (database overrides defaults)
     const config: ScraperConfig = {
       supermarketId: supermarket.id,
       name: supermarket.name,
       baseUrl: supermarket.website_url || defaultConfig.baseUrl || '',
-      categoryUrls: dbConfig.categoryUrls || defaultConfig.categoryUrls || [],
+      categories,
       selectors: {
         ...defaultConfig.selectors,
         ...dbConfig.selectors,
@@ -96,6 +135,13 @@ export class ScraperFactory {
 
     scraperLogger.info(`Creating scraper for supermarket: ${supermarket.name}`);
     return new ScraperClass(config);
+  }
+
+  /**
+   * Get available categories for a scraper class
+   */
+  static getAvailableCategories(scraperClass: string): CategoryConfig[] {
+    return getScraperCategories(scraperClass);
   }
 
   /**
