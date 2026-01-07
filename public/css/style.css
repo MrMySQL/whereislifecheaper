@@ -11,6 +11,7 @@
   --success-color: #22c55e;
   --warning-color: #f59e0b;
   --danger-color: #ef4444;
+  --error-color: #ef4444;
   --bg-color: #f8fafc;
   --card-bg: #ffffff;
   --text-color: #1e293b;
@@ -18,6 +19,11 @@
   --border-color: #e2e8f0;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);
+  /* Aliases for mapping page */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --text-primary: #1e293b;
+  --accent-color: #2563eb;
 }
 
 body {
@@ -44,6 +50,34 @@ header h1 {
 header .subtitle {
   font-size: 1.2rem;
   opacity: 0.9;
+}
+
+.nav-links {
+  margin-top: 1rem;
+}
+
+.nav-link {
+  color: white;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.section-note {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.section-note a {
+  color: var(--primary-color);
 }
 
 /* Main content */
@@ -160,6 +194,22 @@ main {
 
 .btn:hover {
   background: var(--primary-dark);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary-color);
+  color: white;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
 }
 
 /* Table */

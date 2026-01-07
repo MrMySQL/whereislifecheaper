@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Mapping - Where Is Life Cheaper</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .mapping-container {
+      display: flex;
+      gap: 2rem;
+      margin-top: 1rem;
+    }
+
+    .country-selector {
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .country-selector select {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      min-width: 200px;
+    }
+
+    .products-panel {
+      flex: 2;
+    }
+
+    .canonical-panel {
+      flex: 1;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 1rem;
+      position: sticky;
+      top: 1rem;
+      max-height: calc(100vh - 150px);
+      overflow-y: auto;
+    }
+
+    .canonical-panel h3 {
+      margin-top: 0;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.5rem;
+    }
+
+    .product-row {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+    }
+
+    .product-row:hover {
+      background: var(--bg-primary);
+    }
+
+    .product-info {
+      flex: 1;
+    }
+
+    .product-name {
+      font-weight: 500;
+    }
+
+    .product-details {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    .product-price {
+      min-width: 100px;
+      text-align: right;
+      font-weight: 500;
+    }
+
+    .canonical-select {
+      min-width: 200px;
+    }
+
+    .canonical-select select {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+
+    .canonical-select select.assigned {
+      border-color: var(--success-color);
+      background: rgba(76, 175, 80, 0.1);
+    }
+
+    .new-canonical-form {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .new-canonical-form input {
+      flex: 1;
+      padding: 0.5rem;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+
+    .new-canonical-form button {
+      padding: 0.5rem 1rem;
+    }
+
+    .canonical-item {
+      padding: 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+      background: var(--bg-primary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .canonical-item .name {
+      font-weight: 500;
+    }
+
+    .canonical-item .count {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .canonical-item .delete-btn {
+      background: none;
+      border: none;
+      color: var(--error-color);
+      cursor: pointer;
+      padding: 0.25rem;
+      opacity: 0.7;
+    }
+
+    .canonical-item .delete-btn:hover {
+      opacity: 1;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      align-items: center;
+    }
+
+    .filter-bar input {
+      flex: 1;
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+
+    .filter-bar .filter-options {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .filter-bar .filter-btn {
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .filter-bar .filter-btn.active {
+      background: var(--accent-color);
+      border-color: var(--accent-color);
+    }
+
+    .stats-bar {
+      display: flex;
+      gap: 2rem;
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      background: var(--bg-secondary);
+      border-radius: 4px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-item .value {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--accent-color);
+    }
+
+    .stat-item .label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .load-more {
+      text-align: center;
+      padding: 1rem;
+    }
+
+    .load-more button {
+      padding: 0.75rem 2rem;
+    }
+
+    .back-link {
+      color: var(--accent-color);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+
+    .saving-indicator {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      background: var(--accent-color);
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      display: none;
+    }
+
+    .saving-indicator.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="back-link">&larr; Back to Dashboard</a>
+
+    <header>
+      <h1>Product Mapping</h1>
+      <p>Map products from different countries to shared canonical identifiers for comparison</p>
+    </header>
+
+    <div class="saving-indicator" id="saving-indicator">Saving...</div>
+
+    <div class="country-selector">
+      <label>Select Country:</label>
+      <select id="country-select">
+        <option value="">Loading countries...</option>
+      </select>
+      <span id="product-count"></span>
+    </div>
+
+    <div class="mapping-container">
+      <div class="products-panel">
+        <div class="filter-bar">
+          <input type="text" id="search-input" placeholder="Search products...">
+          <div class="filter-options">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="unmapped">Unmapped</button>
+            <button class="filter-btn" data-filter="mapped">Mapped</button>
+          </div>
+        </div>
+
+        <div class="stats-bar" id="stats-bar">
+          <div class="stat-item">
+            <div class="value" id="total-products">-</div>
+            <div class="label">Total Products</div>
+          </div>
+          <div class="stat-item">
+            <div class="value" id="mapped-products">-</div>
+            <div class="label">Mapped</div>
+          </div>
+          <div class="stat-item">
+            <div class="value" id="unmapped-products">-</div>
+            <div class="label">Unmapped</div>
+          </div>
+        </div>
+
+        <div id="products-list">
+          <div class="empty-state">
+            <p>Select a country to view products</p>
+          </div>
+        </div>
+
+        <div class="load-more" id="load-more" style="display: none;">
+          <button id="load-more-btn" class="btn">Load More</button>
+        </div>
+      </div>
+
+      <div class="canonical-panel">
+        <h3>Canonical Products</h3>
+
+        <div class="new-canonical-form">
+          <input type="text" id="new-canonical-name" placeholder="New identifier (e.g., Milk 1L)">
+          <button id="add-canonical-btn" class="btn btn-primary">Add</button>
+        </div>
+
+        <div id="canonical-list">
+          <div class="empty-state">
+            <p>No canonical products yet</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = '/api';
+
+    // State
+    let countries = [];
+    let canonicalProducts = [];
+    let currentProducts = [];
+    let selectedCountryId = null;
+    let currentOffset = 0;
+    let currentFilter = 'all';
+    let searchTimeout = null;
+    const LIMIT = 50;
+
+    // Currency symbols
+    const CURRENCY_SYMBOLS = {
+      TRY: '\u20BA',
+      EUR: '\u20AC',
+      USD: '$',
+      UZS: 'UZS',
+    };
+
+    /**
+     * Initialize the page
+     */
+    async function init() {
+      await Promise.all([
+        loadCountries(),
+        loadCanonicalProducts(),
+      ]);
+
+      setupEventListeners();
+    }
+
+    /**
+     * Load countries
+     */
+    async function loadCountries() {
+      try {
+        const response = await fetch(`${API_URL}/countries`);
+        const { data } = await response.json();
+        countries = data;
+
+        const select = document.getElementById('country-select');
+        select.innerHTML = '<option value="">Select a country...</option>' +
+          data.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      } catch (error) {
+        console.error('Failed to load countries:', error);
+      }
+    }
+
+    /**
+     * Load canonical products
+     */
+    async function loadCanonicalProducts() {
+      try {
+        const response = await fetch(`${API_URL}/canonical`);
+        const { data } = await response.json();
+        canonicalProducts = data;
+        renderCanonicalList();
+      } catch (error) {
+        console.error('Failed to load canonical products:', error);
+      }
+    }
+
+    /**
+     * Load products for selected country
+     */
+    async function loadProducts(reset = false) {
+      if (!selectedCountryId) return;
+
+      if (reset) {
+        currentOffset = 0;
+        currentProducts = [];
+      }
+
+      const search = document.getElementById('search-input').value;
+
+      try {
+        const response = await fetch(
+          `${API_URL}/canonical/products-by-country/${selectedCountryId}?limit=${LIMIT}&offset=${currentOffset}&search=${encodeURIComponent(search)}`
+        );
+        const { data } = await response.json();
+
+        if (reset) {
+          currentProducts = data;
+        } else {
+          currentProducts = [...currentProducts, ...data];
+        }
+
+        renderProducts();
+        updateStats();
+
+        // Show/hide load more button
+        const loadMore = document.getElementById('load-more');
+        loadMore.style.display = data.length === LIMIT ? 'block' : 'none';
+
+      } catch (error) {
+        console.error('Failed to load products:', error);
+      }
+    }
+
+    /**
+     * Render products list
+     */
+    function renderProducts() {
+      const container = document.getElementById('products-list');
+
+      let filteredProducts = currentProducts;
+      if (currentFilter === 'mapped') {
+        filteredProducts = currentProducts.filter(p => p.canonical_product_id);
+      } else if (currentFilter === 'unmapped') {
+        filteredProducts = currentProducts.filter(p => !p.canonical_product_id);
+      }
+
+      if (filteredProducts.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <p>No products found</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filteredProducts.map(product => `
+        <div class="product-row" data-product-id="${product.id}">
+          <div class="product-info">
+            <div class="product-name">${product.name}</div>
+            <div class="product-details">
+              ${product.brand ? `<span>${product.brand}</span> | ` : ''}
+              ${product.unit_quantity ? `${product.unit_quantity} ` : ''}${product.unit || ''}
+              ${product.supermarket_name ? ` | ${product.supermarket_name}` : ''}
+            </div>
+          </div>
+          <div class="product-price">
+            ${formatPrice(product.price, product.currency)}
+          </div>
+          <div class="canonical-select">
+            <select
+              class="${product.canonical_product_id ? 'assigned' : ''}"
+              onchange="handleCanonicalChange(${product.id}, this.value)"
+            >
+              <option value="">-- Select --</option>
+              ${canonicalProducts.map(cp => `
+                <option value="${cp.id}" ${product.canonical_product_id === cp.id ? 'selected' : ''}>
+                  ${cp.name}
+                </option>
+              `).join('')}
+            </select>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    /**
+     * Render canonical products list
+     */
+    function renderCanonicalList() {
+      const container = document.getElementById('canonical-list');
+
+      if (canonicalProducts.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <p>No canonical products yet</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = canonicalProducts.map(cp => `
+        <div class="canonical-item">
+          <div>
+            <div class="name">${cp.name}</div>
+            <div class="count">${cp.linked_products_count} products, ${cp.countries_count} countries</div>
+          </div>
+          <button class="delete-btn" onclick="deleteCanonical(${cp.id})" title="Delete">&times;</button>
+        </div>
+      `).join('');
+    }
+
+    /**
+     * Update stats display
+     */
+    function updateStats() {
+      const total = currentProducts.length;
+      const mapped = currentProducts.filter(p => p.canonical_product_id).length;
+      const unmapped = total - mapped;
+
+      document.getElementById('total-products').textContent = total;
+      document.getElementById('mapped-products').textContent = mapped;
+      document.getElementById('unmapped-products').textContent = unmapped;
+    }
+
+    /**
+     * Format price with currency
+     */
+    function formatPrice(price, currency) {
+      if (price === null || price === undefined) return '-';
+      const num = parseFloat(price);
+      if (isNaN(num)) return '-';
+      const symbol = CURRENCY_SYMBOLS[currency] || currency;
+      return `${num.toFixed(2)} ${symbol}`;
+    }
+
+    /**
+     * Handle canonical product selection change
+     */
+    async function handleCanonicalChange(productId, canonicalId) {
+      showSaving();
+
+      try {
+        const response = await fetch(`${API_URL}/canonical/link`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product_id: productId,
+            canonical_product_id: canonicalId ? parseInt(canonicalId) : null,
+          }),
+        });
+
+        if (response.ok) {
+          // Update local state
+          const product = currentProducts.find(p => p.id === productId);
+          if (product) {
+            product.canonical_product_id = canonicalId ? parseInt(canonicalId) : null;
+            product.canonical_product_name = canonicalId
+              ? canonicalProducts.find(cp => cp.id === parseInt(canonicalId))?.name
+              : null;
+          }
+
+          // Update the select style
+          const select = document.querySelector(`[data-product-id="${productId}"] select`);
+          if (select) {
+            select.className = canonicalId ? 'assigned' : '';
+          }
+
+          updateStats();
+
+          // Reload canonical products to update counts
+          await loadCanonicalProducts();
+        }
+      } catch (error) {
+        console.error('Failed to update product:', error);
+        alert('Failed to save. Please try again.');
+      }
+
+      hideSaving();
+    }
+
+    /**
+     * Add new canonical product
+     */
+    async function addCanonical() {
+      const input = document.getElementById('new-canonical-name');
+      const name = input.value.trim();
+
+      if (!name) {
+        alert('Please enter a name');
+        return;
+      }
+
+      showSaving();
+
+      try {
+        const response = await fetch(`${API_URL}/canonical`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+
+        if (response.ok) {
+          input.value = '';
+          await loadCanonicalProducts();
+          renderProducts(); // Re-render to update dropdowns
+        } else {
+          const error = await response.json();
+          alert(error.message || 'Failed to create');
+        }
+      } catch (error) {
+        console.error('Failed to create canonical product:', error);
+        alert('Failed to create. Please try again.');
+      }
+
+      hideSaving();
+    }
+
+    /**
+     * Delete canonical product
+     */
+    async function deleteCanonical(id) {
+      if (!confirm('Are you sure? This will unlink all associated products.')) {
+        return;
+      }
+
+      showSaving();
+
+      try {
+        const response = await fetch(`${API_URL}/canonical/${id}`, {
+          method: 'DELETE',
+        });
+
+        if (response.ok) {
+          await loadCanonicalProducts();
+          // Update local products state
+          currentProducts.forEach(p => {
+            if (p.canonical_product_id === id) {
+              p.canonical_product_id = null;
+              p.canonical_product_name = null;
+            }
+          });
+          renderProducts();
+          updateStats();
+        }
+      } catch (error) {
+        console.error('Failed to delete:', error);
+        alert('Failed to delete. Please try again.');
+      }
+
+      hideSaving();
+    }
+
+    /**
+     * Show saving indicator
+     */
+    function showSaving() {
+      document.getElementById('saving-indicator').classList.add('show');
+    }
+
+    /**
+     * Hide saving indicator
+     */
+    function hideSaving() {
+      document.getElementById('saving-indicator').classList.remove('show');
+    }
+
+    /**
+     * Setup event listeners
+     */
+    function setupEventListeners() {
+      // Country select
+      document.getElementById('country-select').addEventListener('change', (e) => {
+        selectedCountryId = e.target.value || null;
+        loadProducts(true);
+      });
+
+      // Search input
+      document.getElementById('search-input').addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          loadProducts(true);
+        }, 300);
+      });
+
+      // Filter buttons
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentFilter = btn.dataset.filter;
+          renderProducts();
+        });
+      });
+
+      // Add canonical button
+      document.getElementById('add-canonical-btn').addEventListener('click', addCanonical);
+
+      // Enter key on canonical input
+      document.getElementById('new-canonical-name').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          addCanonical();
+        }
+      });
+
+      // Load more button
+      document.getElementById('load-more-btn').addEventListener('click', () => {
+        currentOffset += LIMIT;
+        loadProducts(false);
+      });
+    }
+
+    // Make functions available globally
+    window.handleCanonicalChange = handleCanonicalChange;
+    window.deleteCanonical = deleteCanonical;
+
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

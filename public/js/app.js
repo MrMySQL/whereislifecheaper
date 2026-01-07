@@ -17,8 +17,16 @@ const FLAGS = {
   UZ: '\u{1F1FA}\u{1F1FF}',
 };
 
+// Currency symbols
+const CURRENCY_SYMBOLS = {
+  TRY: '\u{20BA}',
+  EUR: '\u{20AC}',
+  USD: '$',
+  UZS: 'UZS',
+};
+
 // State
-let allPrices = [];
+let comparisonData = [];
 let countries = [];
 
 /**
@@ -33,7 +41,7 @@ async function init() {
   // Load data
   await Promise.all([
     loadCountryStats(),
-    loadPrices(),
+    loadComparison(),
   ]);
 
   // Setup event listeners
@@ -98,35 +106,36 @@ async function loadCountryStats() {
 }
 
 /**
- * Load price data
+ * Load comparison data using canonical products
  */
-async function loadPrices() {
+async function loadComparison() {
   const tbody = document.getElementById('comparison-tbody');
 
   try {
-    const response = await fetch(`${API_URL}/prices/latest?limit=500`);
+    const response = await fetch(`${API_URL}/canonical/comparison?limit=500`);
     const { data } = await response.json();
 
     if (!data || data.length === 0) {
       tbody.innerHTML = `
         <tr>
           <td colspan="5" class="empty-state">
-            <p>No price data available. Run the scrapers first!</p>
+            <p>No mapped products available for comparison.</p>
+            <p><a href="/mapping.html">Map products to compare prices across countries</a></p>
           </td>
         </tr>
       `;
       return;
     }
 
-    allPrices = data;
+    comparisonData = data;
     renderComparisonTable(data);
 
   } catch (error) {
-    console.error('Failed to load prices:', error);
+    console.error('Failed to load comparison:', error);
     tbody.innerHTML = `
       <tr>
         <td colspan="5" class="empty-state">
-          <p>Failed to load price data. Is the API running?</p>
+          <p>Failed to load comparison data. Is the API running?</p>
         </td>
       </tr>
     `;
@@ -136,62 +145,23 @@ async function loadPrices() {
 /**
  * Render the comparison table
  */
-function renderComparisonTable(prices) {
+function renderComparisonTable(data) {
   const tbody = document.getElementById('comparison-tbody');
   const searchTerm = document.getElementById('search-input').value.toLowerCase();
 
-  // Group prices by product name
-  const productMap = new Map();
-
-  prices.forEach(price => {
-    const key = price.product_name.toLowerCase();
-    if (!productMap.has(key)) {
-      productMap.set(key, {
-        name: price.product_name,
-        brand: price.brand,
-        unit: price.unit,
-        unit_quantity: price.unit_quantity,
-        prices: {},
-      });
-    }
-
-    const product = productMap.get(key);
-    const countryKey = price.country_code;
-
-    // Keep the latest price per country
-    if (!product.prices[countryKey] ||
-        new Date(price.scraped_at) > new Date(product.prices[countryKey].scraped_at)) {
-      product.prices[countryKey] = {
-        price: parseFloat(price.price),
-        currency: price.currency,
-        original_price: price.original_price ? parseFloat(price.original_price) : null,
-        is_on_sale: price.is_on_sale,
-        supermarket: price.supermarket_name,
-        scraped_at: price.scraped_at,
-      };
-    }
-  });
-
-  // Convert to array and filter
-  let products = Array.from(productMap.values());
-
+  // Filter by search term
+  let filtered = data;
   if (searchTerm) {
-    products = products.filter(p =>
-      p.name.toLowerCase().includes(searchTerm) ||
-      (p.brand && p.brand.toLowerCase().includes(searchTerm))
+    filtered = data.filter(item =>
+      item.canonical_name.toLowerCase().includes(searchTerm)
     );
   }
 
-  // Only show products that exist in both countries
-  products = products.filter(p =>
-    Object.keys(p.prices).length >= 2
-  );
-
-  if (products.length === 0) {
+  if (filtered.length === 0) {
     tbody.innerHTML = `
       <tr>
         <td colspan="5" class="empty-state">
-          <p>${searchTerm ? 'No matching products found.' : 'No products available in multiple countries for comparison.'}</p>
+          <p>${searchTerm ? 'No matching products found.' : 'No products available for comparison.'}</p>
         </td>
       </tr>
     `;
@@ -199,9 +169,9 @@ function renderComparisonTable(prices) {
   }
 
   // Render rows
-  tbody.innerHTML = products.map(product => {
-    const trPrice = product.prices['TR'];
-    const mePrice = product.prices['ME'];
+  tbody.innerHTML = filtered.map(item => {
+    const trPrice = item.prices_by_country['TR'];
+    const mePrice = item.prices_by_country['ME'];
 
     // Calculate difference in EUR for comparison
     let difference = '';
@@ -226,15 +196,19 @@ function renderComparisonTable(prices) {
     return `
       <tr>
         <td class="product-name">
-          ${product.name}
-          ${product.brand ? `<br><small style="color: var(--text-muted)">${product.brand}</small>` : ''}
+          <strong>${item.canonical_name}</strong>
+          ${item.category ? `<br><small style="color: var(--text-muted)">${item.category}</small>` : ''}
         </td>
-        <td>${formatUnit(product.unit, product.unit_quantity)}</td>
+        <td>
+          ${trPrice ? formatUnit(trPrice.unit, trPrice.unit_quantity) : (mePrice ? formatUnit(mePrice.unit, mePrice.unit_quantity) : '-')}
+        </td>
         <td class="price">
           ${trPrice ? formatPriceCell(trPrice) : '<span style="color: var(--text-muted)">N/A</span>'}
+          ${trPrice ? `<br><small style="color: var(--text-muted)">${trPrice.product_name}</small>` : ''}
         </td>
         <td class="price">
           ${mePrice ? formatPriceCell(mePrice) : '<span style="color: var(--text-muted)">N/A</span>'}
+          ${mePrice ? `<br><small style="color: var(--text-muted)">${mePrice.product_name}</small>` : ''}
         </td>
         <td>
           ${difference ? `<span class="difference ${diffClass}">${difference}</span>` : '-'}
@@ -266,14 +240,7 @@ function formatPrice(price, currency) {
   const num = parseFloat(price);
   if (isNaN(num)) return '-';
 
-  const symbols = {
-    TRY: '\u{20BA}',
-    EUR: '\u{20AC}',
-    USD: '$',
-    UZS: 'UZS',
-  };
-
-  const symbol = symbols[currency] || currency;
+  const symbol = CURRENCY_SYMBOLS[currency] || currency;
   return `${num.toFixed(2)} ${symbol}`;
 }
 
@@ -319,7 +286,7 @@ function setupEventListeners() {
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
-      renderComparisonTable(allPrices);
+      renderComparisonTable(comparisonData);
     }, 300);
   });
 
@@ -331,7 +298,7 @@ function setupEventListeners() {
 
     await Promise.all([
       loadCountryStats(),
-      loadPrices(),
+      loadComparison(),
     ]);
 
     updateLastUpdated();

@@ -12,6 +12,7 @@ import supermarketsRouter from './routes/supermarkets';
 import productsRouter from './routes/products';
 import pricesRouter from './routes/prices';
 import scraperRouter from './routes/scraper';
+import canonicalRouter from './routes/canonical';
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use('/api/supermarkets', supermarketsRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/prices', pricesRouter);
 app.use('/api/scraper', scraperRouter);
+app.use('/api/canonical', canonicalRouter);
 
 // Serve frontend for non-API routes
 app.get('/', (_req, res) => {
