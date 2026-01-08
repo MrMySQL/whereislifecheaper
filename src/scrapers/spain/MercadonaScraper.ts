@@ -252,8 +252,13 @@ export class MercadonaScraper extends BaseScraper {
         // Extract brand from display name (Hacendado, Mercadona, etc.)
         const brand = this.extractBrand(item.display_name);
 
+        // Include packaging in name to distinguish variants (e.g., "Leche entera Hacendado 6 bricks x 1 L")
+        const productName = item.packaging
+          ? `${item.display_name} ${item.packaging}`
+          : item.display_name;
+
         const product: ProductData = {
-          name: item.display_name,
+          name: productName,
           price,
           currency: 'EUR',
           originalPrice: isOnSale ? previousPrice : undefined,
