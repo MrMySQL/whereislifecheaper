@@ -42,8 +42,9 @@ export class ProductService {
 
       // Create or update product mapping for this supermarket
       // Returns the mapping ID for recording prices
+      // Use externalId from scraper if provided, otherwise try to extract from URL
       const mappingId = await this.createOrUpdateMapping(productId, supermarketId, {
-        externalId: this.extractExternalId(productData.productUrl),
+        externalId: productData.externalId || this.extractExternalId(productData.productUrl),
         productUrl: productData.productUrl,
       });
 
@@ -178,10 +179,13 @@ export class ProductService {
 
   /**
    * Extract external product ID from URL
-   * Example: https://www.migros.com.tr/sut-1l-p-12345 -> 12345
+   * Examples:
+   *   https://www.migros.com.tr/sut-1l-p-12345 -> 12345
+   *   https://www.migros.com.tr/sut-1l-p-f4725a -> f4725a
    */
   private extractExternalId(url: string): string | undefined {
-    const match = url.match(/-p-(\d+)/);
+    // Match both numeric and hex IDs after -p-
+    const match = url.match(/-p-([a-zA-Z0-9]+)/);
     return match ? match[1] : undefined;
   }
 
