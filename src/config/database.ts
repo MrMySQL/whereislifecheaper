@@ -37,11 +37,11 @@ export async function query<T extends QueryResultRow = any>(
   text: string,
   params?: any[]
 ): Promise<QueryResult<T>> {
-  const start = Date.now();
+  // const start = Date.now();
   try {
     const result = await pool.query<T>(text, params);
-    const duration = Date.now() - start;
-    console.log('Executed query', { text, duration, rows: result.rowCount });
+    // const duration = Date.now() - start;
+    // console.log('Executed query', { text, duration, rows: result.rowCount });
     return result;
   } catch (error) {
     console.error('Query error', { text, error });

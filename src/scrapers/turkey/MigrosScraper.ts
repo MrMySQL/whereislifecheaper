@@ -1,42 +1,98 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig } from '../../types/scraper.types';
 import { scraperLogger } from '../../utils/logger';
-import { extractQuantity, parsePrice } from '../../utils/normalizer';
+
+/**
+ * Migros API response types
+ */
+interface MigrosApiResponse {
+  successful: boolean;
+  data: {
+    searchInfo: {
+      pageCount: number;
+      hitCount: number;
+      storeProductInfos: MigrosProduct[];
+    };
+  };
+}
+
+interface MigrosProduct {
+  id: number;
+  sku: string;
+  name: string;
+  brand?: {
+    name: string;
+    id: number;
+    prettyName: string;
+  };
+  category?: {
+    name: string;
+    id: number;
+    prettyName: string;
+  };
+  images?: Array<{
+    urls: {
+      PRODUCT_LIST: string;
+      PRODUCT_DETAIL: string;
+    };
+  }>;
+  prettyName: string;
+  status: string;
+  unit: 'GRAM' | 'PIECE' | 'LITRE' | 'MILLILITER';
+  unitAmount: number;
+  regularPrice: number;  // in kuruş (1/100 TRY)
+  shownPrice: number;    // in kuruş
+  discountRate: number;
+}
 
 /**
  * Scraper for Migros Turkey (migros.com.tr)
+ * Uses the REST API via Playwright for efficient data extraction
+ * Browser context is needed to bypass Cloudflare protection
  */
 export class MigrosScraper extends BaseScraper {
+  private readonly API_BASE = 'https://www.migros.com.tr/rest/search/screens';
+
   constructor(config: ScraperConfig) {
     super(config);
   }
 
   /**
-   * Initialize the scraper
+   * Initialize the scraper with browser (needed for Cloudflare bypass)
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Migros scraper...`);
+    scraperLogger.info(`Initializing Migros API scraper...`);
     this.startTime = Date.now();
+
+    // Launch browser to handle Cloudflare
     await this.launchBrowser();
     this.page = await this.createPage();
-    scraperLogger.info(`Migros scraper initialized`);
+
+    // Navigate to main page first to get cookies/pass Cloudflare
+    scraperLogger.info('Navigating to Migros homepage to establish session...');
+    await this.page.goto(this.config.baseUrl, { waitUntil: 'domcontentloaded' });
+    await this.waitForDynamicContent();
+
+    // Handle any Cloudflare challenge
+    await this.handleAntiBot();
+
+    scraperLogger.info(`Migros API scraper initialized`);
   }
 
   /**
-   * Scrape product list from all category pages
+   * Scrape product list from all category pages using REST API
    */
   async scrapeProductList(): Promise<ProductData[]> {
     const allProducts: ProductData[] = [];
 
-    scraperLogger.info(`Starting to scrape Migros categories (${this.config.categories.length} categories)...`);
+    scraperLogger.info(`Starting to scrape Migros categories via API (${this.config.categories.length} categories)...`);
 
     for (const category of this.config.categories) {
       try {
-        const fullUrl = `${this.config.baseUrl}${category.url}`;
         scraperLogger.info(`Scraping category: ${category.name} (${category.id})`);
 
-        const categoryProducts = await this.scrapeCategoryPage(
-          fullUrl,
+        const categoryProducts = await this.scrapeCategoryViaApi(
+          category.url,
           category.id,
           category.name
         );
@@ -62,63 +118,84 @@ export class MigrosScraper extends BaseScraper {
   }
 
   /**
-   * Scrape a single category page with pagination
-   * Saves products after each page via callback
+   * Scrape a single category using REST API with pagination
    */
-  private async scrapeCategoryPage(
-    url: string,
+  private async scrapeCategoryViaApi(
+    categoryUrl: string,
     categoryId: string,
     categoryName: string
   ): Promise<ProductData[]> {
     const products: ProductData[] = [];
-    let currentPage = 1;
-    let hasNextPage = true;
 
-    while (hasNextPage) {
+    // Convert URL like /meyve-sebze-c-2 to API slug meyve-sebze-c-2
+    const categorySlug = categoryUrl.replace(/^\//, '');
+
+    // First request to get total page count
+    const firstPageData = await this.fetchCategoryPage(categorySlug, 1);
+
+    if (!firstPageData?.successful) {
+      scraperLogger.warn(`Failed to fetch category ${categoryName}: API returned unsuccessful`);
+      return products;
+    }
+
+    const totalPages = firstPageData.data.searchInfo.pageCount;
+    const totalProducts = firstPageData.data.searchInfo.hitCount;
+
+    scraperLogger.info(`Category ${categoryName}: ${totalProducts} products across ${totalPages} pages`);
+
+    // Process first page
+    const firstPageProducts = this.parseProducts(firstPageData.data.searchInfo.storeProductInfos);
+
+    // Save products after first page via callback
+    if (this.onPageScraped && firstPageProducts.length > 0) {
+      const savedCount = await this.onPageScraped(firstPageProducts, {
+        categoryId,
+        categoryName,
+        pageNumber: 1,
+        totalProductsOnPage: firstPageProducts.length,
+      });
+      scraperLogger.info(
+        `Page 1/${totalPages} of ${categoryName}: Saved ${savedCount}/${firstPageProducts.length} products`
+      );
+    }
+
+    products.push(...firstPageProducts);
+
+    // Process remaining pages
+    for (let page = 2; page <= totalPages; page++) {
       try {
-        const pageUrl = currentPage === 1 ? url : `${url}?sayfa=${currentPage}`;
-        await this.navigateToUrl(pageUrl);
-        await this.waitForDynamicContent();
+        await this.waitBetweenRequests();
 
-        // Handle anti-bot if needed
-        await this.handleAntiBot();
+        const pageData = await this.fetchCategoryPage(categorySlug, page);
 
-        // Get products from current page
-        const pageProducts = await this.extractProductsFromPage();
+        if (!pageData?.successful) {
+          scraperLogger.warn(`Failed to fetch page ${page} of ${categoryName}`);
+          continue;
+        }
 
-        scraperLogger.debug(
-          `Page ${currentPage}: Found ${pageProducts.length} products`
-        );
+        const pageProducts = this.parseProducts(pageData.data.searchInfo.storeProductInfos);
 
         // Save products after each page via callback
         if (this.onPageScraped && pageProducts.length > 0) {
           const savedCount = await this.onPageScraped(pageProducts, {
             categoryId,
             categoryName,
-            pageNumber: currentPage,
+            pageNumber: page,
             totalProductsOnPage: pageProducts.length,
           });
           scraperLogger.info(
-            `Page ${currentPage} of ${categoryName}: Saved ${savedCount}/${pageProducts.length} products`
+            `Page ${page}/${totalPages} of ${categoryName}: Saved ${savedCount}/${pageProducts.length} products`
           );
         }
 
         products.push(...pageProducts);
 
-        // Check if there's a next page
-        hasNextPage = await this.hasNextPage();
-
-        if (hasNextPage) {
-          currentPage++;
-          await this.waitBetweenRequests();
-        }
       } catch (error) {
         this.logError(
-          `Failed to scrape page ${currentPage} of ${url}`,
-          url,
+          `Failed to scrape page ${page} of ${categoryName}`,
+          `${this.API_BASE}/${categorySlug}?sayfa=${page}`,
           error as Error
         );
-        hasNextPage = false;
       }
     }
 
@@ -126,213 +203,141 @@ export class MigrosScraper extends BaseScraper {
   }
 
   /**
-   * Extract products from the current page
+   * Fetch a single category page from the API using browser context
    */
-  private async extractProductsFromPage(): Promise<ProductData[]> {
+  private async fetchCategoryPage(categorySlug: string, page: number): Promise<MigrosApiResponse | null> {
     if (!this.page) {
       throw new Error('Page not initialized');
     }
 
-    const products: ProductData[] = [];
+    const url = page === 1
+      ? `${this.API_BASE}/${categorySlug}`
+      : `${this.API_BASE}/${categorySlug}?sayfa=${page}`;
 
     try {
-      // Wait for product cards to load
-      await this.page.waitForSelector(this.config.selectors.productCard, {
-        timeout: 10000,
-      }).catch(() => {
-        scraperLogger.warn('Product cards not found on page');
+      // Use Playwright's request context (includes cookies from browser)
+      const response = await this.page.request.get(url, {
+        headers: {
+          'Accept': 'application/json',
+          'X-PWA': 'true',
+          'X-FORWARDED-REST': 'true',
+        },
       });
 
-      // Get all product card elements
-      const productCards = await this.page.$$(this.config.selectors.productCard);
-
-      scraperLogger.debug(`Found ${productCards.length} product cards`);
-
-      for (const card of productCards) {
-        try {
-          const product = await this.extractProductFromCard(card);
-          if (product) {
-            products.push(product);
-            this.productsScraped++;
-          }
-        } catch (error) {
-          this.productsFailed++;
-          scraperLogger.debug('Failed to extract product from card:', error);
-        }
-      }
-    } catch (error) {
-      scraperLogger.error('Failed to extract products from page:', error);
-      await this.takeScreenshot('extract-products-error');
-      throw error;
-    }
-
-    return products;
-  }
-
-  /**
-   * Extract product data from a single product card
-   */
-  private async extractProductFromCard(card: any): Promise<ProductData | null> {
-    try {
-      // Extract product image element (contains name in alt attribute)
-      const imageElement = await card.$(this.config.selectors.productImage || 'img.product-image');
-
-      // Get product name from image alt attribute (Migros specific)
-      const name = imageElement
-        ? await imageElement.getAttribute('alt') || ''
-        : '';
-
-      if (!name) {
-        scraperLogger.debug('Product name not found in image alt, skipping');
+      if (!response.ok()) {
+        scraperLogger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
         return null;
       }
 
-      // Extract price
-      const priceElement = await card.$(this.config.selectors.productPrice);
-      const priceText = priceElement
-        ? (await priceElement.textContent())?.trim() || ''
-        : '';
-      const price = parsePrice(priceText);
-
-      if (!price) {
-        scraperLogger.debug(`Price not found for product: ${name}`);
-        return null;
-      }
-
-      // Extract product URL
-      const urlElement = await card.$(this.config.selectors.productUrl || 'a[href*="-p-"]');
-      const productUrl = urlElement
-        ? await urlElement.getAttribute('href') || ''
-        : '';
-
-      const fullUrl = productUrl.startsWith('http')
-        ? productUrl
-        : `${this.config.baseUrl}${productUrl}`;
-
-      // Extract image URL
-      const imageUrl = imageElement
-        ? await imageElement.getAttribute('src') || ''
-        : '';
-
-      // Extract original price (if on sale)
-      const originalPriceElement = await card.$(
-        this.config.selectors.productOriginalPrice || '.old-price'
-      );
-      const originalPriceText = originalPriceElement
-        ? (await originalPriceElement.textContent())?.trim() || ''
-        : '';
-      const originalPrice = originalPriceText ? parsePrice(originalPriceText) ?? undefined : undefined;
-
-      // Extract brand if available
-      const brandElement = await card.$(this.config.selectors.productBrand || '.brand');
-      const brand = brandElement
-        ? (await brandElement.textContent())?.trim() || undefined
-        : undefined;
-
-      // Extract quantity from name
-      const quantityInfo = extractQuantity(name);
-
-      const productData: ProductData = {
-        name,
-        price,
-        currency: 'TRY',
-        originalPrice,
-        isOnSale: !!originalPrice,
-        imageUrl: imageUrl || undefined,
-        productUrl: fullUrl,
-        brand,
-        unit: quantityInfo?.unit,
-        unitQuantity: quantityInfo?.value,
-        isAvailable: true,
-      };
-
-      return productData;
+      const data: MigrosApiResponse = await response.json();
+      return data;
     } catch (error) {
-      scraperLogger.debug('Error extracting product from card:', error);
+      scraperLogger.error(`Failed to fetch ${url}:`, error);
       return null;
     }
   }
 
   /**
-   * Scrape detailed product information
-   * This can be used for individual product pages if needed
+   * Parse API product data into ProductData format
    */
-  async scrapeProductDetails(url: string): Promise<ProductData> {
-    if (!this.page) {
-      throw new Error('Page not initialized');
+  private parseProducts(apiProducts: MigrosProduct[]): ProductData[] {
+    const products: ProductData[] = [];
+
+    if (!apiProducts || !Array.isArray(apiProducts)) {
+      scraperLogger.warn(`No products array in API response`);
+      return products;
     }
 
-    await this.navigateToUrl(url);
-    await this.waitForDynamicContent();
+    for (const item of apiProducts) {
+      try {
+        // Skip products not in sale
+        if (item.status !== 'IN_SALE') {
+          continue;
+        }
 
-    // Extract detailed product information
-    const name = await this.extractText(this.config.selectors.productName);
-    const priceText = await this.extractText(this.config.selectors.productPrice);
-    const price = parsePrice(priceText);
+        // Convert kuruş to TRY (divide by 100)
+        const price = item.shownPrice / 100;
+        const regularPrice = item.regularPrice / 100;
+        const isOnSale = item.discountRate > 0 || item.shownPrice < item.regularPrice;
 
-    if (!price) {
-      throw new Error(`Could not extract price from ${url}`);
+        // Parse unit information
+        const { unit, unitQuantity } = this.parseUnit(item.unit, item.unitAmount);
+
+        // Get image URL
+        const imageUrl = item.images?.[0]?.urls?.PRODUCT_DETAIL;
+
+        // Build product URL
+        const productUrl = `${this.config.baseUrl}/${item.prettyName}`;
+
+        const product: ProductData = {
+          name: item.name,
+          price,
+          currency: 'TRY',
+          originalPrice: isOnSale ? regularPrice : undefined,
+          isOnSale,
+          imageUrl,
+          productUrl,
+          brand: item.brand?.name,
+          unit,
+          unitQuantity,
+          isAvailable: true,
+          externalId: item.sku,
+        };
+
+        products.push(product);
+        this.productsScraped++;
+      } catch (error) {
+        this.productsFailed++;
+        scraperLogger.debug(`Failed to parse product: ${item.name}`, error);
+      }
     }
 
-    const imageUrl = await this.extractAttribute(
-      this.config.selectors.productImage || 'img',
-      'src'
-    );
-
-    const originalPriceText = await this.extractText(
-      this.config.selectors.productOriginalPrice || '.old-price'
-    );
-    const originalPrice = originalPriceText ? parsePrice(originalPriceText) ?? undefined : undefined;
-
-    const brand = await this.extractText(this.config.selectors.productBrand || '.brand');
-
-    const quantityInfo = extractQuantity(name);
-
-    const productData: ProductData = {
-      name,
-      price,
-      currency: 'TRY',
-      originalPrice,
-      isOnSale: !!originalPrice,
-      imageUrl: imageUrl || undefined,
-      productUrl: url,
-      brand: brand || undefined,
-      unit: quantityInfo?.unit,
-      unitQuantity: quantityInfo?.value,
-      isAvailable: true,
-    };
-
-    this.productsScraped++;
-    return productData;
+    return products;
   }
 
   /**
-   * Check if there's a next page
+   * Parse Migros unit format to standard format
    */
-  private async hasNextPage(): Promise<boolean> {
-    if (!this.page) return false;
+  private parseUnit(unit: string, unitAmount: number): { unit?: string; unitQuantity?: number } {
+    switch (unit) {
+      case 'GRAM':
+        // unitAmount is typically 1000 for kg
+        if (unitAmount >= 1000) {
+          return { unit: 'kg', unitQuantity: unitAmount / 1000 };
+        }
+        return { unit: 'g', unitQuantity: unitAmount };
 
-    try {
-      const nextPageSelector = this.config.selectors.nextPage || '.next-page';
-      const nextPageButton = await this.page.$(nextPageSelector);
+      case 'PIECE':
+        return { unit: 'pieces', unitQuantity: unitAmount };
 
-      if (!nextPageButton) return false;
+      case 'LITRE':
+        return { unit: 'l', unitQuantity: unitAmount };
 
-      // Check if button is disabled
-      const isDisabled = await nextPageButton.getAttribute('disabled');
-      const ariaDisabled = await nextPageButton.getAttribute('aria-disabled');
+      case 'MILLILITER':
+        if (unitAmount >= 1000) {
+          return { unit: 'l', unitQuantity: unitAmount / 1000 };
+        }
+        return { unit: 'ml', unitQuantity: unitAmount };
 
-      return !isDisabled && ariaDisabled !== 'true';
-    } catch (error) {
-      return false;
+      default:
+        return { unit: undefined, unitQuantity: undefined };
     }
+  }
+
+  /**
+   * Scrape detailed product information (not needed for API-based scraping)
+   */
+  async scrapeProductDetails(url: string): Promise<ProductData> {
+    // For API-based scraping, we get all details from the list endpoint
+    // This method is kept for interface compatibility
+    throw new Error(`scrapeProductDetails not implemented for API-based scraper. URL: ${url}`);
   }
 
   /**
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Migros scraper...`);
+    scraperLogger.info(`Cleaning up Migros API scraper...`);
     await this.closeBrowser();
 
     const stats = this.getStats();
