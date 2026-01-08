@@ -2,11 +2,14 @@ import { ScraperConfig, CategoryConfig } from '../types/scraper.types';
 import { BaseScraper } from './base/BaseScraper';
 import { MigrosScraper } from './turkey/MigrosScraper';
 import { VoliScraper } from './montenegro/VoliScraper';
+import { MercadonaScraper } from './spain/MercadonaScraper';
 import {
   migrosConfig,
   migrosCategories,
   voliConfig,
   voliCategories,
+  mercadonaConfig,
+  mercadonaCategories,
 } from '../config/scrapers';
 
 /**
@@ -51,16 +54,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       categories: voliCategories,
     },
   ],
-  // Add new scrapers here:
-  // [
-  //   'MercadonaScraper',
-  //   {
-  //     className: 'MercadonaScraper',
-  //     scraperClass: MercadonaScraper,
-  //     defaultConfig: mercadonaConfig,
-  //     categories: mercadonaCategories,
-  //   },
-  // ],
+  [
+    'MercadonaScraper',
+    {
+      className: 'MercadonaScraper',
+      scraperClass: MercadonaScraper,
+      defaultConfig: mercadonaConfig,
+      categories: mercadonaCategories,
+    },
+  ],
 ]);
 
 /**

@@ -330,16 +330,64 @@ export const voliConfig: Partial<ScraperConfig> = {
 };
 
 export const mercadonaCategories: CategoryConfig[] = [
-  { id: 'fruits-vegetables', name: 'Fruits & Vegetables', url: '/frutas-y-verduras' },
-  { id: 'meat-fish', name: 'Meat & Fish', url: '/carne-y-pescado' },
-  { id: 'dairy', name: 'Dairy', url: '/lacteos' },
+  // Fruta y verdura (Fruits and vegetables)
+  { id: '27', name: 'Fruta', url: '/categories/27/' },
+  { id: '28', name: 'Lechuga y ensalada preparada', url: '/categories/28/' },
+  { id: '29', name: 'Verdura', url: '/categories/29/' },
+  // Carne (Meat)
+  { id: '38', name: 'Aves y pollo', url: '/categories/38/' },
+  { id: '37', name: 'Cerdo', url: '/categories/37/' },
+  { id: '40', name: 'Vacuno', url: '/categories/40/' },
+  { id: '44', name: 'Hamburguesas y picadas', url: '/categories/44/' },
+  // Marisco y pescado (Fish and seafood)
+  { id: '31', name: 'Pescado fresco', url: '/categories/31/' },
+  { id: '32', name: 'Marisco', url: '/categories/32/' },
+  // Huevos, leche y mantequilla (Eggs, milk and butter)
+  { id: '77', name: 'Huevos', url: '/categories/77/' },
+  { id: '72', name: 'Leche y bebidas vegetales', url: '/categories/72/' },
+  { id: '75', name: 'Mantequilla y margarina', url: '/categories/75/' },
+  // Panadería y pastelería (Bakery)
+  { id: '59', name: 'Pan de horno', url: '/categories/59/' },
+  { id: '60', name: 'Pan de molde y otras especialidades', url: '/categories/60/' },
+  // Agua y refrescos (Water and beverages)
+  { id: '156', name: 'Agua', url: '/categories/156/' },
+  { id: '158', name: 'Refresco de cola', url: '/categories/158/' },
+  { id: '159', name: 'Refresco de naranja y de limón', url: '/categories/159/' },
+  { id: '163', name: 'Isotónico y energético', url: '/categories/163/' },
+  // Aceite, especias y salsas (Oil, spices and sauces)
+  { id: '112', name: 'Aceite, vinagre y sal', url: '/categories/112/' },
+  { id: '116', name: 'Mayonesa, ketchup y mostaza', url: '/categories/116/' },
+  // Arroz, legumbres y pasta (Rice, legumes and pasta)
+  { id: '118', name: 'Arroz', url: '/categories/118/' },
+  { id: '120', name: 'Pasta y fideos', url: '/categories/120/' },
+  { id: '121', name: 'Legumbres', url: '/categories/121/' },
+  // Conservas, caldos y cremas (Canned goods)
+  { id: '122', name: 'Atún y otras conservas de pescado', url: '/categories/122/' },
+  { id: '126', name: 'Tomate', url: '/categories/126/' },
+  // Cacao, café e infusiones (Coffee and tea)
+  { id: '81', name: 'Café cápsula y monodosis', url: '/categories/81/' },
+  { id: '83', name: 'Café molido y en grano', url: '/categories/83/' },
+  { id: '88', name: 'Té e infusiones', url: '/categories/88/' },
+  // Cereales y galletas (Cereals and cookies)
+  { id: '78', name: 'Cereales', url: '/categories/78/' },
+  { id: '80', name: 'Galletas', url: '/categories/80/' },
+  // Postres y yogures (Yogurt and desserts)
+  { id: '104', name: 'Yogures naturales y sabores', url: '/categories/104/' },
+  { id: '110', name: 'Flan y natillas', url: '/categories/110/' },
+  // Zumos (Juices)
+  { id: '143', name: 'Zumo de naranja', url: '/categories/143/' },
+  { id: '99', name: 'Zumo de fruta variada', url: '/categories/99/' },
+  // Charcutería y quesos (Deli and cheese)
+  { id: '50', name: 'Jamón serrano', url: '/categories/50/' },
+  { id: '54', name: 'Queso curado, semicurado y tierno', url: '/categories/54/' },
 ];
 
 export const mercadonaConfig: Partial<ScraperConfig> = {
   name: 'Mercadona',
-  baseUrl: 'https://www.mercadona.es',
+  baseUrl: 'https://tienda.mercadona.es',
   categories: mercadonaCategories,
   selectors: {
+    // Not used for API-based scraping, kept for compatibility
     productCard: '.product-cell',
     productName: '.product-title',
     productPrice: '.product-price',
@@ -348,11 +396,15 @@ export const mercadonaConfig: Partial<ScraperConfig> = {
   },
   waitTimes: {
     pageLoad: 5000,
-    dynamicContent: 2000,
+    dynamicContent: 3000,
     betweenRequests: 1500,
   },
   maxRetries: 3,
-  concurrentPages: 2,
+  concurrentPages: 1,
+  userAgents: [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  ],
 };
 
 export const korzinkaCategories: CategoryConfig[] = [

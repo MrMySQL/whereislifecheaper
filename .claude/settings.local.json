@@ -4,7 +4,13 @@
       "mcp__playwright__browser_navigate",
       "mcp__playwright__browser_type",
       "mcp__playwright__browser_click",
-      "Bash(npm run migrate:*)"
+      "Bash(npm run migrate:*)",
+      "mcp__playwright__browser_hover",
+      "mcp__playwright__browser_close",
+      "Bash(psql:*)",
+      "Bash(source:*)",
+      "Bash(npm run build:*)",
+      "Bash(git add:*)"
     ]
   }
 }
