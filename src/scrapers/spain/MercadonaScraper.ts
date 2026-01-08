@@ -252,10 +252,14 @@ export class MercadonaScraper extends BaseScraper {
         // Extract brand from display name (Hacendado, Mercadona, etc.)
         const brand = this.extractBrand(item.display_name);
 
-        // Include packaging in name to distinguish variants (e.g., "Leche entera Hacendado 6 bricks x 1 L")
-        const productName = item.packaging
-          ? `${item.display_name} ${item.packaging}`
-          : item.display_name;
+        // Include packaging AND unit info in name to distinguish variants
+        // e.g., "Huevos grandes L Paquete 12 ud." vs "Huevos grandes L Paquete 6 ud."
+        const productName = this.buildProductName(
+          item.display_name,
+          item.packaging,
+          priceInfo.unit_size,
+          priceInfo.size_format
+        );
 
         const product: ProductData = {
           name: productName,
@@ -320,6 +324,38 @@ export class MercadonaScraper extends BaseScraper {
       default:
         return { unit: format, unitQuantity: unitSize };
     }
+  }
+
+  /**
+   * Build full product name including packaging and unit info
+   * This ensures variants are distinguished, e.g.:
+   * - "Huevos grandes L Paquete 12 ud." vs "Huevos grandes L Paquete 6 ud."
+   * - "Leche entera Hacendado Brick 1 l" vs "Leche entera Hacendado 6 bricks x 1 l"
+   */
+  private buildProductName(
+    displayName: string,
+    packaging?: string,
+    unitSize?: number,
+    sizeFormat?: string
+  ): string {
+    let name = displayName;
+
+    // Add packaging if present
+    if (packaging) {
+      name = `${name} ${packaging}`;
+    }
+
+    // Add unit size and format if present and not already included in packaging
+    // Check if the packaging already contains the quantity info
+    if (unitSize && sizeFormat) {
+      const unitInfo = `${unitSize} ${sizeFormat}`;
+      // Only add if not already present in the name or packaging
+      if (!name.toLowerCase().includes(unitInfo.toLowerCase())) {
+        name = `${name} ${unitInfo}`;
+      }
+    }
+
+    return name;
   }
 
   /**
