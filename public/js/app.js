@@ -1,13 +1,19 @@
 /**
  * Where Is Life Cheaper - Dashboard Application
+ * Supports dynamic multi-country comparison
  */
 
 // API base URL
 const API_URL = '/api';
 
-// Exchange rate (hardcoded for now - TRY per EUR)
+// Exchange rates to EUR (approximate)
 // TODO: Fetch from an exchange rate API
-const EXCHANGE_RATE_TRY_EUR = 50.5;
+const EXCHANGE_RATES_TO_EUR = {
+  EUR: 1,
+  TRY: 0.026,  // 1 TRY = 0.026 EUR (approx 38 TRY per EUR)
+  UZS: 0.000076,  // 1 UZS = 0.000076 EUR
+  USD: 0.92,
+};
 
 // Country flag emojis
 const FLAGS = {
@@ -15,6 +21,14 @@ const FLAGS = {
   ME: '\u{1F1F2}\u{1F1EA}',
   ES: '\u{1F1EA}\u{1F1F8}',
   UZ: '\u{1F1FA}\u{1F1FF}',
+};
+
+// Country names
+const COUNTRY_NAMES = {
+  TR: 'Turkey',
+  ME: 'Montenegro',
+  ES: 'Spain',
+  UZ: 'Uzbekistan',
 };
 
 // Currency symbols
@@ -25,18 +39,24 @@ const CURRENCY_SYMBOLS = {
   UZS: 'UZS',
 };
 
+// Currency by country
+const COUNTRY_CURRENCIES = {
+  TR: 'TRY',
+  ME: 'EUR',
+  ES: 'EUR',
+  UZ: 'UZS',
+};
+
 // State
 let comparisonData = [];
 let countries = [];
+let activeCountryCodes = [];
 
 /**
  * Initialize the dashboard
  */
 async function init() {
   console.log('Initializing dashboard...');
-
-  // Set exchange rate display
-  document.getElementById('try-rate').textContent = EXCHANGE_RATE_TRY_EUR.toFixed(2);
 
   // Load data
   await Promise.all([
@@ -49,6 +69,9 @@ async function init() {
 
   // Update timestamp
   updateLastUpdated();
+
+  // Update exchange rates display
+  updateExchangeRatesDisplay();
 }
 
 /**
@@ -71,6 +94,9 @@ async function loadCountryStats() {
     }
 
     countries = data;
+    // Track which countries have data
+    activeCountryCodes = data.map(c => c.country_code);
+
     container.innerHTML = data.map(country => `
       <div class="country-card" data-flag="${FLAGS[country.country_code] || ''}">
         <h3>${FLAGS[country.country_code] || ''} ${country.country_name}</h3>
@@ -95,6 +121,13 @@ async function loadCountryStats() {
       </div>
     `).join('');
 
+    // Update footer with supermarket list
+    const supermarketList = document.getElementById('supermarket-list');
+    if (supermarketList) {
+      const supermarkets = data.map(c => `${c.country_name}`).join(', ');
+      supermarketList.textContent = supermarkets;
+    }
+
   } catch (error) {
     console.error('Failed to load country stats:', error);
     container.innerHTML = `
@@ -106,19 +139,40 @@ async function loadCountryStats() {
 }
 
 /**
+ * Update exchange rates display
+ */
+function updateExchangeRatesDisplay() {
+  const container = document.getElementById('exchange-rates');
+
+  const rates = Object.entries(EXCHANGE_RATES_TO_EUR)
+    .filter(([currency]) => currency !== 'EUR')
+    .map(([currency, rate]) => `
+      <div class="exchange-rate">
+        <span class="currency">${currency}</span>
+        <span class="rate">${(1/rate).toFixed(2)}</span>
+        <span class="label">${currency} per EUR</span>
+      </div>
+    `).join('');
+
+  container.innerHTML = rates || '<p>No exchange rate data available.</p>';
+}
+
+/**
  * Load comparison data using canonical products
  */
 async function loadComparison() {
   const tbody = document.getElementById('comparison-tbody');
+  const thead = document.getElementById('comparison-thead');
 
   try {
     const response = await fetch(`${API_URL}/canonical/comparison?limit=500`);
     const { data } = await response.json();
 
     if (!data || data.length === 0) {
+      const colCount = 3 + activeCountryCodes.length;
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" class="empty-state">
+          <td colspan="${colCount}" class="empty-state">
             <p>No mapped products available for comparison.</p>
             <p><a href="/mapping.html">Map products to compare prices across countries</a></p>
           </td>
@@ -128,13 +182,27 @@ async function loadComparison() {
     }
 
     comparisonData = data;
-    renderComparisonTable(data);
+
+    // Determine which countries are present in the comparison data
+    const countriesInData = new Set();
+    data.forEach(item => {
+      Object.keys(item.prices_by_country).forEach(code => countriesInData.add(code));
+    });
+
+    // Use countries that have comparison data, maintain consistent order
+    const orderedCountries = ['TR', 'ME', 'ES', 'UZ'].filter(code => countriesInData.has(code));
+
+    // Update table headers
+    updateTableHeaders(thead, orderedCountries);
+
+    // Render the table
+    renderComparisonTable(data, orderedCountries);
 
   } catch (error) {
     console.error('Failed to load comparison:', error);
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="empty-state">
+        <td colspan="6" class="empty-state">
           <p>Failed to load comparison data. Is the API running?</p>
         </td>
       </tr>
@@ -143,9 +211,27 @@ async function loadComparison() {
 }
 
 /**
+ * Update table headers based on available countries
+ */
+function updateTableHeaders(thead, countryCodes) {
+  const countryHeaders = countryCodes.map(code =>
+    `<th>${FLAGS[code] || ''} ${COUNTRY_NAMES[code] || code} (${COUNTRY_CURRENCIES[code] || 'EUR'})</th>`
+  ).join('');
+
+  thead.innerHTML = `
+    <tr>
+      <th>Product</th>
+      <th>Unit</th>
+      ${countryHeaders}
+      <th>Cheapest</th>
+    </tr>
+  `;
+}
+
+/**
  * Render the comparison table
  */
-function renderComparisonTable(data) {
+function renderComparisonTable(data, countryCodes) {
   const tbody = document.getElementById('comparison-tbody');
   const searchTerm = document.getElementById('search-input').value.toLowerCase();
 
@@ -157,10 +243,12 @@ function renderComparisonTable(data) {
     );
   }
 
+  const colCount = 3 + countryCodes.length;
+
   if (filtered.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="empty-state">
+        <td colspan="${colCount}" class="empty-state">
           <p>${searchTerm ? 'No matching products found.' : 'No products available for comparison.'}</p>
         </td>
       </tr>
@@ -170,52 +258,79 @@ function renderComparisonTable(data) {
 
   // Render rows
   tbody.innerHTML = filtered.map(item => {
-    const trPrice = item.prices_by_country['TR'];
-    const mePrice = item.prices_by_country['ME'];
+    // Get prices for each country
+    const prices = countryCodes.map(code => ({
+      code,
+      data: item.prices_by_country[code],
+    }));
 
-    // Calculate difference in EUR for comparison
-    let difference = '';
-    let diffClass = '';
+    // Find unit from first available price
+    const firstPrice = prices.find(p => p.data);
+    const unitDisplay = firstPrice ? formatUnit(firstPrice.data.unit, firstPrice.data.unit_quantity) : '-';
 
-    if (trPrice && mePrice) {
-      const trPriceEur = trPrice.price / EXCHANGE_RATE_TRY_EUR;
-      const diff = ((trPriceEur - mePrice.price) / mePrice.price * 100).toFixed(1);
+    // Calculate EUR prices for comparison
+    const eurPrices = prices
+      .filter(p => p.data)
+      .map(p => ({
+        code: p.code,
+        eurPrice: convertToEur(p.data.price, p.data.currency),
+        originalPrice: p.data.price,
+        currency: p.data.currency,
+      }));
 
-      if (Math.abs(diff) < 5) {
-        difference = 'Similar';
-        diffClass = 'similar';
-      } else if (trPriceEur < mePrice.price) {
-        difference = `TR ${Math.abs(diff)}% cheaper`;
-        diffClass = 'cheaper';
-      } else {
-        difference = `ME ${Math.abs(diff)}% cheaper`;
-        diffClass = 'expensive';
+    // Find cheapest
+    let cheapestInfo = '';
+    if (eurPrices.length >= 2) {
+      const sorted = [...eurPrices].sort((a, b) => a.eurPrice - b.eurPrice);
+      const cheapest = sorted[0];
+      const secondCheapest = sorted[1];
+
+      if (cheapest.eurPrice > 0 && secondCheapest.eurPrice > 0) {
+        const savings = ((secondCheapest.eurPrice - cheapest.eurPrice) / secondCheapest.eurPrice * 100).toFixed(0);
+        cheapestInfo = `<span class="cheapest-badge">${FLAGS[cheapest.code] || ''} ${COUNTRY_NAMES[cheapest.code] || cheapest.code}</span>`;
+        if (savings > 5) {
+          cheapestInfo += `<br><small class="savings">${savings}% cheaper</small>`;
+        }
       }
     }
+
+    // Build price cells
+    const priceCells = prices.map(p => {
+      if (!p.data) {
+        return `<td class="price"><span class="no-data">N/A</span></td>`;
+      }
+
+      const isLowest = eurPrices.length >= 2 &&
+        convertToEur(p.data.price, p.data.currency) === Math.min(...eurPrices.map(ep => ep.eurPrice));
+
+      return `
+        <td class="price ${isLowest ? 'lowest-price' : ''}">
+          ${formatPriceCell(p.data)}
+          <br><small class="product-detail">${p.data.product_name}</small>
+        </td>
+      `;
+    }).join('');
 
     return `
       <tr>
         <td class="product-name">
           <strong>${item.canonical_name}</strong>
-          ${item.category ? `<br><small style="color: var(--text-muted)">${item.category}</small>` : ''}
+          ${item.category ? `<br><small class="category">${item.category}</small>` : ''}
         </td>
-        <td>
-          ${trPrice ? formatUnit(trPrice.unit, trPrice.unit_quantity) : (mePrice ? formatUnit(mePrice.unit, mePrice.unit_quantity) : '-')}
-        </td>
-        <td class="price">
-          ${trPrice ? formatPriceCell(trPrice) : '<span style="color: var(--text-muted)">N/A</span>'}
-          ${trPrice ? `<br><small style="color: var(--text-muted)">${trPrice.product_name}</small>` : ''}
-        </td>
-        <td class="price">
-          ${mePrice ? formatPriceCell(mePrice) : '<span style="color: var(--text-muted)">N/A</span>'}
-          ${mePrice ? `<br><small style="color: var(--text-muted)">${mePrice.product_name}</small>` : ''}
-        </td>
-        <td>
-          ${difference ? `<span class="difference ${diffClass}">${difference}</span>` : '-'}
-        </td>
+        <td class="unit">${unitDisplay}</td>
+        ${priceCells}
+        <td class="cheapest">${cheapestInfo || '-'}</td>
       </tr>
     `;
   }).join('');
+}
+
+/**
+ * Convert price to EUR for comparison
+ */
+function convertToEur(price, currency) {
+  const rate = EXCHANGE_RATES_TO_EUR[currency] || 1;
+  return price * rate;
 }
 
 /**
@@ -286,7 +401,13 @@ function setupEventListeners() {
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
-      renderComparisonTable(comparisonData);
+      // Re-determine countries from data
+      const countriesInData = new Set();
+      comparisonData.forEach(item => {
+        Object.keys(item.prices_by_country).forEach(code => countriesInData.add(code));
+      });
+      const orderedCountries = ['TR', 'ME', 'ES', 'UZ'].filter(code => countriesInData.has(code));
+      renderComparisonTable(comparisonData, orderedCountries);
     }, 300);
   });
 
