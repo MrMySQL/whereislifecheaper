@@ -10,9 +10,9 @@ const API_URL = '/api';
 // TODO: Fetch from an exchange rate API
 const EXCHANGE_RATES_TO_EUR = {
   EUR: 1,
-  TRY: 0.026,  // 1 TRY = 0.026 EUR (approx 38 TRY per EUR)
-  UZS: 0.000076,  // 1 UZS = 0.000076 EUR
-  USD: 0.92,
+  TRY: 0.020,  // 1 TRY = 0.026 EUR (approx 38 TRY per EUR)
+  UZS: 0.000071,  // 1 UZS = 0.000076 EUR
+  USD: 0.86,
 };
 
 // Country flag emojis
