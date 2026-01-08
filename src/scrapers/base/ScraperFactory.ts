@@ -1,54 +1,38 @@
 import { BaseScraper } from './BaseScraper';
 import { ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { scraperLogger } from '../../utils/logger';
-import { getScraperConfig, getScraperCategories } from '../../config/scrapers';
-
-// Import scrapers as they're created
-// Turkey
-import { MigrosScraper } from '../turkey/MigrosScraper';
-// import { A101Scraper } from '../turkey/A101Scraper';
-
-// Montenegro
-import { VoliScraper } from '../montenegro/VoliScraper';
-
-// Spain
-// import { MercadonaScraper } from '../spain/MercadonaScraper';
-
-// Uzbekistan
-// import { KorzinkaScraper } from '../uzbekistan/KorzinkaScraper';
+import {
+  getScraperRegistration,
+  getScraperCategories,
+  getScraperDefaultConfig,
+  isScraperRegistered,
+  getRegisteredScraperNames,
+} from '../scraperRegistry';
 
 export interface CreateScraperOptions {
   categoryIds?: string[];  // Filter to specific category IDs
 }
 
 /**
- * Factory class for creating scraper instances
+ * Factory class for creating scraper instances.
+ * Uses the central ScraperRegistry for all scraper metadata.
  */
 export class ScraperFactory {
-  private static scraperMap: Map<string, new (config: ScraperConfig) => BaseScraper> = new Map();
-
-  /**
-   * Register a scraper class
-   */
-  static register(className: string, scraperClass: new (config: ScraperConfig) => BaseScraper): void {
-    ScraperFactory.scraperMap.set(className, scraperClass);
-    scraperLogger.info(`Registered scraper: ${className}`);
-  }
-
   /**
    * Create a scraper instance based on configuration
    */
   static create(config: ScraperConfig): BaseScraper {
-    const ScraperClass = ScraperFactory.scraperMap.get(config.name);
+    const registration = getScraperRegistration(config.name);
 
-    if (!ScraperClass) {
-      const error = `Scraper not found for: ${config.name}. Available scrapers: ${Array.from(ScraperFactory.scraperMap.keys()).join(', ')}`;
+    if (!registration) {
+      const available = getRegisteredScraperNames().join(', ');
+      const error = `Scraper not found: ${config.name}. Available: ${available}`;
       scraperLogger.error(error);
       throw new Error(error);
     }
 
-    scraperLogger.info(`Creating scraper instance for: ${config.name}`);
-    return new ScraperClass(config);
+    scraperLogger.info(`Creating scraper instance: ${config.name}`);
+    return new registration.scraperClass(config);
   }
 
   /**
@@ -64,21 +48,20 @@ export class ScraperFactory {
     },
     options?: CreateScraperOptions
   ): BaseScraper {
-    // Get the scraper class from the map
-    const ScraperClass = ScraperFactory.scraperMap.get(supermarket.scraper_class);
+    const registration = getScraperRegistration(supermarket.scraper_class);
 
-    if (!ScraperClass) {
+    if (!registration) {
       const error = `Scraper class not found: ${supermarket.scraper_class} for ${supermarket.name}`;
       scraperLogger.error(error);
       throw new Error(error);
     }
 
-    // Get default config from file
-    const defaultConfig = getScraperConfig(supermarket.scraper_class) || {};
+    // Get default config from registry
+    const defaultConfig = registration.defaultConfig || {};
     const dbConfig = supermarket.scraper_config || {};
 
-    // Get categories - prioritize database config, then default config
-    let categories: CategoryConfig[] = dbConfig.categories || defaultConfig.categories || [];
+    // Get categories - prioritize database config, then default from registry
+    let categories: CategoryConfig[] = dbConfig.categories || registration.categories || [];
 
     // Legacy support: convert categoryUrls to categories if needed
     if (categories.length === 0 && (dbConfig.categoryUrls || defaultConfig.categoryUrls)) {
@@ -134,7 +117,7 @@ export class ScraperFactory {
     };
 
     scraperLogger.info(`Creating scraper for supermarket: ${supermarket.name}`);
-    return new ScraperClass(config);
+    return new registration.scraperClass(config);
   }
 
   /**
@@ -145,25 +128,25 @@ export class ScraperFactory {
   }
 
   /**
+   * Get default config for a scraper class
+   */
+  static getDefaultConfig(scraperClass: string): Partial<ScraperConfig> | undefined {
+    return getScraperDefaultConfig(scraperClass);
+  }
+
+  /**
    * Get list of registered scrapers
    */
   static getRegisteredScrapers(): string[] {
-    return Array.from(ScraperFactory.scraperMap.keys());
+    return getRegisteredScraperNames();
   }
 
   /**
    * Check if a scraper is registered
    */
   static isRegistered(className: string): boolean {
-    return ScraperFactory.scraperMap.has(className);
+    return isScraperRegistered(className);
   }
 }
-
-// Register scrapers here as they're implemented
-ScraperFactory.register('MigrosScraper', MigrosScraper);
-ScraperFactory.register('VoliScraper', VoliScraper);
-// ScraperFactory.register('A101Scraper', A101Scraper);
-// ScraperFactory.register('MercadonaScraper', MercadonaScraper);
-// ScraperFactory.register('KorzinkaScraper', KorzinkaScraper);
 
 export default ScraperFactory;

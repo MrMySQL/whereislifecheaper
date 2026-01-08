@@ -1,5 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
-import { ProductData, ScraperConfig } from '../../types/scraper.types';
+import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { scraperLogger } from '../../utils/logger';
 
 /**
@@ -80,41 +80,10 @@ export class MigrosScraper extends BaseScraper {
   }
 
   /**
-   * Scrape product list from all category pages using REST API
+   * Scrape a single category using REST API
    */
-  async scrapeProductList(): Promise<ProductData[]> {
-    const allProducts: ProductData[] = [];
-
-    scraperLogger.info(`Starting to scrape Migros categories via API (${this.config.categories.length} categories)...`);
-
-    for (const category of this.config.categories) {
-      try {
-        scraperLogger.info(`Scraping category: ${category.name} (${category.id})`);
-
-        const categoryProducts = await this.scrapeCategoryViaApi(
-          category.url,
-          category.id,
-          category.name
-        );
-        allProducts.push(...categoryProducts);
-
-        scraperLogger.info(
-          `Scraped ${categoryProducts.length} products from ${category.name}`
-        );
-
-        // Wait between categories
-        await this.waitBetweenRequests();
-      } catch (error) {
-        this.logError(
-          `Failed to scrape category: ${category.name}`,
-          undefined,
-          error as Error
-        );
-      }
-    }
-
-    scraperLogger.info(`Total products scraped: ${allProducts.length}`);
-    return allProducts;
+  protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+    return this.scrapeCategoryViaApi(category.url, category.id, category.name);
   }
 
   /**

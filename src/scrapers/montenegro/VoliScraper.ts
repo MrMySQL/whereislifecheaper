@@ -1,5 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
-import { ProductData, ScraperConfig } from '../../types/scraper.types';
+import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { scraperLogger } from '../../utils/logger';
 import { extractQuantity, parsePrice } from '../../utils/normalizer';
 
@@ -24,42 +24,11 @@ export class VoliScraper extends BaseScraper {
   }
 
   /**
-   * Scrape product list from all category pages
+   * Scrape a single category page
    */
-  async scrapeProductList(): Promise<ProductData[]> {
-    const allProducts: ProductData[] = [];
-
-    scraperLogger.info(`Starting to scrape Voli categories (${this.config.categories.length} categories)...`);
-
-    for (const category of this.config.categories) {
-      try {
-        const fullUrl = `${this.config.baseUrl}${category.url}`;
-        scraperLogger.info(`Scraping category: ${category.name} (${category.id})`);
-
-        const categoryProducts = await this.scrapeCategoryPage(
-          fullUrl,
-          category.id,
-          category.name
-        );
-        allProducts.push(...categoryProducts);
-
-        scraperLogger.info(
-          `Scraped ${categoryProducts.length} products from ${category.name}`
-        );
-
-        // Wait between categories
-        await this.waitBetweenRequests();
-      } catch (error) {
-        this.logError(
-          `Failed to scrape category: ${category.name}`,
-          undefined,
-          error as Error
-        );
-      }
-    }
-
-    scraperLogger.info(`Total products scraped: ${allProducts.length}`);
-    return allProducts;
+  protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+    const fullUrl = `${this.config.baseUrl}${category.url}`;
+    return this.scrapeCategoryPage(fullUrl, category.id, category.name);
   }
 
   /**

@@ -8,6 +8,7 @@ import {
   ScrapeResult,
   ScrapeError,
   OnPageScrapedCallback,
+  CategoryConfig,
 } from '../../types/scraper.types';
 import path from 'path';
 import fs from 'fs';
@@ -44,9 +45,10 @@ export abstract class BaseScraper {
   abstract initialize(): Promise<void>;
 
   /**
-   * Scrape the product list from category pages
+   * Scrape a single category and return its products.
+   * This is the main method that subclasses must implement.
    */
-  abstract scrapeProductList(): Promise<ProductData[]>;
+  protected abstract scrapeCategory(category: CategoryConfig): Promise<ProductData[]>;
 
   /**
    * Scrape detailed information for a single product
@@ -57,6 +59,45 @@ export abstract class BaseScraper {
    * Cleanup resources - must be called after scraping
    */
   abstract cleanup(): Promise<void>;
+
+  /**
+   * Scrape the product list from all category pages.
+   * Default implementation using template method pattern.
+   * Iterates over all categories and calls scrapeCategory for each.
+   * Can be overridden if special handling is needed.
+   */
+  async scrapeProductList(): Promise<ProductData[]> {
+    const allProducts: ProductData[] = [];
+
+    scraperLogger.info(
+      `Starting to scrape ${this.config.name} (${this.config.categories.length} categories)...`
+    );
+
+    for (const category of this.config.categories) {
+      try {
+        scraperLogger.info(`Scraping category: ${category.name} (${category.id})`);
+
+        const categoryProducts = await this.scrapeCategory(category);
+        allProducts.push(...categoryProducts);
+
+        scraperLogger.info(
+          `Scraped ${categoryProducts.length} products from ${category.name}`
+        );
+
+        // Wait between categories
+        await this.waitBetweenRequests();
+      } catch (error) {
+        this.logError(
+          `Failed to scrape category: ${category.name}`,
+          undefined,
+          error as Error
+        );
+      }
+    }
+
+    scraperLogger.info(`Total products scraped: ${allProducts.length}`);
+    return allProducts;
+  }
 
   /**
    * Launch browser with configured options
