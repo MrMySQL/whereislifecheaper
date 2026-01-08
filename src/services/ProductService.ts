@@ -17,13 +17,32 @@ export class ProductService {
     categoryId?: string
   ): Promise<string> {
     const normalizedName = normalizeProductName(productData.name);
+    const externalId = productData.externalId || this.extractExternalId(productData.productUrl);
 
     try {
-      // First, try to find existing product by normalized name and brand
-      let productId = await this.findProductByNameAndBrand(
-        normalizedName,
-        productData.brand
-      );
+      let productId: string | null = null;
+
+      // If we have an external_id, first check if a mapping already exists
+      // This ensures product variants with different external_ids stay separate
+      if (externalId) {
+        const existingMapping = await this.findMappingByExternalId(supermarketId, externalId);
+        if (existingMapping) {
+          productId = existingMapping.productId;
+          // Update the product name if it changed (e.g., packaging was added)
+          await this.updateProductIfChanged(productId, {
+            name: productData.name,
+            normalizedName,
+            imageUrl: productData.imageUrl,
+            unit: productData.unit,
+            unitQuantity: productData.unitQuantity,
+          });
+        }
+      }
+
+      // If no existing mapping found by external_id, try to find by normalized name + brand
+      if (!productId) {
+        productId = await this.findProductByNameAndBrand(normalizedName, productData.brand);
+      }
 
       if (!productId) {
         // Create new product
@@ -42,9 +61,8 @@ export class ProductService {
 
       // Create or update product mapping for this supermarket
       // Returns the mapping ID for recording prices
-      // Use externalId from scraper if provided, otherwise try to extract from URL
       const mappingId = await this.createOrUpdateMapping(productId, supermarketId, {
-        externalId: productData.externalId || this.extractExternalId(productData.productUrl),
+        externalId,
         productUrl: productData.productUrl,
       });
 
@@ -53,6 +71,62 @@ export class ProductService {
       scraperLogger.error('Error in findOrCreateProduct:', error);
       throw error;
     }
+  }
+
+  /**
+   * Find existing mapping by supermarket and external_id
+   */
+  private async findMappingByExternalId(
+    supermarketId: string,
+    externalId: string
+  ): Promise<{ productId: string; mappingId: string } | null> {
+    const result = await query<{ product_id: string; id: string }>(
+      `SELECT product_id, id FROM product_mappings
+       WHERE supermarket_id = $1 AND external_id = $2
+       LIMIT 1`,
+      [supermarketId, externalId]
+    );
+
+    if (result.rows.length > 0) {
+      return {
+        productId: result.rows[0].product_id,
+        mappingId: result.rows[0].id,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Update product fields if they changed
+   */
+  private async updateProductIfChanged(
+    productId: string,
+    data: {
+      name: string;
+      normalizedName: string;
+      imageUrl?: string;
+      unit?: string;
+      unitQuantity?: number;
+    }
+  ): Promise<void> {
+    await query(
+      `UPDATE products SET
+        name = $2,
+        normalized_name = $3,
+        image_url = COALESCE($4, image_url),
+        unit = COALESCE($5, unit),
+        unit_quantity = COALESCE($6, unit_quantity),
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [
+        productId,
+        data.name,
+        data.normalizedName,
+        data.imageUrl || null,
+        data.unit || null,
+        data.unitQuantity || null,
+      ]
+    );
   }
 
   /**
