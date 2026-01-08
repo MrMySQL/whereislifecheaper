@@ -64,9 +64,9 @@ export const supermarketsData: SupermarketSeedData[] = [
   {
     country_code: 'ES',
     name: 'Mercadona',
-    website_url: 'https://www.mercadona.es',
+    website_url: 'https://tienda.mercadona.es',
     scraper_class: 'MercadonaScraper',
-    is_active: false,
+    is_active: true,
   },
   {
     country_code: 'ES',
