@@ -4,20 +4,25 @@ import { config } from '../config/env';
 import fs from 'fs';
 import { LoggingWinston } from '@google-cloud/logging-winston';
 
-// Ensure log directories exist
-const logDir = config.logging.dir;
-const dirs = [
-  logDir,
-  path.join(logDir, 'scrapers'),
-  path.join(logDir, 'api'),
-  path.join(logDir, 'cron'),
-];
+// Detect serverless environment (Vercel, AWS Lambda, etc.)
+const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
-dirs.forEach((dir) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-});
+// Ensure log directories exist (skip on serverless - read-only filesystem)
+const logDir = config.logging.dir;
+if (!isServerless) {
+  const dirs = [
+    logDir,
+    path.join(logDir, 'scrapers'),
+    path.join(logDir, 'api'),
+    path.join(logDir, 'cron'),
+  ];
+
+  dirs.forEach((dir) => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+}
 
 // Define log format
 const logFormat = winston.format.combine(
@@ -77,21 +82,25 @@ const createGoogleCloudTransport = (logName: string) => {
 
 // Create base logger
 const baseTransports: winston.transport[] = [
-  // Write all logs to combined.log
-  new winston.transports.File({
-    filename: path.join(logDir, 'combined.log'),
-    level: 'info',
-  }),
-  // Write error logs to error.log
-  new winston.transports.File({
-    filename: path.join(logDir, 'error.log'),
-    level: 'error',
-  }),
-  // Console output
+  // Console output (always enabled)
   new winston.transports.Console({
     format: consoleFormat,
   }),
 ];
+
+// Add file transports only when not on serverless
+if (!isServerless) {
+  baseTransports.push(
+    new winston.transports.File({
+      filename: path.join(logDir, 'combined.log'),
+      level: 'info',
+    }),
+    new winston.transports.File({
+      filename: path.join(logDir, 'error.log'),
+      level: 'error',
+    })
+  );
+}
 
 const gcpMainTransport = createGoogleCloudTransport('main');
 if (gcpMainTransport) baseTransports.push(gcpMainTransport);
@@ -105,17 +114,23 @@ export const logger = winston.createLogger({
 // Helper to create logger with optional GCP transport
 const createLogger = (component: string, logSubDir: string) => {
   const transports: winston.transport[] = [
-    new winston.transports.File({
-      filename: path.join(logDir, logSubDir, 'combined.log'),
-    }),
-    new winston.transports.File({
-      filename: path.join(logDir, logSubDir, 'error.log'),
-      level: 'error',
-    }),
     new winston.transports.Console({
       format: consoleFormat,
     }),
   ];
+
+  // Add file transports only when not on serverless
+  if (!isServerless) {
+    transports.push(
+      new winston.transports.File({
+        filename: path.join(logDir, logSubDir, 'combined.log'),
+      }),
+      new winston.transports.File({
+        filename: path.join(logDir, logSubDir, 'error.log'),
+        level: 'error',
+      })
+    );
+  }
 
   const gcpTransport = createGoogleCloudTransport(component);
   if (gcpTransport) transports.push(gcpTransport);
