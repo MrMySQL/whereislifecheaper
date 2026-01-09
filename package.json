@@ -4,8 +4,8 @@
   "description": "Compare grocery basket prices across countries by scraping supermarket websites",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc && npm run build:frontend",
-    "build:backend": "tsc",
+    "build": "npx tsc && npm run build:frontend",
+    "build:backend": "npx tsc",
     "build:frontend": "cd frontend && npm run build",
     "dev": "ts-node src/index.ts",
     "dev:frontend": "cd frontend && npm run dev",
