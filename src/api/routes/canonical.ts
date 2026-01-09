@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query } from '../../config/database';
+import { isAdmin } from '../../auth';
 
 const router = Router();
 
@@ -58,8 +59,9 @@ router.get('/', async (req, res, next) => {
 /**
  * POST /api/canonical
  * Create a new canonical product
+ * @requires Admin
  */
-router.post('/', async (req, res, next) => {
+router.post('/', isAdmin, async (req, res, next) => {
   try {
     const { name, description, category_id } = req.body;
 
@@ -92,8 +94,9 @@ router.post('/', async (req, res, next) => {
 /**
  * PUT /api/canonical/link
  * Link a product to a canonical product
+ * @requires Admin
  */
-router.put('/link', async (req, res, next) => {
+router.put('/link', isAdmin, async (req, res, next) => {
   try {
     const { product_id, canonical_product_id } = req.body;
 
@@ -322,8 +325,9 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
 /**
  * DELETE /api/canonical/:id
  * Delete a canonical product
+ * @requires Admin
  */
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', isAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
 

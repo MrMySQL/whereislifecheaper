@@ -2,9 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
+import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import { config } from '../config/env';
 import { scraperLogger } from '../utils/logger';
 import { checkConnection, closePool } from '../config/database';
+import pool from '../config/database';
+
+// Auth imports
+import { initializePassport, passport, authRouter } from '../auth';
 
 // Import routes
 import countriesRouter from './routes/countries';
@@ -20,11 +26,35 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: false, // Disable for development
 }));
-app.use(cors());
+app.use(cors({
+  origin: config.api.env === 'development' ? ['http://localhost:5173', 'http://localhost:3000'] : true,
+  credentials: true,
+}));
 app.use(express.json());
 
-// Serve static files from public directory
-app.use(express.static(path.join(__dirname, '../../public')));
+// Session middleware
+const PgSession = connectPgSimple(session);
+app.use(session({
+  store: new PgSession({
+    pool: pool,
+    tableName: 'sessions',
+    createTableIfMissing: false,
+  }),
+  secret: config.session.secret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: config.api.env === 'production',
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    sameSite: config.api.env === 'production' ? 'strict' : 'lax',
+  },
+}));
+
+// Passport initialization
+initializePassport();
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Request logging
 app.use((req, res, next) => {
@@ -55,17 +85,13 @@ app.get('/health', async (_req, res) => {
 });
 
 // API routes
+app.use('/api/auth', authRouter);
 app.use('/api/countries', countriesRouter);
 app.use('/api/supermarkets', supermarketsRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/prices', pricesRouter);
 app.use('/api/scraper', scraperRouter);
 app.use('/api/canonical', canonicalRouter);
-
-// Serve frontend for non-API routes
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, '../../public/index.html'));
-});
 
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
@@ -75,9 +101,17 @@ app.use('/api/*', (req, res) => {
   });
 });
 
-// Fallback to frontend for other routes
+// Serve React frontend in production, or fallback to old public directory
+const frontendPath = config.api.env === 'production'
+  ? path.join(__dirname, '../../dist/frontend')
+  : path.join(__dirname, '../../public');
+
+// Serve static files
+app.use(express.static(frontendPath));
+
+// SPA fallback - serve index.html for all non-API routes
 app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, '../../public/index.html'));
+  res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 // Error handler
@@ -104,13 +138,15 @@ async function startServer() {
       console.log(`\n🚀 Server running on http://localhost:${PORT}`);
       console.log(`\n📊 Dashboard: http://localhost:${PORT}/`);
       console.log(`\n🔌 API Endpoints:`);
+      console.log(`   - GET  /api/auth/google (Login with Google)`);
+      console.log(`   - GET  /api/auth/me (Current user)`);
       console.log(`   - GET  /api/countries`);
       console.log(`   - GET  /api/supermarkets`);
       console.log(`   - GET  /api/products`);
       console.log(`   - GET  /api/prices/latest`);
       console.log(`   - GET  /api/prices/stats`);
-      console.log(`   - GET  /api/prices/basket?products=...`);
-      console.log(`   - POST /api/scraper/trigger`);
+      console.log(`   - GET  /api/canonical/comparison`);
+      console.log(`   - POST /api/scraper/trigger (Admin only)`);
       console.log(`\n❤️  Health check: http://localhost:${PORT}/health`);
       scraperLogger.info(`Server started on port ${PORT}`);
     });

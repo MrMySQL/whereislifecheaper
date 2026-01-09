@@ -14,6 +14,14 @@ const envSchema = Joi.object({
   SCRAPER_CONCURRENT_BROWSERS: Joi.number().default(3),
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug').default('info'),
   LOG_DIR: Joi.string().default('./logs'),
+  // Google OAuth
+  GOOGLE_CLIENT_ID: Joi.string().optional(),
+  GOOGLE_CLIENT_SECRET: Joi.string().optional(),
+  GOOGLE_CALLBACK_URL: Joi.string().default('http://localhost:3000/api/auth/google/callback'),
+  // Session
+  SESSION_SECRET: Joi.string().default('development-secret-change-in-production'),
+  // Admin emails (comma-separated)
+  ADMIN_EMAILS: Joi.string().default(''),
 }).unknown();
 
 const { error, value: envVars } = envSchema.validate(process.env);
@@ -39,5 +47,16 @@ export const config = {
   logging: {
     level: envVars.LOG_LEVEL as string,
     dir: envVars.LOG_DIR as string,
+  },
+  google: {
+    clientId: envVars.GOOGLE_CLIENT_ID as string | undefined,
+    clientSecret: envVars.GOOGLE_CLIENT_SECRET as string | undefined,
+    callbackUrl: envVars.GOOGLE_CALLBACK_URL as string,
+  },
+  session: {
+    secret: envVars.SESSION_SECRET as string,
+  },
+  auth: {
+    adminEmails: (envVars.ADMIN_EMAILS as string).split(',').map(e => e.trim()).filter(Boolean),
   },
 };

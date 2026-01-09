@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { ScraperService } from '../../services/ScraperService';
 import { query } from '../../config/database';
 import { scraperLogger } from '../../utils/logger';
+import { isAdmin } from '../../auth';
 
 const router = Router();
 const scraperService = new ScraperService();
@@ -44,8 +45,9 @@ router.get('/categories/:supermarketId', async (req, res, next) => {
  * POST /api/scraper/trigger
  * Trigger a manual scrape
  * Body: { supermarket_id: string, categories?: string[] }
+ * @requires Admin
  */
-router.post('/trigger', async (req, res, next) => {
+router.post('/trigger', isAdmin, async (req, res, next) => {
   try {
     const { supermarket_id, categories } = req.body;
 
@@ -116,8 +118,9 @@ router.post('/trigger', async (req, res, next) => {
 /**
  * GET /api/scraper/status
  * Get scraper status and recent logs
+ * @requires Admin
  */
-router.get('/status', async (_req, res, next) => {
+router.get('/status', isAdmin, async (_req, res, next) => {
   try {
     // Get recent scrape logs
     const recentLogs = await query(`
@@ -166,8 +169,9 @@ router.get('/status', async (_req, res, next) => {
 /**
  * GET /api/scraper/logs
  * Get scrape logs with optional filters
+ * @requires Admin
  */
-router.get('/logs', async (req, res, next) => {
+router.get('/logs', isAdmin, async (req, res, next) => {
   try {
     const { supermarket_id, status, limit = '50', offset = '0' } = req.query;
 
