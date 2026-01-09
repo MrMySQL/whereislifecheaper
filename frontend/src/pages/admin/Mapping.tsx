@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Link2, Unlink, Plus, Trash2 } from 'lucide-react';
+import { Search, Link2, Unlink, Plus, Trash2, Package } from 'lucide-react';
 import { countriesApi, canonicalApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
 import type { Product, Country, CanonicalProductBasic } from '../../types';
@@ -159,7 +159,26 @@ export default function Mapping() {
                   }`}
                   onClick={() => setSelectedProduct(product)}
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    {/* Product Image */}
+                    <div className="flex-shrink-0 w-16 h-16 bg-slate-100 rounded-lg overflow-hidden">
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url}
+                          alt={product.name}
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-400">
+                          <Package className="h-6 w-6" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Product Info */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-slate-900 truncate">
                         {product.name}
@@ -173,27 +192,31 @@ export default function Mapping() {
                         </p>
                       )}
                     </div>
-                    {product.canonical_product_id ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                          {product.canonical_product_name}
+
+                    {/* Status Badge */}
+                    <div className="flex-shrink-0">
+                      {product.canonical_product_id ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                            {product.canonical_product_name}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleUnlinkProduct(product);
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-500"
+                            title="Unlink"
+                          >
+                            <Unlink className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs px-2 py-1 bg-slate-100 text-slate-500 rounded-full">
+                          Not linked
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleUnlinkProduct(product);
-                          }}
-                          className="p-1 text-slate-400 hover:text-red-500"
-                          title="Unlink"
-                        >
-                          <Unlink className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-xs px-2 py-1 bg-slate-100 text-slate-500 rounded-full">
-                        Not linked
-                      </span>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
