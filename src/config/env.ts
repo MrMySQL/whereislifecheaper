@@ -31,7 +31,7 @@ export const config = {
     env: envVars.NODE_ENV as string,
   },
   scraper: {
-    headless: envVars.PLAYWRIGHT_HEADLESS === 'true',
+    headless: envVars.PLAYWRIGHT_HEADLESS as boolean,
     maxRetries: envVars.SCRAPER_MAX_RETRIES as number,
     timeout: envVars.SCRAPER_TIMEOUT as number,
     concurrentBrowsers: envVars.SCRAPER_CONCURRENT_BROWSERS as number,
