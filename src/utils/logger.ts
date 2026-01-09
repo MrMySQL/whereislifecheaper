@@ -2,6 +2,7 @@ import winston from 'winston';
 import path from 'path';
 import { config } from '../config/env';
 import fs from 'fs';
+import { LoggingWinston } from '@google-cloud/logging-winston';
 
 // Ensure log directories exist
 const logDir = config.logging.dir;
@@ -39,79 +40,97 @@ const consoleFormat = winston.format.combine(
   })
 );
 
+// Google Cloud Logging transport (enabled when GOOGLE_CLOUD_PROJECT is set)
+const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT;
+const useGoogleCloud = !!gcpProjectId && config.api.env === 'production';
+
+// Parse credentials from JSON env var (for serverless platforms like Vercel)
+const getGoogleCredentials = () => {
+  const credentialsJson = process.env.GOOGLE_CREDENTIALS_JSON;
+  if (credentialsJson) {
+    try {
+      return JSON.parse(credentialsJson);
+    } catch (e) {
+      console.error('Failed to parse GOOGLE_CREDENTIALS_JSON:', e);
+      return undefined;
+    }
+  }
+  // Falls back to GOOGLE_APPLICATION_CREDENTIALS file path
+  return undefined;
+};
+
+const createGoogleCloudTransport = (logName: string) => {
+  if (!useGoogleCloud) return null;
+
+  const credentials = getGoogleCredentials();
+
+  return new LoggingWinston({
+    projectId: gcpProjectId,
+    logName: `whereislifecheaper-${logName}`,
+    labels: {
+      app: 'whereislifecheaper',
+      component: logName,
+    },
+    ...(credentials && { credentials }),
+  });
+};
+
 // Create base logger
+const baseTransports: winston.transport[] = [
+  // Write all logs to combined.log
+  new winston.transports.File({
+    filename: path.join(logDir, 'combined.log'),
+    level: 'info',
+  }),
+  // Write error logs to error.log
+  new winston.transports.File({
+    filename: path.join(logDir, 'error.log'),
+    level: 'error',
+  }),
+  // Console output
+  new winston.transports.Console({
+    format: consoleFormat,
+  }),
+];
+
+const gcpMainTransport = createGoogleCloudTransport('main');
+if (gcpMainTransport) baseTransports.push(gcpMainTransport);
+
 export const logger = winston.createLogger({
   level: config.logging.level,
   format: logFormat,
-  transports: [
-    // Write all logs to combined.log
+  transports: baseTransports,
+});
+
+// Helper to create logger with optional GCP transport
+const createLogger = (component: string, logSubDir: string) => {
+  const transports: winston.transport[] = [
     new winston.transports.File({
-      filename: path.join(logDir, 'combined.log'),
-      level: 'info',
+      filename: path.join(logDir, logSubDir, 'combined.log'),
     }),
-    // Write error logs to error.log
     new winston.transports.File({
-      filename: path.join(logDir, 'error.log'),
+      filename: path.join(logDir, logSubDir, 'error.log'),
       level: 'error',
     }),
-    // Console output
     new winston.transports.Console({
       format: consoleFormat,
     }),
-  ],
-});
+  ];
+
+  const gcpTransport = createGoogleCloudTransport(component);
+  if (gcpTransport) transports.push(gcpTransport);
+
+  return winston.createLogger({
+    level: config.logging.level,
+    format: logFormat,
+    transports,
+  });
+};
 
 // Create specialized loggers for different components
-export const scraperLogger = winston.createLogger({
-  level: config.logging.level,
-  format: logFormat,
-  transports: [
-    new winston.transports.File({
-      filename: path.join(logDir, 'scrapers', 'combined.log'),
-    }),
-    new winston.transports.File({
-      filename: path.join(logDir, 'scrapers', 'error.log'),
-      level: 'error',
-    }),
-    new winston.transports.Console({
-      format: consoleFormat,
-    }),
-  ],
-});
-
-export const apiLogger = winston.createLogger({
-  level: config.logging.level,
-  format: logFormat,
-  transports: [
-    new winston.transports.File({
-      filename: path.join(logDir, 'api', 'combined.log'),
-    }),
-    new winston.transports.File({
-      filename: path.join(logDir, 'api', 'error.log'),
-      level: 'error',
-    }),
-    new winston.transports.Console({
-      format: consoleFormat,
-    }),
-  ],
-});
-
-export const cronLogger = winston.createLogger({
-  level: config.logging.level,
-  format: logFormat,
-  transports: [
-    new winston.transports.File({
-      filename: path.join(logDir, 'cron', 'combined.log'),
-    }),
-    new winston.transports.File({
-      filename: path.join(logDir, 'cron', 'error.log'),
-      level: 'error',
-    }),
-    new winston.transports.Console({
-      format: consoleFormat,
-    }),
-  ],
-});
+export const scraperLogger = createLogger('scraper', 'scrapers');
+export const apiLogger = createLogger('api', 'api');
+export const cronLogger = createLogger('cron', 'cron');
 
 // If in development, also log to console with colors
 if (config.api.env === 'development') {
