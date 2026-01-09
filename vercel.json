@@ -1,9 +1,20 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "outputDirectory": "public",
+  "outputDirectory": "dist/frontend",
+  "installCommand": "npm install && cd frontend && npm install",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.ts"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
   ],
   "functions": {
     "api/index.ts": {
