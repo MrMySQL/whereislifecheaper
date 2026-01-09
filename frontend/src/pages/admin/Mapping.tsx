@@ -167,9 +167,9 @@ export default function Mapping() {
                       <p className="text-sm text-slate-500">
                         {product.brand || 'No brand'} • {product.supermarket_name}
                       </p>
-                      {product.price && (
+                      {product.price != null && (
                         <p className="text-sm font-medium text-green-600">
-                          {product.currency} {product.price.toFixed(2)}
+                          {product.currency} {Number(product.price).toFixed(2)}
                         </p>
                       )}
                     </div>
