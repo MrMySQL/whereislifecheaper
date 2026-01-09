@@ -309,9 +309,28 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
 
     const result = await query(sql, params);
 
+    // Get total count for pagination
+    let countSql = `
+      SELECT COUNT(*) as total
+      FROM products p
+      INNER JOIN product_mappings pm ON p.id = pm.product_id
+      INNER JOIN supermarkets s ON pm.supermarket_id = s.id
+      INNER JOIN countries c ON s.country_id = c.id
+      WHERE c.id = $1
+    `;
+    const countParams: (string | number)[] = [countryId];
+
+    if (search) {
+      countSql += ` AND (p.name ILIKE $2 OR p.brand ILIKE $2)`;
+      countParams.push(`%${search}%`);
+    }
+
+    const countResult = await query(countSql, countParams);
+    const total = parseInt(countResult.rows[0]?.total || '0');
+
     res.json({
       data: result.rows,
-      count: result.rowCount,
+      count: total,
       pagination: {
         limit: parseInt(limit as string),
         offset: parseInt(offset as string),

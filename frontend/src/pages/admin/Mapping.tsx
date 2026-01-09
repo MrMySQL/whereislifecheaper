@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Link2, Unlink, Plus, Trash2, Package } from 'lucide-react';
+import { Search, Link2, Unlink, Plus, Trash2, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { countriesApi, canonicalApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
 import type { Product, Country, CanonicalProductBasic } from '../../types';
+
+const PRODUCTS_PER_PAGE = 100;
 
 export default function Mapping() {
   const queryClient = useQueryClient();
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState('');
+  const [productPage, setProductPage] = useState(0);
   const [canonicalSearch, setCanonicalSearch] = useState('');
   const [newCanonicalName, setNewCanonicalName] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -19,18 +22,31 @@ export default function Mapping() {
     queryFn: countriesApi.getAll,
   });
 
-  // Fetch products by country
+  // Fetch products by country with pagination
   const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: ['products', selectedCountryId, productSearch],
+    queryKey: ['products', selectedCountryId, productSearch, productPage],
     queryFn: () =>
       selectedCountryId
         ? canonicalApi.getProductsByCountry(selectedCountryId, {
             search: productSearch || undefined,
-            limit: 100,
+            limit: PRODUCTS_PER_PAGE,
+            offset: productPage * PRODUCTS_PER_PAGE,
           })
         : Promise.resolve({ data: [], count: 0 }),
     enabled: !!selectedCountryId,
   });
+
+  // Reset page when search or country changes
+  const handleCountryChange = (countryId: number | null) => {
+    setSelectedCountryId(countryId);
+    setProductPage(0);
+    setSelectedProduct(null);
+  };
+
+  const handleProductSearch = (search: string) => {
+    setProductSearch(search);
+    setProductPage(0);
+  };
 
   // Fetch canonical products
   const { data: canonicalProducts = [], isLoading: canonicalLoading } = useQuery({
@@ -112,7 +128,7 @@ export default function Mapping() {
             </label>
             <select
               value={selectedCountryId || ''}
-              onChange={(e) => setSelectedCountryId(Number(e.target.value) || null)}
+              onChange={(e) => handleCountryChange(Number(e.target.value) || null)}
               className="input"
             >
               <option value="">Choose a country...</option>
@@ -132,7 +148,7 @@ export default function Mapping() {
                 type="text"
                 placeholder="Search products..."
                 value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
+                onChange={(e) => handleProductSearch(e.target.value)}
                 className="input pl-10"
               />
             </div>
@@ -222,6 +238,36 @@ export default function Mapping() {
               ))
             )}
           </div>
+
+          {/* Pagination */}
+          {selectedCountryId && productsData && productsData.count > PRODUCTS_PER_PAGE && (
+            <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-4">
+              <p className="text-sm text-slate-500">
+                Showing {productPage * PRODUCTS_PER_PAGE + 1}-
+                {Math.min((productPage + 1) * PRODUCTS_PER_PAGE, productsData.count)} of{' '}
+                {productsData.count} products
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setProductPage((p) => Math.max(0, p - 1))}
+                  disabled={productPage === 0}
+                  className="btn-secondary py-1 px-2 disabled:opacity-50"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm text-slate-600">
+                  Page {productPage + 1} of {Math.ceil(productsData.count / PRODUCTS_PER_PAGE)}
+                </span>
+                <button
+                  onClick={() => setProductPage((p) => p + 1)}
+                  disabled={(productPage + 1) * PRODUCTS_PER_PAGE >= productsData.count}
+                  className="btn-secondary py-1 px-2 disabled:opacity-50"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Panel - Canonical Products */}
