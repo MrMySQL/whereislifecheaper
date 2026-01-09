@@ -16,16 +16,17 @@ CREATE TABLE IF NOT EXISTS product_mappings (
 );
 
 -- Create trigger to automatically update updated_at timestamp
+DROP TRIGGER IF EXISTS update_product_mappings_updated_at ON product_mappings;
 CREATE TRIGGER update_product_mappings_updated_at
     BEFORE UPDATE ON product_mappings
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Create indexes for product mappings
-CREATE INDEX idx_product_mappings_product ON product_mappings(product_id);
-CREATE INDEX idx_product_mappings_supermarket ON product_mappings(supermarket_id);
-CREATE INDEX idx_product_mappings_available ON product_mappings(is_available);
-CREATE INDEX idx_product_mappings_last_scraped ON product_mappings(last_scraped_at);
+CREATE INDEX IF NOT EXISTS idx_product_mappings_product ON product_mappings(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_mappings_supermarket ON product_mappings(supermarket_id);
+CREATE INDEX IF NOT EXISTS idx_product_mappings_available ON product_mappings(is_available);
+CREATE INDEX IF NOT EXISTS idx_product_mappings_last_scraped ON product_mappings(last_scraped_at);
 
 -- Comments for product_mappings
 COMMENT ON TABLE product_mappings IS 'Links products to specific supermarkets with URLs and external IDs';
@@ -47,13 +48,13 @@ CREATE TABLE IF NOT EXISTS prices (
 );
 
 -- Create indexes for prices
-CREATE INDEX idx_prices_mapping ON prices(product_mapping_id);
-CREATE INDEX idx_prices_scraped_at ON prices(scraped_at);
-CREATE INDEX idx_prices_currency ON prices(currency);
-CREATE INDEX idx_prices_on_sale ON prices(is_on_sale) WHERE is_on_sale = true;
+CREATE INDEX IF NOT EXISTS idx_prices_mapping ON prices(product_mapping_id);
+CREATE INDEX IF NOT EXISTS idx_prices_scraped_at ON prices(scraped_at);
+CREATE INDEX IF NOT EXISTS idx_prices_currency ON prices(currency);
+CREATE INDEX IF NOT EXISTS idx_prices_on_sale ON prices(is_on_sale) WHERE is_on_sale = true;
 
 -- Create composite index for latest price queries
-CREATE INDEX idx_prices_mapping_scraped ON prices(product_mapping_id, scraped_at DESC);
+CREATE INDEX IF NOT EXISTS idx_prices_mapping_scraped ON prices(product_mapping_id, scraped_at DESC);
 
 -- Comments for prices
 COMMENT ON TABLE prices IS 'Historical price data for all products';

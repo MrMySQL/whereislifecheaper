@@ -13,21 +13,22 @@ CREATE TABLE IF NOT EXISTS canonical_products (
 );
 
 -- Create trigger to automatically update updated_at timestamp
+DROP TRIGGER IF EXISTS update_canonical_products_updated_at ON canonical_products;
 CREATE TRIGGER update_canonical_products_updated_at
     BEFORE UPDATE ON canonical_products
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Create index for name search
-CREATE INDEX idx_canonical_products_name ON canonical_products(name);
-CREATE INDEX idx_canonical_products_category ON canonical_products(category_id);
+CREATE INDEX IF NOT EXISTS idx_canonical_products_name ON canonical_products(name);
+CREATE INDEX IF NOT EXISTS idx_canonical_products_category ON canonical_products(category_id);
 
 -- Add canonical_product_id to products table
 ALTER TABLE products
 ADD COLUMN IF NOT EXISTS canonical_product_id INTEGER REFERENCES canonical_products(id) ON DELETE SET NULL;
 
 -- Create index for the foreign key
-CREATE INDEX idx_products_canonical ON products(canonical_product_id);
+CREATE INDEX IF NOT EXISTS idx_products_canonical ON products(canonical_product_id);
 
 -- Comments
 COMMENT ON TABLE canonical_products IS 'User-defined product identifiers for matching products across countries';

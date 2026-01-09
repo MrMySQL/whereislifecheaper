@@ -16,15 +16,16 @@ CREATE TABLE IF NOT EXISTS supermarkets (
 );
 
 -- Create trigger to automatically update updated_at timestamp
+DROP TRIGGER IF EXISTS update_supermarkets_updated_at ON supermarkets;
 CREATE TRIGGER update_supermarkets_updated_at
     BEFORE UPDATE ON supermarkets
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Create indexes for faster queries
-CREATE INDEX idx_supermarkets_country ON supermarkets(country_id);
-CREATE INDEX idx_supermarkets_is_active ON supermarkets(is_active);
-CREATE INDEX idx_supermarkets_scraper_class ON supermarkets(scraper_class);
+CREATE INDEX IF NOT EXISTS idx_supermarkets_country ON supermarkets(country_id);
+CREATE INDEX IF NOT EXISTS idx_supermarkets_is_active ON supermarkets(is_active);
+CREATE INDEX IF NOT EXISTS idx_supermarkets_scraper_class ON supermarkets(scraper_class);
 
 -- Comments
 COMMENT ON TABLE supermarkets IS 'Stores supermarket chains and their scraping configuration';

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 
 -- Create index for hierarchical queries
-CREATE INDEX idx_categories_parent ON categories(parent_id);
+CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
 
 -- Comments
 COMMENT ON TABLE categories IS 'Product categories for organizing grocery items';

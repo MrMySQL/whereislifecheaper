@@ -15,10 +15,10 @@ CREATE TABLE IF NOT EXISTS scrape_logs (
 );
 
 -- Create indexes for scrape logs
-CREATE INDEX idx_scrape_logs_supermarket ON scrape_logs(supermarket_id);
-CREATE INDEX idx_scrape_logs_started_at ON scrape_logs(started_at DESC);
-CREATE INDEX idx_scrape_logs_status ON scrape_logs(status);
-CREATE INDEX idx_scrape_logs_supermarket_started ON scrape_logs(supermarket_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scrape_logs_supermarket ON scrape_logs(supermarket_id);
+CREATE INDEX IF NOT EXISTS idx_scrape_logs_started_at ON scrape_logs(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scrape_logs_status ON scrape_logs(status);
+CREATE INDEX IF NOT EXISTS idx_scrape_logs_supermarket_started ON scrape_logs(supermarket_id, started_at DESC);
 
 -- Comments
 COMMENT ON TABLE scrape_logs IS 'Logs of all scraping operations for monitoring';

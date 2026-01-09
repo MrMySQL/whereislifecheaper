@@ -24,12 +24,13 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 -- Create indexes
-CREATE INDEX idx_sessions_expire ON sessions(expire);
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_google_id ON users(google_id);
-CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions(expire);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 
 -- Create trigger to automatically update updated_at timestamp
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at
     BEFORE UPDATE ON users
     FOR EACH ROW

@@ -18,20 +18,21 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 -- Create trigger to automatically update updated_at timestamp
+DROP TRIGGER IF EXISTS update_products_updated_at ON products;
 CREATE TRIGGER update_products_updated_at
     BEFORE UPDATE ON products
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Create indexes for faster queries
-CREATE INDEX idx_products_normalized_name ON products(normalized_name);
-CREATE INDEX idx_products_category ON products(category_id);
-CREATE INDEX idx_products_group ON products(product_group_id);
-CREATE INDEX idx_products_barcode ON products(barcode) WHERE barcode IS NOT NULL;
-CREATE INDEX idx_products_brand ON products(brand) WHERE brand IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_products_normalized_name ON products(normalized_name);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_group ON products(product_group_id);
+CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode) WHERE barcode IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand) WHERE brand IS NOT NULL;
 
 -- Create full-text search index for product names
-CREATE INDEX idx_products_name_search ON products USING gin(to_tsvector('english', name));
+CREATE INDEX IF NOT EXISTS idx_products_name_search ON products USING gin(to_tsvector('english', name));
 
 -- Comments
 COMMENT ON TABLE products IS 'Master product catalog with normalized names for matching';

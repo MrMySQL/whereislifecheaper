@@ -20,13 +20,14 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS update_countries_updated_at ON countries;
 CREATE TRIGGER update_countries_updated_at
     BEFORE UPDATE ON countries
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Create index on country code for faster lookups
-CREATE INDEX idx_countries_code ON countries(code);
+CREATE INDEX IF NOT EXISTS idx_countries_code ON countries(code);
 
 -- Comments
 COMMENT ON TABLE countries IS 'Stores countries where grocery prices are being compared';
