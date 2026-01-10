@@ -187,6 +187,9 @@ export class ProductService {
   /**
    * Create or update product mapping for a supermarket
    * Returns the mapping ID
+   *
+   * Handles duplicate products that may appear in multiple categories
+   * by checking for existing mappings first.
    */
   private async createOrUpdateMapping(
     productId: string,
@@ -196,8 +199,29 @@ export class ProductService {
       productUrl: string;
     }
   ): Promise<string> {
-    // Use ON CONFLICT to handle the unique constraint on (supermarket_id, external_id)
-    // If external_id exists, use upsert on that constraint
+    // First check if a mapping already exists for this (product_id, supermarket_id)
+    // This handles the case where the same product appears in multiple categories
+    const existingMapping = await query<{ id: string }>(
+      `SELECT id FROM product_mappings
+       WHERE product_id = $1 AND supermarket_id = $2
+       LIMIT 1`,
+      [productId, supermarketId]
+    );
+
+    if (existingMapping.rows.length > 0) {
+      // Update existing mapping
+      await query(
+        `UPDATE product_mappings SET
+          url = $2,
+          last_scraped_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [existingMapping.rows[0].id, data.productUrl]
+      );
+      return existingMapping.rows[0].id;
+    }
+
+    // No existing mapping - insert new one
     if (data.externalId) {
       const result = await query<{ id: string }>(
         `INSERT INTO product_mappings (
