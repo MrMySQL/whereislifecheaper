@@ -39,6 +39,7 @@ export interface CountryPrice {
   brand: string | null;
   unit: string | null;
   unit_quantity: number | null;
+  image_url: string | null;
   price: number;
   currency: string;
   original_price: number | null;

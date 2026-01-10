@@ -1,4 +1,4 @@
-import { TrendingDown, Tag, Trophy, Package } from 'lucide-react';
+import { TrendingDown, Tag, Trophy, Package, ImageOff } from 'lucide-react';
 import type { CanonicalProduct } from '../../types';
 import { formatPrice, convertToUSD, findCheapestCountry } from '../../utils/currency';
 
@@ -72,12 +72,36 @@ export default function ComparisonTable({
               return (
                 <tr key={product.canonical_id} className="border-b border-cream-100 hover:bg-cream-50/50 transition-colors">
                   <td className="py-2.5 px-4">
-                    <p className="font-medium text-charcoal-900 truncate max-w-[200px]">
-                      {product.canonical_name}
-                    </p>
-                    {product.category && (
-                      <span className="text-[10px] text-charcoal-400">{product.category}</span>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {/* Product image - find first real image URL (prefer http/https over local paths) */}
+                      {(() => {
+                        const prices = Object.values(product.prices_by_country);
+                        const imageUrl = prices.find(p => p.image_url?.startsWith('http'))?.image_url
+                          || prices.find(p => p.image_url && !p.image_url.includes('default'))?.image_url;
+                        return imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={product.canonical_name}
+                            className="w-10 h-10 rounded-lg object-cover bg-cream-100 flex-shrink-0"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null;
+                      })()}
+                      <div className={`w-10 h-10 rounded-lg bg-cream-100 flex items-center justify-center flex-shrink-0 ${Object.values(product.prices_by_country).some(p => p.image_url?.startsWith('http')) ? 'hidden' : ''}`}>
+                        <ImageOff className="w-4 h-4 text-cream-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-charcoal-900 truncate max-w-[180px]">
+                          {product.canonical_name}
+                        </p>
+                        {product.category && (
+                          <span className="text-[10px] text-charcoal-400">{product.category}</span>
+                        )}
+                      </div>
+                    </div>
                   </td>
 
                   {selectedCountries.map((code) => {
