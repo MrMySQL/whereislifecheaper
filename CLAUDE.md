@@ -11,7 +11,7 @@ This is a multi-country grocery price comparison system that scrapes supermarket
 - **Web Framework**: Express.js for REST API
 - **Scraping**: Playwright for browser automation (Chromium)
 - **Database**: PostgreSQL 15+ (running in Docker)
-- **Scheduling**: node-cron for daily automated scraping
+- **Scheduling**: GitHub Actions for daily automated scraping
 - **Logging**: Winston with file-based logs in `logs/`
 
 ### Directory Structure
@@ -26,7 +26,6 @@ src/
 │   └── index.ts       # Connection pool & query interface
 ├── services/          # Business logic layer
 ├── api/               # Express REST API endpoints
-├── scheduler/         # Cron job definitions
 ├── utils/             # Logger, retry logic, text normalizer
 ├── config/            # Environment config, scraper configs
 └── types/             # TypeScript type definitions
@@ -83,7 +82,7 @@ Each scraper must implement:
 npm run build         # Compile TypeScript to dist/
 npm run dev          # Run main application with ts-node
 npm run api          # Start Express API server (port 3000)
-npm run cron         # Run scheduler for automated scraping
+npm run scraper:run  # Run all scrapers (or pass scraper name)
 npm run scraper:test # Test individual scraper manually
 npm test             # Run Jest tests
 ```

@@ -16,7 +16,7 @@ A web scraping system to compare grocery basket prices across **Turkey, Monteneg
 - **Backend**: Node.js + TypeScript + Express.js
 - **Scraping**: Playwright for browser automation
 - **Database**: PostgreSQL 15+
-- **Scheduling**: node-cron for daily automation
+- **Scheduling**: GitHub Actions for daily automation
 - **Frontend**: React + Vite (coming soon)
 - **Logging**: Winston
 
@@ -29,7 +29,6 @@ whereislifecheaper/
 │   ├── database/          # Migrations, models, seeds
 │   ├── services/          # Business logic
 │   ├── api/               # Express REST API
-│   ├── scheduler/         # Cronjobs
 │   ├── utils/             # Utilities (logger, normalizer, retry)
 │   └── config/            # Configuration
 ├── scripts/               # Migration and seed scripts
@@ -97,8 +96,8 @@ npm run api
 # Test a scraper manually
 npm run scraper:test
 
-# Run cronjobs
-npm run cron
+# Run all scrapers
+npm run scraper:run
 
 # Build TypeScript
 npm run build
@@ -204,16 +203,16 @@ Products are matched across countries using:
 3. **Fuzzy matching within category** (medium confidence)
 4. **Manual mapping** for common products
 
-## Daily Cronjob
+## Daily Scraping
 
-The system runs a daily scraper at 2 AM UTC that:
+GitHub Actions runs scrapers daily at 3 AM UTC:
 1. Gets all active supermarkets
 2. For each supermarket:
    - Creates scraper instance
    - Scrapes all products
    - Saves prices with timestamps
    - Logs scrape status
-3. Waits 1 minute between supermarkets to avoid rate limiting
+3. Runs up to 2 scrapers in parallel
 
 ## Monitoring
 

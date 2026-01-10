@@ -49,10 +49,10 @@ jobs:
         run: |
           if [ -n "${{ inputs.scraper }}" ]; then
             echo "Running specific scraper: ${{ inputs.scraper }}"
-            npm run scraper:run -- --scraper=${{ inputs.scraper }}
+            npm run scraper:run -- ${{ inputs.scraper }}
           else
             echo "Running all scrapers"
-            npm run cron -- --run-now
+            npm run scraper:run
           fi
 
       - name: Upload logs on failure
