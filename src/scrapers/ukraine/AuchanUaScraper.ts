@@ -425,7 +425,8 @@ export class AuchanUaScraper extends BaseScraper {
         price = parsePriceValue(priceMatches[0]);
       }
 
-      if (!price || price <= 0) {
+      // Skip products with invalid prices or placeholder prices (99999 UAH)
+      if (!price || price <= 0 || price >= 99999) {
         return null;
       }
 

@@ -430,8 +430,8 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
       const discountPercent = minimum_price.discount?.percent_off ?? 0;
       const isOnSale = discountPercent > 0 || regularPrice > finalPrice;
 
-      // Skip products with invalid prices
-      if (!finalPrice || finalPrice <= 0) {
+      // Skip products with invalid prices or placeholder prices (99999 UAH)
+      if (!finalPrice || finalPrice <= 0 || finalPrice >= 99999) {
         return null;
       }
 
