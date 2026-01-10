@@ -103,6 +103,13 @@ export const supermarketsData: SupermarketSeedData[] = [
     name: 'Auchan',
     website_url: 'https://auchan.ua',
     scraper_class: 'AuchanUaScraper',
+    is_active: false, // Disabled - use GraphQL scraper instead
+  },
+  {
+    country_code: 'UA',
+    name: 'Auchan Express',
+    website_url: 'https://express.auchan.ua',
+    scraper_class: 'AuchanUaGraphQLScraper',
     is_active: true,
   },
 ];
