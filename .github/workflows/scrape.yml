@@ -46,6 +46,8 @@ jobs:
           SCRAPER_TIMEOUT: '30000'
           SCRAPER_CONCURRENT_BROWSERS: '2'
           NODE_ENV: production
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         run: |
           if [ -n "${{ inputs.scraper }}" ]; then
             echo "Running specific scraper: ${{ inputs.scraper }}"
