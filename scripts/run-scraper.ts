@@ -6,20 +6,26 @@ import { closePool } from '../src/config/database';
 /**
  * Script to run scrapers and store results in database
  * Usage:
- *   npm run scraper:run              # Run all active scrapers
- *   npm run scraper:run <id>         # Run specific scraper by supermarket ID
- *   npm run scraper:run migros       # Run specific scraper by name
+ *   npm run scraper:run                    # Run all active scrapers (3 parallel)
+ *   npm run scraper:run --concurrency=5    # Run all with custom concurrency
+ *   npm run scraper:run <id>               # Run specific scraper by supermarket ID
+ *   npm run scraper:run migros             # Run specific scraper by name
  */
 
 async function main() {
   const scraperService = new ScraperService();
   const args = process.argv.slice(2);
 
+  // Parse --concurrency flag
+  const concurrencyArg = args.find(a => a.startsWith('--concurrency='));
+  const concurrency = concurrencyArg ? parseInt(concurrencyArg.split('=')[1], 10) : 3;
+  const filteredArgs = args.filter(a => !a.startsWith('--'));
+
   try {
-    if (args.length === 0) {
-      // Run all scrapers
-      scraperLogger.info('Running all active scrapers...');
-      const results = await scraperService.runAllScrapers();
+    if (filteredArgs.length === 0) {
+      // Run all scrapers in parallel
+      scraperLogger.info(`Running all active scrapers (${concurrency} parallel)...`);
+      const results = await scraperService.runAllScrapers(concurrency);
 
       console.log('\n=== Scraping Results ===\n');
       for (const result of results) {
@@ -32,7 +38,7 @@ async function main() {
       }
     } else {
       // Run specific scraper
-      const identifier = args[0];
+      const identifier = filteredArgs[0];
 
       // Try to find supermarket by ID or name
       let supermarketId = identifier;

@@ -137,10 +137,11 @@ export class ScraperService {
   }
 
   /**
-   * Run scrapers for all active supermarkets
+   * Run scrapers for all active supermarkets with concurrency control
+   * @param concurrency Number of scrapers to run in parallel (default: 3)
    */
-  async runAllScrapers(): Promise<ScrapeResult[]> {
-    scraperLogger.info('Starting scrape for all active supermarkets');
+  async runAllScrapers(concurrency: number = 3): Promise<ScrapeResult[]> {
+    scraperLogger.info(`Starting scrape for all active supermarkets (concurrency: ${concurrency})`);
 
     const supermarkets = await this.getActiveSupermarkets();
 
@@ -149,22 +150,36 @@ export class ScraperService {
     );
 
     const results: ScrapeResult[] = [];
+    const queue = [...supermarkets];
+    const running: Promise<void>[] = [];
 
-    // Run scrapers sequentially to avoid overwhelming servers
-    for (const supermarket of supermarkets) {
+    const runNext = async (): Promise<void> => {
+      const supermarket = queue.shift();
+      if (!supermarket) return;
+
       try {
+        scraperLogger.info(`[Pool] Starting: ${supermarket.name}`);
         const result = await this.runScraper(supermarket.id);
         results.push(result);
-
-        // Wait between supermarkets to be respectful
-        await this.sleep(60000); // 1 minute between supermarkets
+        scraperLogger.info(`[Pool] Completed: ${supermarket.name} (${result.productsScraped} products)`);
       } catch (error) {
         scraperLogger.error(
           `Failed to run scraper for ${supermarket.name}:`,
           error
         );
       }
+
+      // Run next scraper in queue
+      await runNext();
+    };
+
+    // Start initial batch of scrapers
+    for (let i = 0; i < Math.min(concurrency, supermarkets.length); i++) {
+      running.push(runNext());
     }
+
+    // Wait for all to complete
+    await Promise.all(running);
 
     scraperLogger.info(
       `Completed scraping all supermarkets. Total results: ${results.length}`
@@ -370,13 +385,6 @@ export class ScraperService {
         },
       ],
     };
-  }
-
-  /**
-   * Helper to sleep for specified milliseconds
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
