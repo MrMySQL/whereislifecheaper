@@ -58,13 +58,11 @@ export class AuchanUaScraper extends BaseScraper {
         await this.navigateToUrl(pageUrl);
         await this.waitForDynamicContent();
 
-        // Handle cookie consent on first page
+        // Handle cookie consent and anti-bot only on first page of category
         if (currentPage === 1) {
           await this.handleCookieConsent();
+          await this.handleAntiBot();
         }
-
-        // Handle anti-bot measures
-        await this.handleAntiBot();
 
         // Extract products from current page
         const pageProducts = await this.extractProductsFromPage();

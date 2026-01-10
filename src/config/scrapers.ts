@@ -635,10 +635,10 @@ export const auchanUaConfig: Partial<ScraperConfig> = {
     productUrl: 'a[href*="/ua/"]',
   },
   waitTimes: {
-    pageLoad: 5000,
-    dynamicContent: 3000,
-    betweenRequests: 2000,
-    betweenPages: 2500,
+    pageLoad: 2000,        // Reduced from 5000 - page loads faster
+    dynamicContent: 1500,  // Reduced from 3000 - products render quickly
+    betweenRequests: 1000, // Reduced from 2000 - still polite but faster
+    betweenPages: 1500,    // Reduced from 2500
   },
   maxRetries: 3,
   concurrentPages: 1,
