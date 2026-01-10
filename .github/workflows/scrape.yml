@@ -33,6 +33,11 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install chromium --with-deps
 
+      - name: Seed database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run seed
+
       - name: Run scrapers
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
