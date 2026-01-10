@@ -1,4 +1,4 @@
-import { TrendingDown, Tag } from 'lucide-react';
+import { TrendingDown, Tag, Trophy, Package } from 'lucide-react';
 import type { CanonicalProduct } from '../../types';
 import { formatPrice, convertToUSD, findCheapestCountry } from '../../utils/currency';
 
@@ -15,11 +15,11 @@ export default function ComparisonTable({
 }: ComparisonTableProps) {
   if (loading) {
     return (
-      <div className="card">
-        <div className="animate-pulse space-y-4">
-          <div className="h-10 bg-slate-200 rounded w-full" />
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-16 bg-slate-100 rounded w-full" />
+      <div className="card !p-3">
+        <div className="space-y-2">
+          <div className="skeleton h-8 w-full rounded-lg" />
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="skeleton h-12 w-full rounded-lg" />
           ))}
         </div>
       </div>
@@ -28,35 +28,37 @@ export default function ComparisonTable({
 
   if (products.length === 0) {
     return (
-      <div className="card text-center py-12">
-        <p className="text-slate-500">No products found matching your criteria.</p>
-        <p className="text-sm text-slate-400 mt-1">
-          Try selecting different countries or adjusting your search.
-        </p>
+      <div className="card text-center py-8">
+        <Package className="w-8 h-8 text-cream-400 mx-auto mb-2" />
+        <p className="text-sm font-medium text-charcoal-600">No products found</p>
+        <p className="text-xs text-charcoal-400 mt-1">Try different countries or search terms</p>
       </div>
     );
   }
 
   return (
-    <div className="card overflow-hidden p-0">
+    <div className="card !p-0 overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full text-sm">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="text-left py-4 px-6 font-semibold text-slate-700">
+            <tr className="bg-cream-50 border-b border-cream-200">
+              <th className="text-left py-2.5 px-4 font-display font-semibold text-charcoal-700">
                 Product
               </th>
               {selectedCountries.map((code) => (
-                <th key={code} className="text-center py-4 px-4 font-semibold text-slate-700 min-w-[140px]">
+                <th key={code} className="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[110px]">
                   {code}
                 </th>
               ))}
-              <th className="text-center py-4 px-4 font-semibold text-slate-700 min-w-[120px]">
-                Best Deal
+              <th className="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[80px]">
+                <span className="inline-flex items-center gap-1">
+                  <Trophy className="w-3.5 h-3.5 text-saffron-500" />
+                  Best
+                </span>
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {products.map((product) => {
               const cheapest = findCheapestCountry(
                 Object.fromEntries(
@@ -68,25 +70,24 @@ export default function ComparisonTable({
               );
 
               return (
-                <tr key={product.canonical_id} className="hover:bg-slate-50">
-                  <td className="py-4 px-6">
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        {product.canonical_name}
-                      </p>
-                      {product.category && (
-                        <p className="text-sm text-slate-500">{product.category}</p>
-                      )}
-                    </div>
+                <tr key={product.canonical_id} className="border-b border-cream-100 hover:bg-cream-50/50 transition-colors">
+                  <td className="py-2.5 px-4">
+                    <p className="font-medium text-charcoal-900 truncate max-w-[200px]">
+                      {product.canonical_name}
+                    </p>
+                    {product.category && (
+                      <span className="text-[10px] text-charcoal-400">{product.category}</span>
+                    )}
                   </td>
+
                   {selectedCountries.map((code) => {
                     const priceData = product.prices_by_country[code];
                     const isCheapest = cheapest?.code === code;
 
                     if (!priceData) {
                       return (
-                        <td key={code} className="text-center py-4 px-4">
-                          <span className="text-slate-400">-</span>
+                        <td key={code} className="text-center py-2.5 px-3">
+                          <span className="text-cream-400">—</span>
                         </td>
                       );
                     }
@@ -94,55 +95,34 @@ export default function ComparisonTable({
                     return (
                       <td
                         key={code}
-                        className={`text-center py-4 px-4 ${
-                          isCheapest ? 'bg-green-50' : ''
-                        }`}
+                        className={`text-center py-2.5 px-3 ${isCheapest ? 'bg-olive-50/60' : ''}`}
                       >
-                        <div className="space-y-1">
-                          <p
-                            className={`font-semibold ${
-                              isCheapest ? 'text-green-700' : 'text-slate-900'
-                            }`}
-                          >
-                            {formatPrice(priceData.price, priceData.currency)}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            ≈ ${convertToUSD(priceData.price, priceData.currency).toFixed(2)}
-                          </p>
-                          {priceData.is_on_sale && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded-full">
-                              <Tag className="h-3 w-3" />
-                              Sale
-                            </span>
-                          )}
-                          <p className="text-xs text-slate-400 truncate max-w-[120px]">
-                            {priceData.supermarket}
-                          </p>
-                        </div>
+                        <p className={`font-bold ${isCheapest ? 'text-olive-700' : 'text-charcoal-800'}`}>
+                          {formatPrice(priceData.price, priceData.currency)}
+                        </p>
+                        <p className="text-[10px] text-charcoal-400">
+                          ≈ ${convertToUSD(priceData.price, priceData.currency).toFixed(2)}
+                        </p>
+                        {priceData.is_on_sale && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-terracotta-600">
+                            <Tag className="h-2.5 w-2.5" />
+                            Sale
+                          </span>
+                        )}
                       </td>
                     );
                   })}
-                  <td className="text-center py-4 px-4">
+
+                  <td className="text-center py-2.5 px-3">
                     {cheapest && (
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-lg">
-                          {
-                            products[0]?.prices_by_country[cheapest.code]
-                              ? '✓'
-                              : ''
-                          }
-                        </span>
-                        <div>
-                          <p className="font-medium text-green-600">
-                            {cheapest.code}
-                          </p>
-                          {cheapest.savings > 0 && (
-                            <p className="text-xs text-green-600 flex items-center gap-1">
-                              <TrendingDown className="h-3 w-3" />
-                              {cheapest.savings}% cheaper
-                            </p>
-                          )}
-                        </div>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="font-bold text-saffron-700">{cheapest.code}</span>
+                        {cheapest.savings > 0 && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-olive-600 font-medium">
+                            <TrendingDown className="h-2.5 w-2.5" />
+                            {cheapest.savings}%
+                          </span>
+                        )}
                       </div>
                     )}
                   </td>

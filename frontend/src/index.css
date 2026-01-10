@@ -3,49 +3,248 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    @apply scroll-smooth;
+  }
+
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-cream-100 text-charcoal-800 font-body antialiased;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(212, 168, 75, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(196, 93, 53, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 0% 50%, rgba(74, 93, 58, 0.05) 0%, transparent 40%);
+    background-attachment: fixed;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+
+  ::selection {
+    @apply bg-terracotta-200 text-terracotta-900;
   }
 }
 
 @layer components {
+  /* Glass morphism card */
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-slate-200 p-6;
+    @apply bg-white/80 backdrop-blur-sm rounded-2xl border border-cream-300/50 p-6;
+    box-shadow:
+      0 4px 24px -4px rgba(45, 45, 45, 0.08),
+      0 0 0 1px rgba(255, 255, 255, 0.5) inset;
   }
 
+  .card-elevated {
+    @apply card;
+    box-shadow:
+      0 12px 40px -8px rgba(45, 45, 45, 0.12),
+      0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+  }
+
+  .card-interactive {
+    @apply card transition-all duration-300 cursor-pointer;
+  }
+
+  .card-interactive:hover {
+    @apply border-terracotta-200/70;
+    box-shadow:
+      0 16px 48px -8px rgba(196, 93, 53, 0.15),
+      0 0 0 1px rgba(255, 255, 255, 0.7) inset;
+    transform: translateY(-2px);
+  }
+
+  /* Buttons */
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply px-5 py-2.5 rounded-xl font-medium transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-cream-100
+           inline-flex items-center justify-center gap-2;
   }
 
   .btn-primary {
-    @apply btn bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500;
+    @apply btn bg-gradient-to-br from-terracotta-500 to-terracotta-600 text-white
+           hover:from-terracotta-600 hover:to-terracotta-700
+           focus:ring-terracotta-400 shadow-warm;
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 14px 44px -10px rgba(196, 93, 53, 0.45);
+    transform: translateY(-1px);
   }
 
   .btn-secondary {
-    @apply btn bg-slate-100 text-slate-700 hover:bg-slate-200 focus:ring-slate-500;
+    @apply btn bg-white/90 text-charcoal-700 border border-cream-300
+           hover:bg-cream-50 hover:border-cream-400 focus:ring-cream-400;
   }
 
   .btn-ghost {
-    @apply btn bg-transparent text-slate-600 hover:bg-slate-100 focus:ring-slate-500;
+    @apply btn bg-transparent text-charcoal-600
+           hover:bg-charcoal-800/5 focus:ring-charcoal-400;
   }
 
+  .btn-olive {
+    @apply btn bg-gradient-to-br from-olive-600 to-olive-700 text-white
+           hover:from-olive-700 hover:to-olive-800 focus:ring-olive-400;
+  }
+
+  /* Inputs */
   .input {
-    @apply w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply w-full px-4 py-3 bg-white/90 border border-cream-300 rounded-xl
+           font-body text-charcoal-800 placeholder:text-charcoal-400
+           focus:outline-none focus:ring-2 focus:ring-terracotta-400/50 focus:border-terracotta-400
+           transition-all duration-200;
   }
 
+  .input:hover {
+    @apply border-cream-400;
+  }
+
+  /* Price indicators */
   .price-lowest {
-    @apply bg-green-50 text-green-700 font-semibold;
+    @apply bg-gradient-to-br from-olive-50 to-olive-100 text-olive-800 font-semibold
+           border border-olive-200/50;
   }
 
   .price-sale {
-    @apply text-red-500;
+    @apply text-terracotta-600 font-medium;
   }
 
+  /* Country pills */
   .country-pill {
-    @apply px-4 py-2 rounded-full border-2 border-slate-200 cursor-pointer transition-all hover:border-slate-300;
+    @apply px-4 py-2.5 rounded-full border-2 border-cream-300 bg-white/80
+           cursor-pointer transition-all duration-200
+           hover:border-cream-400 hover:shadow-md flex items-center gap-2;
   }
 
   .country-pill.active {
-    @apply border-blue-500 bg-blue-50 text-blue-700;
+    @apply border-terracotta-400 bg-terracotta-50 text-terracotta-800;
+    box-shadow: 0 4px 12px -2px rgba(196, 93, 53, 0.2);
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-terracotta {
+    @apply badge bg-terracotta-100 text-terracotta-700;
+  }
+
+  .badge-olive {
+    @apply badge bg-olive-100 text-olive-700;
+  }
+
+  .badge-saffron {
+    @apply badge bg-saffron-100 text-saffron-700;
+  }
+
+  /* Animated gradient background */
+  .gradient-animated {
+    background: linear-gradient(
+      135deg,
+      rgba(212, 168, 75, 0.15) 0%,
+      rgba(196, 93, 53, 0.1) 50%,
+      rgba(74, 93, 58, 0.12) 100%
+    );
+    background-size: 200% 200%;
+    animation: gradientShift 15s ease infinite;
+  }
+
+  @keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Decorative elements */
+  .decorative-circle {
+    @apply absolute rounded-full opacity-60 pointer-events-none;
+    filter: blur(60px);
+  }
+
+  /* Table styles */
+  .table-header {
+    @apply bg-gradient-to-r from-cream-100 to-cream-50 text-charcoal-700 font-display;
+  }
+
+  .table-row {
+    @apply border-b border-cream-200/70 transition-colors duration-150;
+  }
+
+  .table-row:hover {
+    @apply bg-cream-50/50;
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply bg-gradient-to-r from-cream-200 via-cream-100 to-cream-200 rounded-lg;
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Staggered animations */
+  .stagger-1 { animation-delay: 0.1s; }
+  .stagger-2 { animation-delay: 0.2s; }
+  .stagger-3 { animation-delay: 0.3s; }
+  .stagger-4 { animation-delay: 0.4s; }
+  .stagger-5 { animation-delay: 0.5s; }
+
+  /* Hero decorative shapes */
+  .hero-shape {
+    @apply absolute pointer-events-none;
+  }
+
+  .hero-shape-1 {
+    @apply hero-shape w-72 h-72 -top-20 -right-20 bg-terracotta-300/20 rounded-full;
+    filter: blur(80px);
+  }
+
+  .hero-shape-2 {
+    @apply hero-shape w-96 h-96 -bottom-40 -left-40 bg-saffron-300/20 rounded-full;
+    filter: blur(100px);
+  }
+
+  .hero-shape-3 {
+    @apply hero-shape w-64 h-64 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+           bg-olive-300/15 rounded-full;
+    filter: blur(70px);
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-cream-100;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-cream-400 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-cream-500;
+  }
+
+  /* Focus visible for accessibility */
+  .focus-ring {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta-400
+           focus-visible:ring-offset-2 focus-visible:ring-offset-cream-100;
+  }
+}
+
+/* Custom utility for text gradient */
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-terracotta-600 via-saffron-600 to-olive-600;
+  }
+
+  .text-gradient-warm {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-terracotta-500 to-saffron-500;
   }
 }
