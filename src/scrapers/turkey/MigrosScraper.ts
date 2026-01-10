@@ -3,6 +3,52 @@ import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.
 import { scraperLogger } from '../../utils/logger';
 
 /**
+ * Migros categories configuration
+ */
+export const migrosCategories: CategoryConfig[] = [
+  { id: 'fruits-vegetables', name: 'Fruits & Vegetables', url: '/meyve-sebze-c-2' },
+  { id: 'meat-fish', name: 'Meat, Chicken & Fish', url: '/et-tavuk-balik-c-3' },
+  { id: 'dairy', name: 'Dairy & Breakfast', url: '/sut-kahvaltilik-c-4' },
+  { id: 'staples', name: 'Staple Foods', url: '/temel-gida-c-5' },
+  { id: 'beverages', name: 'Beverages', url: '/icecek-c-6' },
+  { id: 'snacks', name: 'Snacks', url: '/atistirmalik-c-7' },
+  { id: 'frozen', name: 'Frozen Foods', url: '/donuk-gida-c-8' },
+];
+
+/**
+ * Migros scraper configuration
+ */
+export const migrosConfig: Partial<ScraperConfig> = {
+  name: 'Migros',
+  baseUrl: 'https://www.migros.com.tr',
+  categories: migrosCategories,
+  selectors: {
+    productCard: 'mat-card',
+    productName: 'img.product-image',
+    productPrice: '.price-container',
+    productImage: 'img.product-image',
+    productUrl: 'a[href*="-p-"]',
+    productBrand: '.brand',
+    productOriginalPrice: '.old-price',
+    pagination: 'button[aria-label*="sayfa"]',
+    nextPage: 'button[aria-label="Sonraki sayfa"]',
+  },
+  waitTimes: {
+    pageLoad: 5000,
+    dynamicContent: 3000,
+    betweenRequests: 1500,
+    betweenPages: 3000,
+  },
+  maxRetries: 3,
+  concurrentPages: 2,
+  userAgents: [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  ],
+};
+
+/**
  * Migros API response types
  */
 interface MigrosApiResponse {

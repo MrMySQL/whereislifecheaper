@@ -5,7 +5,7 @@ import { query } from '../config/database';
 import { scraperLogger } from '../utils/logger';
 import { ProductData, ScrapeResult, CategoryConfig, PageInfo } from '../types/scraper.types';
 import { calculatePricePerUnit } from '../utils/normalizer';
-import { getScraperCategories } from '../config/scrapers';
+import { getScraperCategories } from '../scrapers/scraperRegistry';
 
 export interface RunScraperOptions {
   categoryIds?: string[];  // Filter to specific category IDs

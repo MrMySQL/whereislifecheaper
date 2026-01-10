@@ -1,19 +1,9 @@
 import { ScraperConfig, CategoryConfig } from '../types/scraper.types';
 import { BaseScraper } from './base/BaseScraper';
-import { MigrosScraper } from './turkey/MigrosScraper';
-import { VoliScraper } from './montenegro/VoliScraper';
-import { MercadonaScraper } from './spain/MercadonaScraper';
-import { AuchanUaScraper } from './ukraine/AuchanUaScraper';
-import {
-  migrosConfig,
-  migrosCategories,
-  voliConfig,
-  voliCategories,
-  mercadonaConfig,
-  mercadonaCategories,
-  auchanUaConfig,
-  auchanUaCategories,
-} from '../config/scrapers';
+import { MigrosScraper, migrosConfig, migrosCategories } from './turkey/MigrosScraper';
+import { VoliScraper, voliConfig, voliCategories } from './montenegro/VoliScraper';
+import { MercadonaScraper, mercadonaConfig, mercadonaCategories } from './spain/MercadonaScraper';
+import { AuchanUaScraper, auchanUaConfig, auchanUaCategories } from './ukraine/AuchanUaScraper';
 
 /**
  * Scraper registration entry containing all metadata for a scraper
