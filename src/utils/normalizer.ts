@@ -16,6 +16,7 @@ export interface BrandAndProduct {
 /**
  * Normalize product name for matching
  * Removes special characters, lowercases, and normalizes whitespace
+ * Supports Latin, Cyrillic, and other Unicode letters
  * @param name - Original product name
  * @returns Normalized product name
  */
@@ -25,7 +26,7 @@ export function normalizeProductName(name: string): string {
   return name
     .toLowerCase()
     .replace(/[®™©]/g, '') // Remove trademark symbols
-    .replace(/[^a-z0-9\s]/g, '') // Remove special characters except spaces and numbers
+    .replace(/[^\p{L}\p{N}\s]/gu, '') // Remove special characters except letters, numbers, and spaces (Unicode-aware)
     .replace(/\s+/g, ' ') // Normalize whitespace
     .trim();
 }
