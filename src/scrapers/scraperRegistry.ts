@@ -3,6 +3,7 @@ import { BaseScraper } from './base/BaseScraper';
 import { MigrosScraper } from './turkey/MigrosScraper';
 import { VoliScraper } from './montenegro/VoliScraper';
 import { MercadonaScraper } from './spain/MercadonaScraper';
+import { AuchanUaScraper } from './ukraine/AuchanUaScraper';
 import {
   migrosConfig,
   migrosCategories,
@@ -10,6 +11,8 @@ import {
   voliCategories,
   mercadonaConfig,
   mercadonaCategories,
+  auchanUaConfig,
+  auchanUaCategories,
 } from '../config/scrapers';
 
 /**
@@ -61,6 +64,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: MercadonaScraper,
       defaultConfig: mercadonaConfig,
       categories: mercadonaCategories,
+    },
+  ],
+  [
+    'AuchanUaScraper',
+    {
+      className: 'AuchanUaScraper',
+      scraperClass: AuchanUaScraper,
+      defaultConfig: auchanUaConfig,
+      categories: auchanUaCategories,
     },
   ],
 ]);

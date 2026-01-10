@@ -97,6 +97,14 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'KorzinkaScraper',
     is_active: false,
   },
+  // Ukraine
+  {
+    country_code: 'UA',
+    name: 'Auchan',
+    website_url: 'https://auchan.ua',
+    scraper_class: 'AuchanUaScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {
