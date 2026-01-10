@@ -218,37 +218,24 @@ export class ProductService {
       return result.rows[0].id;
     }
 
-    // No external_id - check if mapping exists by product_id + supermarket_id
-    const existingResult = await query<{ id: string }>(
-      `SELECT id FROM product_mappings
-       WHERE product_id = $1 AND supermarket_id = $2
-       LIMIT 1`,
-      [productId, supermarketId]
-    );
-
-    if (existingResult.rows.length > 0) {
-      await query(
-        `UPDATE product_mappings
-         SET url = $2, last_scraped_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1`,
-        [existingResult.rows[0].id, data.productUrl]
-      );
-      return existingResult.rows[0].id;
-    }
-
-    // Insert new mapping without external_id
-    const insertResult = await query<{ id: string }>(
+    // No external_id - use ON CONFLICT on (product_id, supermarket_id) constraint
+    const result = await query<{ id: string }>(
       `INSERT INTO product_mappings (
         product_id,
         supermarket_id,
         url,
         last_scraped_at
       ) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+      ON CONFLICT (product_id, supermarket_id)
+      DO UPDATE SET
+        url = EXCLUDED.url,
+        last_scraped_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
       RETURNING id`,
       [productId, supermarketId, data.productUrl]
     );
 
-    return insertResult.rows[0].id;
+    return result.rows[0].id;
   }
 
   /**

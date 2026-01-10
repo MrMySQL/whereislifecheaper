@@ -34,10 +34,14 @@ export default function Mapping() {
           })
         : Promise.resolve({ data: [], count: 0 }),
     enabled: !!selectedCountryId,
+    // Prevent showing stale data from a different country during loading
+    placeholderData: undefined,
   });
 
   // Reset page when search or country changes
   const handleCountryChange = (countryId: number | null) => {
+    // Cancel any pending product queries to prevent race conditions
+    queryClient.cancelQueries({ queryKey: ['products'] });
     setSelectedCountryId(countryId);
     setProductPage(0);
     setSelectedProduct(null);

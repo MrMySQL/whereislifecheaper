@@ -266,7 +266,7 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
     const { search, limit = '100', offset = '0' } = req.query;
 
     let sql = `
-      SELECT
+      SELECT DISTINCT ON (p.id)
         p.id,
         p.name,
         p.brand,
@@ -305,15 +305,18 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
       paramIndex++;
     }
 
-    sql += ` ORDER BY p.name`;
-    sql += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    // DISTINCT ON requires ORDER BY to start with the same expression
+    sql += ` ORDER BY p.id, p.name`;
+
+    // Wrap in subquery to apply final ordering and pagination
+    sql = `SELECT * FROM (${sql}) sub ORDER BY name LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
     params.push(parseInt(limit as string), parseInt(offset as string));
 
     const result = await query(sql, params);
 
-    // Get total count for pagination
+    // Get total count for pagination (count distinct products)
     let countSql = `
-      SELECT COUNT(*) as total
+      SELECT COUNT(DISTINCT p.id) as total
       FROM products p
       INNER JOIN product_mappings pm ON p.id = pm.product_id
       INNER JOIN supermarkets s ON pm.supermarket_id = s.id
