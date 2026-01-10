@@ -561,6 +561,93 @@ export const korzinkaConfig: Partial<ScraperConfig> = {
   concurrentPages: 2,
 };
 
+// Auchan Ukraine Categories
+export const auchanUaCategories: CategoryConfig[] = [
+  // Бакалія (Grocery/Bakaleya)
+  { id: 'krupy', name: 'Крупи', url: '/ua/krupy/' },
+  { id: 'muka-i-krahmal', name: 'Борошно і крохмаль', url: '/ua/muka-i-krahmal/' },
+  { id: 'makaronnye-izdelija', name: 'Макаронні вироби', url: '/ua/makaronnye-izdelija/' },
+  { id: 'sahar', name: 'Цукор', url: '/ua/sahar/' },
+  { id: 'salt', name: 'Сіль', url: '/ua/salt/' },
+  { id: 'maslo', name: 'Олія', url: '/ua/maslo/' },
+  { id: 'uksus', name: 'Оцет', url: '/ua/uksus/' },
+  { id: 'sousy', name: 'Соуси', url: '/ua/sousy/' },
+  { id: 'sneki', name: 'Снеки', url: '/ua/sneki/' },
+  { id: 'specii-i-priprava', name: 'Спеції та приправа', url: '/ua/specii-i-priprava/' },
+  // Консервація (Canned goods)
+  { id: 'ovocheva-konservacija', name: 'Овочева консервація', url: '/ua/ovocheva-konservacija/' },
+  { id: 'fruktova-konservacija', name: 'Фруктова консервація', url: '/ua/fruktova-konservacija/' },
+  { id: 'm-jasni-konservi-ta-garniri', name: "М'ясні консерви", url: '/ua/m-jasni-konservi-ta-garniri/' },
+  { id: 'ribna-konservacija', name: 'Рибна консервація', url: '/ua/ribna-konservacija/' },
+  { id: 'pashtet', name: 'Паштет', url: '/ua/pashtet/' },
+  // Солодощі (Sweets)
+  { id: 'shokolad', name: 'Шоколад', url: '/ua/shokolad/' },
+  { id: 'batonchiki', name: 'Батончики', url: '/ua/batonchiki/' },
+  { id: 'konfety', name: 'Цукерки', url: '/ua/konfety/' },
+  { id: 'pechen-e', name: 'Печиво та вафлі', url: '/ua/pechen-e/' },
+  // Молочні продукти та яйця (Dairy and eggs)
+  { id: 'sguschennoe-moloko', name: 'Згущене молоко', url: '/ua/sguschennoe-moloko/' },
+  { id: 'moloko', name: 'Молоко', url: '/ua/moloko/' },
+  { id: 'slivki', name: 'Вершки', url: '/ua/slivki/' },
+  // Вода та напої (Water and beverages)
+  { id: 'mineral-naja-voda', name: 'Мінеральна вода', url: '/ua/mineral-naja-voda/' },
+  { id: 'sok', name: 'Соки та нектари', url: '/ua/sok/' },
+  { id: 'sladkaja-voda', name: 'Солодка вода та лимонади', url: '/ua/sladkaja-voda/' },
+  { id: 'energetychni-napoji', name: 'Енергетичні напої', url: '/ua/energetychni-napoji/' },
+  // Гарячі напої (Hot beverages)
+  { id: 'kofe', name: 'Кава', url: '/ua/kofe/' },
+  { id: 'chaj', name: 'Чай', url: '/ua/chaj/' },
+  { id: 'kakao', name: 'Какао та гарячий шоколад', url: '/ua/kakao/' },
+  // Сухофрукти та горіхи (Dried fruits and nuts)
+  { id: 'suhofrukty', name: 'Сухофрукти', url: '/ua/suhofrukty/' },
+  { id: 'gorihi', name: 'Горіхи', url: '/ua/gorihi/' },
+  { id: 'nasinnja', name: 'Насіння', url: '/ua/nasinnja/' },
+  // Сухі сніданки (Cereals and breakfast)
+  { id: 'suhie-zavtraki-i-kashi', name: 'Сухі сніданки і каші', url: '/ua/suhie-zavtraki-i-kashi/' },
+  // Здорове харчування (Healthy food)
+  { id: 'dieticheskie-tovary', name: 'Дієтичні товари', url: '/ua/dieticheskie-tovary/' },
+  { id: 'bezgljutenovye-tovary', name: 'Безглютенові товари', url: '/ua/bezgljutenovye-tovary/' },
+  // Товари світу (World foods)
+  { id: 'evropejskaja-kuhnja', name: 'Європейська кухня', url: '/ua/evropejskaja-kuhnja/' },
+  { id: 'aziatskaja-kuhnja', name: 'Азіатська кухня', url: '/ua/aziatskaja-kuhnja/' },
+  // Побутова хімія (Household chemicals)
+  { id: 'sredstva-dlja-stirki', name: 'Засоби для прання', url: '/ua/sredstva-dlja-stirki/' },
+  { id: 'sredstva-dlja-mytja-posudy', name: 'Засоби для миття посуду', url: '/ua/sredstva-dlja-mytja-posudy/' },
+  { id: 'universalnye-sredstva', name: 'Універсальні засоби', url: '/ua/universalnye-sredstva/' },
+  // Товари для тварин (Pet supplies)
+  { id: 'korm-dlja-kotov', name: 'Корм для котів', url: '/ua/korm-dlja-kotov/' },
+  { id: 'korm-dlja-sobak', name: 'Корм для собак', url: '/ua/korm-dlja-sobak/' },
+  // Косметика та гігієна (Cosmetics and hygiene)
+  { id: 'tovary-dlja-lichnogo-uhoda', name: 'Товари для особистого догляду', url: '/ua/tovary-dlja-lichnogo-uhoda/' },
+  { id: 'shampuni', name: 'Шампуні', url: '/ua/shampuni/' },
+  { id: 'zubnye-pasty', name: 'Зубні пасти', url: '/ua/zubnye-pasty/' },
+];
+
+export const auchanUaConfig: Partial<ScraperConfig> = {
+  name: 'Auchan Ukraine',
+  baseUrl: 'https://auchan.ua',
+  categories: auchanUaCategories,
+  selectors: {
+    productCard: 'a[href*="/ua/"]',
+    productName: 'img',
+    productPrice: '.price',
+    productImage: 'img',
+    productUrl: 'a[href*="/ua/"]',
+  },
+  waitTimes: {
+    pageLoad: 5000,
+    dynamicContent: 3000,
+    betweenRequests: 2000,
+    betweenPages: 2500,
+  },
+  maxRetries: 3,
+  concurrentPages: 1,
+  userAgents: [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  ],
+};
+
 /**
  * Get default configuration for a scraper by name
  */
@@ -571,6 +658,7 @@ export function getScraperConfig(name: string): Partial<ScraperConfig> | undefin
     VoliScraper: voliConfig,
     MercadonaScraper: mercadonaConfig,
     KorzinkaScraper: korzinkaConfig,
+    AuchanUaScraper: auchanUaConfig,
   };
 
   return configs[name];
@@ -586,6 +674,7 @@ export function getScraperCategories(name: string): CategoryConfig[] {
     VoliScraper: voliCategories,
     MercadonaScraper: mercadonaCategories,
     KorzinkaScraper: korzinkaCategories,
+    AuchanUaScraper: auchanUaCategories,
   };
 
   return categories[name] || [];

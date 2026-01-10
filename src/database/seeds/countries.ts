@@ -32,6 +32,12 @@ export const countriesData: CountrySeedData[] = [
     currency_code: 'UZS',
     flag_emoji: '🇺🇿',
   },
+  {
+    name: 'Ukraine',
+    code: 'UA',
+    currency_code: 'UAH',
+    flag_emoji: '🇺🇦',
+  },
 ];
 
 export async function seedCountries(): Promise<void> {
