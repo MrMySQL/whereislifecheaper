@@ -136,16 +136,26 @@ export class {SupermarketName}Scraper extends BaseScraper {
 }
 ```
 
-### 2. Add Configuration
+### 2. Add Configuration in Scraper File
 
-Add to `src/config/scrapers.ts`:
+Add categories and config at the top of the scraper file (before the class):
 
 ```typescript
+import { BaseScraper } from '../base/BaseScraper';
+import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
+import { scraperLogger } from '../../utils/logger';
+
+/**
+ * {SupermarketName} categories configuration
+ */
 export const {supermarketName}Categories: CategoryConfig[] = [
   { id: 'category-id', name: 'Category Name', url: '/category-url' },
   // ... more categories
 ];
 
+/**
+ * {SupermarketName} scraper configuration
+ */
 export const {supermarketName}Config: Partial<ScraperConfig> = {
   name: '{SupermarketName}',
   baseUrl: 'https://...',
@@ -168,16 +178,19 @@ export const {supermarketName}Config: Partial<ScraperConfig> = {
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36...',
   ],
 };
+
+export class {SupermarketName}Scraper extends BaseScraper {
+  // ... class implementation
+}
 ```
 
 ### 3. Register the Scraper
 
 Add to `src/scrapers/scraperRegistry.ts`:
 
-1. Import the scraper class and config:
+1. Import the scraper class and config from the scraper file:
 ```typescript
-import { {SupermarketName}Scraper } from './{country}/{SupermarketName}Scraper';
-import { {supermarketName}Config, {supermarketName}Categories } from '../config/scrapers';
+import { {SupermarketName}Scraper, {supermarketName}Config, {supermarketName}Categories } from './{country}/{SupermarketName}Scraper';
 ```
 
 2. Add to the SCRAPER_REGISTRY map:
@@ -270,7 +283,7 @@ npm run scraper:test
 Before completing:
 - [ ] Scraper class created and extends BaseScraper
 - [ ] All abstract methods implemented
-- [ ] Configuration added to scrapers.ts
+- [ ] Categories and config exported from scraper file
 - [ ] Scraper registered in scraperRegistry.ts
 - [ ] Seed data added to supermarkets.ts
 - [ ] Test scraper runs successfully

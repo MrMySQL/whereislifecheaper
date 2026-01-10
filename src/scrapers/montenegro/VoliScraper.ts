@@ -4,6 +4,124 @@ import { scraperLogger } from '../../utils/logger';
 import { extractQuantity, parsePrice } from '../../utils/normalizer';
 
 /**
+ * Voli categories configuration
+ */
+export const voliCategories: CategoryConfig[] = [
+  // Pića - Bezalkoholna pića (Non-alcoholic drinks)
+  { id: '127', name: 'Gazirani sokovi', url: '/kategorije/127' },
+  { id: '128', name: 'Energetska pića', url: '/kategorije/128' },
+  { id: '129', name: 'Negazirani sokovi', url: '/kategorije/129' },
+  { id: '130', name: 'Ledeni čaj i napici', url: '/kategorije/130' },
+  { id: '131', name: 'Voda', url: '/kategorije/131' },
+  { id: '132', name: 'Instant sokovi u prahu i suplementi', url: '/kategorije/132' },
+  { id: '133', name: 'Sirupi', url: '/kategorije/133' },
+  { id: '134', name: 'Hladna kafa', url: '/kategorije/134' },
+  // Pića - Topli napici (Hot drinks)
+  { id: '143', name: 'Kafa', url: '/kategorije/143' },
+  { id: '144', name: 'Čaj', url: '/kategorije/144' },
+  { id: '145', name: 'Topla čokolada', url: '/kategorije/145' },
+  // Mliječni proizvodi i jaja (Dairy and eggs)
+  { id: '22', name: 'Mlijeko', url: '/kategorije/22' },
+  { id: '23', name: 'Jogurt, kefir i slično', url: '/kategorije/23' },
+  { id: '24', name: 'Pavlake', url: '/kategorije/24' },
+  { id: '25', name: 'Čokoladno mlijeko', url: '/kategorije/25' },
+  { id: '26', name: 'Jaja', url: '/kategorije/26' },
+  { id: '27', name: 'Mliječni deserti', url: '/kategorije/27' },
+  { id: '28', name: 'Maslac i margarin', url: '/kategorije/28' },
+  { id: '29', name: 'Majonez i prelivi', url: '/kategorije/29' },
+  { id: '30', name: 'Edamer, gauda emental', url: '/kategorije/30' },
+  { id: '31', name: 'Feta, domaći i drugi bijeli sirevi', url: '/kategorije/31' },
+  { id: '32', name: 'Sirni namaz i kajmak', url: '/kategorije/32' },
+  { id: '33', name: 'Parmezan i sirevi sa plijesnima', url: '/kategorije/33' },
+  { id: '34', name: 'Mozzarella i drugi meki sirevi', url: '/kategorije/34' },
+  { id: '35', name: 'Ostali delikatesni sirevi', url: '/kategorije/35' },
+  { id: '36', name: 'Kozji i ovčiji sir', url: '/kategorije/36' },
+  { id: '37', name: 'Tost i topljeni sirevi', url: '/kategorije/37' },
+  { id: '38', name: 'Dimljeni sirevi', url: '/kategorije/38' },
+  { id: '39', name: 'Biljni sirevi', url: '/kategorije/39' },
+  { id: '40', name: 'Surutka', url: '/kategorije/40' },
+  // Voće i povrće (Fruits and vegetables)
+  { id: '146', name: 'Voće', url: '/kategorije/146' },
+  { id: '147', name: 'Povrće', url: '/kategorije/147' },
+  { id: '248', name: 'Pakovane salate i svježe začinsko bilje', url: '/kategorije/248' },
+  { id: '148', name: 'Organsko voće i povrće', url: '/kategorije/148' },
+  { id: '149', name: 'Pečurke', url: '/kategorije/149' },
+  { id: '150', name: 'Orašasti plodovi i sjemenke', url: '/kategorije/150' },
+  { id: '151', name: 'Dehidrirano voće', url: '/kategorije/151' },
+  { id: '152', name: 'Zimnica', url: '/kategorije/152' },
+  { id: '153', name: 'Sosevi i pelati', url: '/kategorije/153' },
+  { id: '154', name: 'Kečap', url: '/kategorije/154' },
+  { id: '155', name: 'Masline', url: '/kategorije/155' },
+  { id: '156', name: 'Namazi', url: '/kategorije/156' },
+  { id: '157', name: 'Kompoti', url: '/kategorije/157' },
+  // Sve za doručak (Breakfast)
+  { id: '43', name: 'Kremovi', url: '/kategorije/43' },
+  { id: '44', name: 'Cerealije (musli, corn flakes)', url: '/kategorije/44' },
+  { id: '45', name: 'Džemovi i marmelade', url: '/kategorije/45' },
+  { id: '46', name: 'Med', url: '/kategorije/46' },
+  { id: '47', name: 'Dodaci za mliječne napitke', url: '/kategorije/47' },
+  // Mesara i ribara (Butcher and fish - excluding Svinjetina)
+  { id: '158', name: 'Roštilj', url: '/kategorije/158' },
+  { id: '160', name: 'Junetina', url: '/kategorije/160' },
+  { id: '161', name: 'Piletina', url: '/kategorije/161' },
+  { id: '162', name: 'Jagnjetina', url: '/kategorije/162' },
+  { id: '163', name: 'Ćuretina', url: '/kategorije/163' },
+  { id: '164', name: 'Teletina', url: '/kategorije/164' },
+  { id: '165', name: 'Smrznuta piletina', url: '/kategorije/165' },
+  { id: '166', name: 'Smrznuta ćuretina', url: '/kategorije/166' },
+  { id: '243', name: 'Smrznuta junetina', url: '/kategorije/243' },
+  { id: '167', name: 'Morska riba smrznuto', url: '/kategorije/167' },
+  { id: '168', name: 'Plodovi mora smrznuto', url: '/kategorije/168' },
+  { id: '169', name: 'Panirani riblji proizvodi smrznuto', url: '/kategorije/169' },
+  { id: '170', name: 'Slatkovodna riba', url: '/kategorije/170' },
+  { id: '171', name: 'Morska riba', url: '/kategorije/171' },
+  // Suhomesnati proizvodi i konzerve (Cured meats and canned goods)
+  { id: '172', name: 'Trajni suhomesnati proizvodi', url: '/kategorije/172' },
+  { id: '173', name: 'Trajne kobasice', url: '/kategorije/173' },
+  { id: '174', name: 'Šunke i mortadele', url: '/kategorije/174' },
+  { id: '175', name: 'Viršle i kobasice', url: '/kategorije/175' },
+  { id: '176', name: 'Bareni suhomesnati proizvodi', url: '/kategorije/176' },
+  { id: '177', name: 'Parizeri i salame', url: '/kategorije/177' },
+  { id: '178', name: 'Paštete', url: '/kategorije/178' },
+  { id: '179', name: 'Mesni naresci', url: '/kategorije/179' },
+  { id: '180', name: 'Gotova jela', url: '/kategorije/180' },
+  { id: '181', name: 'Tuna', url: '/kategorije/181' },
+  { id: '182', name: 'Tuna salata', url: '/kategorije/182' },
+  { id: '183', name: 'Sardine', url: '/kategorije/183' },
+  { id: '184', name: 'Riblje paštete i namazi', url: '/kategorije/184' },
+  { id: '185', name: 'Skuša', url: '/kategorije/185' },
+  { id: '186', name: 'Ostali riblji proizvodi', url: '/kategorije/186' },
+  { id: '187', name: 'Inćun', url: '/kategorije/187' },
+];
+
+/**
+ * Voli scraper configuration
+ */
+export const voliConfig: Partial<ScraperConfig> = {
+  name: 'Voli',
+  baseUrl: 'https://voli.me',
+  categories: voliCategories,
+  selectors: {
+    productCard: 'a[href*="/proizvod/"]',
+    productName: 'img',
+    productPrice: '.price',
+    productImage: 'img',
+    productUrl: 'a[href*="/proizvod/"]',
+  },
+  waitTimes: {
+    pageLoad: 5000,
+    dynamicContent: 3000,
+    betweenRequests: 2000,
+  },
+  maxRetries: 3,
+  concurrentPages: 1,
+  userAgents: [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  ],
+};
+
+/**
  * Scraper for Voli Montenegro (voli.me)
  * Montenegro's leading supermarket chain
  */
