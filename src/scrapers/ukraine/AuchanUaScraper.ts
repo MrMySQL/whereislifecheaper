@@ -438,6 +438,10 @@ export class AuchanUaScraper extends BaseScraper {
         if (imageUrl && !imageUrl.startsWith('http')) {
           imageUrl = `${this.config.baseUrl}${imageUrl}`;
         }
+        // Add size modifiers to reduce image size
+        if (imageUrl) {
+          imageUrl = this.transformImageUrl(imageUrl);
+        }
       }
 
       // Extract quantity from product name
@@ -534,8 +538,11 @@ export class AuchanUaScraper extends BaseScraper {
       throw new Error(`Could not parse price from ${url}`);
     }
 
-    // Extract image URL
-    const imageUrl = await this.extractAttribute('img[alt]', 'src');
+    // Extract image URL and add size modifiers
+    let imageUrl = await this.extractAttribute('img[alt]', 'src');
+    if (imageUrl) {
+      imageUrl = this.transformImageUrl(imageUrl);
+    }
 
     // Extract quantity from name
     const quantityInfo = extractQuantity(name);
@@ -561,6 +568,19 @@ export class AuchanUaScraper extends BaseScraper {
 
     this.productsScraped++;
     return productData;
+  }
+
+  /**
+   * Transform Auchan image URL to include size modifiers for smaller images
+   * Converts: https://img.auchan.ua/rx/q_90,ofmt_webp/...
+   * To: https://img.auchan.ua/rx/q_90,ofmt_webp,w_312,h_312/...
+   */
+  private transformImageUrl(url: string): string {
+    // Match the pattern with image modifiers and add size parameters
+    return url.replace(
+      /\/rx\/([^/]+)\/auchan\.ua\//,
+      '/rx/$1,w_312,h_312/auchan.ua/'
+    );
   }
 
   /**

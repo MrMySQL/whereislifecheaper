@@ -442,7 +442,10 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
       const productUrl = `https://express.auchan.ua/${item.url_key}/`;
 
       // Extract image URL (handle possible null)
-      const imageUrl = item.thumbnail?.url || undefined;
+      // Add size modifiers to reduce image size (w_312,h_312)
+      const imageUrl = item.thumbnail?.url
+        ? this.transformImageUrl(item.thumbnail.url)
+        : undefined;
 
       const productData: ProductData = {
         name: item.name,
@@ -464,6 +467,19 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
       scraperLogger.debug('Error transforming product:', error);
       return null;
     }
+  }
+
+  /**
+   * Transform Auchan image URL to include size modifiers for smaller images
+   * Converts: https://img.auchan.ua/rx/q_90,ofmt_webp/...
+   * To: https://img.auchan.ua/rx/q_90,ofmt_webp,w_312,h_312/...
+   */
+  private transformImageUrl(url: string): string {
+    // Match the pattern with image modifiers and add size parameters
+    return url.replace(
+      /\/rx\/([^/]+)\/auchan\.ua\//,
+      '/rx/$1,w_312,h_312/auchan.ua/'
+    );
   }
 
   /**
