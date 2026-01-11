@@ -5,6 +5,7 @@ const exchangeRates: Record<string, number> = {
   TRY: 0.031,
   RSD: 0.0091,
   UZS: 0.000078,
+  UAH: 0.031,
 };
 
 export function formatPrice(price: number, currency: string): string {
@@ -14,6 +15,7 @@ export function formatPrice(price: number, currency: string): string {
     TRY: '₺',
     RSD: 'RSD',
     UZS: "so'm",
+    UAH: '₴'
   };
 
   const symbol = symbols[currency] || currency;
