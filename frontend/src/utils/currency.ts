@@ -1,40 +1,38 @@
-// Exchange rates to USD (approximate, should be fetched from API in production)
+// Exchange rates to EUR (approximate, should be fetched from API in production)
 const exchangeRates: Record<string, number> = {
-  USD: 1,
-  EUR: 1.08,
-  TRY: 0.031,
-  RSD: 0.0091,
-  UZS: 0.000078,
-  UAH: 0.031,
+  EUR: 1,
+  USD: 0.86,
+  TRY: 0.020,
+  UZS: 0.000071,
+  UAH: 0.020,
+};
+
+const currencySymbols: Record<string, string> = {
+  USD: '$',
+  EUR: '€',
+  TRY: '₺',
+  UZS: "so'm",
+  UAH: '₴'
 };
 
 export function formatPrice(price: number, currency: string): string {
-  const symbols: Record<string, string> = {
-    USD: '$',
-    EUR: '€',
-    TRY: '₺',
-    RSD: 'RSD',
-    UZS: "so'm",
-    UAH: '₴'
-  };
-
-  const symbol = symbols[currency] || currency;
+  const symbol = currencySymbols[currency] || currency;
   return `${symbol}${price.toFixed(2)}`;
 }
 
-export function convertToUSD(price: number, currency: string): number {
+export function convertToEUR(price: number, currency: string): number {
   const rate = exchangeRates[currency] || 1;
   return price * rate;
 }
 
-export function formatPriceWithUSD(price: number, currency: string): {
+export function formatPriceWithEUR(price: number, currency: string): {
   local: string;
-  usd: string;
+  eur: string;
 } {
-  const usdValue = convertToUSD(price, currency);
+  const eurValue = convertToEUR(price, currency);
   return {
     local: formatPrice(price, currency),
-    usd: `$${usdValue.toFixed(2)}`,
+    eur: `€${eurValue.toFixed(2)}`,
   };
 }
 
@@ -44,19 +42,19 @@ export function findCheapestCountry(
   const entries = Object.entries(pricesByCountry);
   if (entries.length < 2) return null;
 
-  // Convert all prices to USD for comparison
-  const pricesInUSD = entries.map(([code, data]) => ({
+  // Convert all prices to EUR for comparison
+  const pricesInEUR = entries.map(([code, data]) => ({
     code,
-    usdPrice: convertToUSD(data.price, data.currency),
+    eurPrice: convertToEUR(data.price, data.currency),
   }));
 
-  // Sort by USD price
-  pricesInUSD.sort((a, b) => a.usdPrice - b.usdPrice);
+  // Sort by EUR price
+  pricesInEUR.sort((a, b) => a.eurPrice - b.eurPrice);
 
-  const cheapest = pricesInUSD[0];
-  const avgOfOthers = pricesInUSD.slice(1).reduce((sum, p) => sum + p.usdPrice, 0) / (pricesInUSD.length - 1);
+  const cheapest = pricesInEUR[0];
+  const avgOfOthers = pricesInEUR.slice(1).reduce((sum, p) => sum + p.eurPrice, 0) / (pricesInEUR.length - 1);
 
-  const savings = ((avgOfOthers - cheapest.usdPrice) / avgOfOthers) * 100;
+  const savings = ((avgOfOthers - cheapest.eurPrice) / avgOfOthers) * 100;
 
   return {
     code: cheapest.code,
