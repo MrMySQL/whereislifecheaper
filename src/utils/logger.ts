@@ -69,6 +69,23 @@ const createGoogleCloudTransport = (logName: string) => {
 
   const credentials = getGoogleCredentials();
 
+  // In serverless environments, use redirectToStdout to avoid gRPC connection blocking
+  // Logs will be in structured JSON format, can be forwarded to GCP via log drain
+  if (isServerless) {
+    return new LoggingWinston({
+      projectId: gcpProjectId,
+      logName: `whereislifecheaper-${logName}`,
+      labels: {
+        app: 'whereislifecheaper',
+        component: logName,
+        environment: 'vercel',
+      },
+      redirectToStdout: true,
+      useMessageField: false, // Put message in jsonPayload for better querying
+    });
+  }
+
+  // Non-serverless: use direct gRPC connection to GCP
   return new LoggingWinston({
     projectId: gcpProjectId,
     logName: `whereislifecheaper-${logName}`,
