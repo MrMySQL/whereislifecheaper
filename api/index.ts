@@ -20,6 +20,9 @@ import scraperRouter from '../src/api/routes/scraper';
 
 const app = express();
 
+// Trust proxy - required for secure cookies behind Vercel/proxies
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
   origin: true,
@@ -42,7 +45,7 @@ app.use(session({
     secure: config.api.env === 'production',
     httpOnly: true,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    sameSite: config.api.env === 'production' ? 'none' : 'lax',
+    sameSite: 'lax', // 'lax' works for same-origin and OAuth redirects
   },
 }));
 

@@ -30,9 +30,14 @@ router.get('/google/callback',
       failureRedirect: '/?error=auth_failed',
     })(req, res, next);
   },
-  (_req: Request, res: Response) => {
-    // Successful authentication
-    res.redirect('/');
+  (req: Request, res: Response) => {
+    // Successful authentication - save session before redirect (important for serverless)
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+      }
+      res.redirect('/');
+    });
   }
 );
 
