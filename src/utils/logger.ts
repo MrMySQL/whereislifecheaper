@@ -46,9 +46,8 @@ const consoleFormat = winston.format.combine(
 );
 
 // Google Cloud Logging transport (enabled when GOOGLE_CLOUD_PROJECT is set)
-// Disabled on serverless (Vercel) - the gRPC connection blocks function startup
 const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT;
-const useGoogleCloud = !!gcpProjectId && config.api.env === 'production' && !isServerless;
+const useGoogleCloud = !!gcpProjectId && config.api.env === 'production';
 
 // Parse credentials from JSON env var (for serverless platforms like Vercel)
 const getGoogleCredentials = () => {
