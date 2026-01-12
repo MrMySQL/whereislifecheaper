@@ -117,9 +117,9 @@ export const voliConfig: Partial<ScraperConfig> = {
     productUrl: 'a[href*="/proizvod/"]',
   },
   waitTimes: {
-    pageLoad: 5000,
-    dynamicContent: 3000,
-    betweenRequests: 2000,
+    pageLoad: 1000,        // Voli loads fast, no need for long waits
+    dynamicContent: 1000,  // Products load with initial render
+    betweenRequests: 1000, // Minimal delay between categories
   },
   maxRetries: 3,
   concurrentPages: 1,
