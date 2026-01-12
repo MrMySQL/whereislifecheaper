@@ -5,20 +5,29 @@ import { closePool } from '../src/config/database';
 
 /**
  * Script to run scrapers and store results in database
- * Usage:
- *   npm run scraper:run                    # Run all active scrapers (3 parallel)
- *   npm run scraper:run --concurrency=5    # Run all with custom concurrency
- *   npm run scraper:run <id>               # Run specific scraper by supermarket ID
- *   npm run scraper:run migros             # Run specific scraper by name
+ * Usage (use -- to pass flags to script):
+ *   npm run scraper:run                                   # Run all active scrapers (3 parallel)
+ *   npm run scraper:run -- --concurrency=5               # Run all with custom concurrency
+ *   npm run scraper:run -- <name|id>                     # Run specific scraper by name or ID
+ *   npm run scraper:run -- voli                          # Run Voli scraper (all categories)
+ *   npm run scraper:run -- voli --categories=75,76,77    # Run Voli with specific categories
+ *   npm run scraper:run -- voli --list-categories        # List available categories for Voli
+ *   npm run scraper:run -- voli -l                       # Short form for --list-categories
  */
 
 async function main() {
   const scraperService = new ScraperService();
   const args = process.argv.slice(2);
 
-  // Parse --concurrency flag
+  // Parse flags
   const concurrencyArg = args.find(a => a.startsWith('--concurrency='));
   const concurrency = concurrencyArg ? parseInt(concurrencyArg.split('=')[1], 10) : 3;
+
+  const categoriesArg = args.find(a => a.startsWith('--categories='));
+  const categoryIds = categoriesArg ? categoriesArg.split('=')[1].split(',').map(c => c.trim()) : undefined;
+
+  const listCategories = args.includes('--list-categories') || args.includes('-l');
+
   const filteredArgs = args.filter(a => !a.startsWith('--'));
 
   try {
@@ -60,8 +69,21 @@ async function main() {
         supermarketId = result.rows[0].id;
       }
 
-      scraperLogger.info(`Running scraper for supermarket: ${supermarketId}`);
-      const result = await scraperService.runScraper(supermarketId);
+      // Handle --list-categories flag
+      if (listCategories) {
+        const categories = await scraperService.getAvailableCategories(supermarketId);
+        console.log('\n=== Available Categories ===\n');
+        categories.forEach(cat => {
+          console.log(`  ${cat.id.padEnd(10)} ${cat.name}`);
+        });
+        console.log(`\nTotal: ${categories.length} categories`);
+        console.log('\nUsage: npm run scraper:run ' + identifier + ' --categories=<id1,id2,...>');
+        return;
+      }
+
+      const categoryInfo = categoryIds ? ` (categories: ${categoryIds.join(', ')})` : '';
+      scraperLogger.info(`Running scraper for supermarket: ${supermarketId}${categoryInfo}`);
+      const result = await scraperService.runScraper(supermarketId, { categoryIds });
 
       console.log('\n=== Scraping Result ===\n');
       console.log(`Supermarket: ${result.supermarketId}`);
