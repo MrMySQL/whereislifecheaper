@@ -127,17 +127,6 @@ export async function retryOnError<T>(
 }
 
 /**
- * Add random jitter to delay to avoid thundering herd
- * @param delay - Base delay in milliseconds
- * @param jitterFactor - Jitter factor (0-1)
- * @returns Delay with jitter
- */
-export function addJitter(delay: number, jitterFactor: number = 0.1): number {
-  const jitter = delay * jitterFactor * Math.random();
-  return delay + jitter;
-}
-
-/**
  * Batch retry - retry a batch of operations independently
  * @param operations - Array of async operations
  * @param options - Retry options

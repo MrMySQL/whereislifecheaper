@@ -4,46 +4,53 @@ export interface AuthenticatedRequest extends Request {
   user?: Express.User;
 }
 
-export const isAuthenticated = (
+function isUserAuthenticated(req: AuthenticatedRequest): boolean {
+  return Boolean(req.isAuthenticated && req.isAuthenticated());
+}
+
+export function isAuthenticated(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-) => {
-  if (req.isAuthenticated && req.isAuthenticated()) {
-    return next();
+): void {
+  if (isUserAuthenticated(req)) {
+    next();
+    return;
   }
   res.status(401).json({
     error: 'Unauthorized',
     message: 'Authentication required',
   });
-};
+}
 
-export const isAdmin = (
+export function isAdmin(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-) => {
-  if (req.isAuthenticated && req.isAuthenticated() && req.user?.role === 'admin') {
-    return next();
-  }
-  if (!req.isAuthenticated || !req.isAuthenticated()) {
-    return res.status(401).json({
+): void {
+  if (!isUserAuthenticated(req)) {
+    res.status(401).json({
       error: 'Unauthorized',
       message: 'Authentication required',
     });
+    return;
   }
-  res.status(403).json({
-    error: 'Forbidden',
-    message: 'Admin access required',
-  });
-};
 
-export const optionalAuth = (
+  if (req.user?.role !== 'admin') {
+    res.status(403).json({
+      error: 'Forbidden',
+      message: 'Admin access required',
+    });
+    return;
+  }
+
+  next();
+}
+
+export function optionalAuth(
   _req: AuthenticatedRequest,
   _res: Response,
   next: NextFunction
-) => {
-  // This middleware just ensures req.user is available if authenticated
-  // but doesn't require authentication
+): void {
   next();
-};
+}

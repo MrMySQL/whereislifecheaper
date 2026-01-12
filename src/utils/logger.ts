@@ -128,15 +128,14 @@ export const logger = winston.createLogger({
   transports: baseTransports,
 });
 
-// Helper to create logger with optional GCP transport
-const createLogger = (component: string, logSubDir: string) => {
+/**
+ * Create a component-specific logger with console, file (non-serverless), and optional GCP transports
+ */
+function createLogger(component: string, logSubDir: string): winston.Logger {
   const transports: winston.transport[] = [
-    new winston.transports.Console({
-      format: consoleFormat,
-    }),
+    new winston.transports.Console({ format: consoleFormat }),
   ];
 
-  // Add file transports only when not on serverless
   if (!isServerless) {
     transports.push(
       new winston.transports.File({
@@ -150,14 +149,16 @@ const createLogger = (component: string, logSubDir: string) => {
   }
 
   const gcpTransport = createGoogleCloudTransport(component);
-  if (gcpTransport) transports.push(gcpTransport);
+  if (gcpTransport) {
+    transports.push(gcpTransport);
+  }
 
   return winston.createLogger({
     level: config.logging.level,
     format: logFormat,
     transports,
   });
-};
+}
 
 // Create specialized loggers for different components
 export const scraperLogger = createLogger('scraper', 'scrapers');

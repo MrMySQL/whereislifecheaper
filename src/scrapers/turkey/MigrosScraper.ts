@@ -99,10 +99,6 @@ interface MigrosProduct {
 export class MigrosScraper extends BaseScraper {
   private readonly API_BASE = 'https://www.migros.com.tr/rest/search/screens';
 
-  constructor(config: ScraperConfig) {
-    super(config);
-  }
-
   /**
    * Initialize the scraper with browser (needed for Cloudflare bypass)
    */

@@ -87,13 +87,8 @@ export class ProductService {
       [supermarketId, externalId]
     );
 
-    if (result.rows.length > 0) {
-      return {
-        productId: result.rows[0].product_id,
-        mappingId: result.rows[0].id,
-      };
-    }
-    return null;
+    const row = result.rows[0];
+    return row ? { productId: row.product_id, mappingId: row.id } : null;
   }
 
   /**
@@ -144,7 +139,7 @@ export class ProductService {
       [normalizedName, brand || null]
     );
 
-    return result.rows.length > 0 ? result.rows[0].id : null;
+    return result.rows[0]?.id ?? null;
   }
 
   /**
@@ -338,7 +333,7 @@ export class ProductService {
       [productId]
     );
 
-    return result.rows[0] || null;
+    return result.rows[0] ?? null;
   }
 
   /**

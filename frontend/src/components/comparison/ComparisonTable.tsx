@@ -240,12 +240,15 @@ export default function ComparisonTable({
           </thead>
           <tbody>
             {products.map((product) => {
+              // Only consider selected countries when finding cheapest
               const cheapest = findCheapestCountry(
                 Object.fromEntries(
-                  Object.entries(product.prices_by_country).map(([code, data]) => [
-                    code,
-                    { price: data.price, currency: data.currency },
-                  ])
+                  Object.entries(product.prices_by_country)
+                    .filter(([code]) => selectedCountries.includes(code))
+                    .map(([code, data]) => [
+                      code,
+                      { price: data.price, currency: data.currency },
+                    ])
                 )
               );
 
@@ -253,9 +256,11 @@ export default function ComparisonTable({
                 <tr key={product.canonical_id} className="border-b border-cream-100 hover:bg-cream-50/50 transition-colors">
                   <td className="py-2.5 px-4">
                     <div className="flex items-center gap-3">
-                      {/* Product image - find first real image URL (prefer http/https over local paths) */}
+                      {/* Product image - find first real image URL from selected countries only */}
                       {(() => {
-                        const prices = Object.values(product.prices_by_country);
+                        const prices = selectedCountries
+                          .map(code => product.prices_by_country[code])
+                          .filter(Boolean);
                         const imageUrl = prices.find(p => p.image_url?.startsWith('http'))?.image_url
                           || prices.find(p => p.image_url && !p.image_url.includes('default'))?.image_url;
                         return imageUrl ? (
@@ -270,7 +275,7 @@ export default function ComparisonTable({
                           />
                         ) : null;
                       })()}
-                      <div className={`w-10 h-10 rounded-lg bg-cream-100 flex items-center justify-center flex-shrink-0 ${Object.values(product.prices_by_country).some(p => p.image_url?.startsWith('http')) ? 'hidden' : ''}`}>
+                      <div className={`w-10 h-10 rounded-lg bg-cream-100 flex items-center justify-center flex-shrink-0 ${selectedCountries.some(code => product.prices_by_country[code]?.image_url?.startsWith('http')) ? 'hidden' : ''}`}>
                         <ImageOff className="w-4 h-4 text-cream-400" />
                       </div>
                       <div className="min-w-0">

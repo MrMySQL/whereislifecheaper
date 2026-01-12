@@ -134,10 +134,6 @@ export const voliConfig: Partial<ScraperConfig> = {
  * Montenegro's leading supermarket chain
  */
 export class VoliScraper extends BaseScraper {
-  constructor(config: ScraperConfig) {
-    super(config);
-  }
-
   /**
    * Initialize the scraper
    */

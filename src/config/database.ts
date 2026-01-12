@@ -1,17 +1,8 @@
 import { Pool, PoolConfig, QueryResult, QueryResultRow } from 'pg';
-import dotenv from 'dotenv';
+import { config } from './env';
 
-dotenv.config();
-
-const databaseUrl = process.env.DATABASE_URL;
-
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL environment variable is not set');
-}
-
-// Create PostgreSQL connection pool
 const poolConfig: PoolConfig = {
-  connectionString: databaseUrl,
+  connectionString: config.database.url,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -19,13 +10,11 @@ const poolConfig: PoolConfig = {
 
 const pool = new Pool(poolConfig);
 
-// Handle pool errors
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
   process.exit(-1);
 });
 
-// Test connection on startup
 pool.on('connect', () => {
   console.log('Database connection established');
 });
@@ -37,12 +26,8 @@ export async function query<T extends QueryResultRow = any>(
   text: string,
   params?: any[]
 ): Promise<QueryResult<T>> {
-  // const start = Date.now();
   try {
-    const result = await pool.query<T>(text, params);
-    // const duration = Date.now() - start;
-    // console.log('Executed query', { text, duration, rows: result.rowCount });
-    return result;
+    return await pool.query<T>(text, params);
   } catch (error) {
     console.error('Query error', { text, error });
     throw error;
