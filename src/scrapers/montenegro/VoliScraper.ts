@@ -92,6 +92,14 @@ export const voliCategories: CategoryConfig[] = [
   { id: '185', name: 'Skuša', url: '/kategorije/185' },
   { id: '186', name: 'Ostali riblji proizvodi', url: '/kategorije/186' },
   { id: '187', name: 'Inćun', url: '/kategorije/187' },
+  // Osnovne namirnice (Basic groceries)
+  { id: '75', name: 'Tjestenina', url: '/kategorije/75' },
+  { id: '76', name: 'Maslinovo i druga ulja', url: '/kategorije/76' },
+  { id: '77', name: 'Pirinač', url: '/kategorije/77' },
+  { id: '78', name: 'Suncokretovo ulje', url: '/kategorije/78' },
+  { id: '79', name: 'Brašno', url: '/kategorije/79' },
+  { id: '80', name: 'Šećer i so', url: '/kategorije/80' },
+  { id: '81', name: 'Sirće', url: '/kategorije/81' },
 ];
 
 /**
