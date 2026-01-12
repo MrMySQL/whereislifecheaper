@@ -168,10 +168,6 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
   private readonly MAX_CONCURRENT_PAGES = 5; // Parallel page requests
   private readonly MAX_PAGES_PER_CATEGORY = 100; // Safety limit
 
-  constructor(config: ScraperConfig) {
-    super(config);
-  }
-
   /**
    * Initialize the scraper (no browser needed)
    */

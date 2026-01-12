@@ -103,10 +103,6 @@ export const auchanUaConfig: Partial<ScraperConfig> = {
 export class AuchanUaScraper extends BaseScraper {
   private readonly MAX_PAGES_PER_CATEGORY = 50; // Safety limit
 
-  constructor(config: ScraperConfig) {
-    super(config);
-  }
-
   /**
    * Initialize the scraper
    */

@@ -259,10 +259,6 @@ export class MercadonaScraper extends BaseScraper {
   private readonly API_BASE = 'https://tienda.mercadona.es/api';
   private readonly POSTAL_CODE = '28001'; // Madrid postal code
 
-  constructor(config: ScraperConfig) {
-    super(config);
-  }
-
   /**
    * Initialize the scraper with browser (needed to set postal code)
    */
