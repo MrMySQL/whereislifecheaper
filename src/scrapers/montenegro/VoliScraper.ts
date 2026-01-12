@@ -240,12 +240,13 @@ export class VoliScraper extends BaseScraper {
     const products: ProductData[] = [];
 
     try {
-      // Wait for product items to load
+      // Wait for product items to load (short timeout - products usually load with page)
       // Voli uses generic elements containing links to /proizvod/
       await this.page.waitForSelector('a[href*="/proizvod/"]', {
-        timeout: 5000,
+        timeout: 1000,
       }).catch(() => {
-        scraperLogger.warn('Product links not found on page');
+        // Products may already be loaded or category may be empty
+        scraperLogger.debug('Product selector wait timed out (may already be loaded)');
       });
 
       // Get all product containers - they are parent elements of product links
