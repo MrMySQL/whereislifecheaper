@@ -5,6 +5,7 @@ import { VoliScraper, voliConfig, voliCategories } from './montenegro/VoliScrape
 import { MercadonaScraper, mercadonaConfig, mercadonaCategories } from './spain/MercadonaScraper';
 import { AuchanUaScraper, auchanUaConfig, auchanUaCategories } from './ukraine/AuchanUaScraper';
 import { AuchanUaGraphQLScraper, auchanUaGraphQLConfig, auchanUaGraphQLCategories } from './ukraine/AuchanUaGraphQLScraper';
+import { MakroScraper, makroConfig, makroCategories } from './uzbekistan/MakroScraper';
 
 /**
  * Scraper registration entry containing all metadata for a scraper
@@ -73,6 +74,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: AuchanUaGraphQLScraper,
       defaultConfig: auchanUaGraphQLConfig,
       categories: auchanUaGraphQLCategories,
+    },
+  ],
+  [
+    'MakroScraper',
+    {
+      className: 'MakroScraper',
+      scraperClass: MakroScraper,
+      defaultConfig: makroConfig,
+      categories: makroCategories,
     },
   ],
 ]);

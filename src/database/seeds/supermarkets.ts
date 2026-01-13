@@ -97,6 +97,13 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'KorzinkaScraper',
     is_active: false,
   },
+  {
+    country_code: 'UZ',
+    name: 'Makro',
+    website_url: 'https://eats.yandex.com/uz/retail/makro',
+    scraper_class: 'MakroScraper',
+    is_active: true,
+  },
   // Ukraine
   {
     country_code: 'UA',
