@@ -134,20 +134,20 @@ export class MakroScraper extends BaseScraper {
     scraperLogger.info(`Initializing Makro scraper...`);
     this.startTime = Date.now();
 
-    // Generate device and session IDs
-    this.deviceId = this.generateId();
-    this.sessionId = this.generateId();
+    // // Generate device and session IDs
+    // this.deviceId = this.generateId();
+    // this.sessionId = this.generateId();
 
-    // Launch browser to handle SmartCaptcha
+    // // Launch browser to handle SmartCaptcha
     await this.launchBrowser();
     this.page = await this.createPage();
 
     // Navigate to main page first to get cookies/pass SmartCaptcha
-    scraperLogger.info('Navigating to Makro page to establish session...');
-    await this.page.goto(
-      `${this.config.baseUrl}/uz/retail/makro/catalog/1034?placeSlug=${this.STORE_SLUG}`,
-      { waitUntil: 'domcontentloaded', timeout: 60000 }
-    );
+    // scraperLogger.info('Navigating to Makro page to establish session...');
+    // await this.page.goto(
+    //   `${this.config.baseUrl}/uz/retail/makro/catalog/1034?placeSlug=${this.STORE_SLUG}`,
+    //   { waitUntil: 'domcontentloaded', timeout: 60000 }
+    // );
 
     // Wait for SmartCaptcha and try to solve it
     // await this.handleSmartCaptcha();
@@ -203,13 +203,13 @@ export class MakroScraper extends BaseScraper {
   /**
    * Generate a random ID for device/session
    */
-  private generateId(): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    const segments = [8, 12, 11, 11];
-    return segments.map(len =>
-      Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-    ).join('-');
-  }
+  // private generateId(): string {
+  //   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  //   const segments = [8, 12, 11, 11];
+  //   return segments.map(len =>
+  //     Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  //   ).join('-');
+  // }
 
   /**
    * Scrape a single category using REST API
