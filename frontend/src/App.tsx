@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import Layout from './components/layout/Layout';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import Home from './pages/Home';
+import CountryProducts from './pages/CountryProducts';
 import Login from './pages/Login';
 import Mapping from './pages/admin/Mapping';
 import Scrapers from './pages/admin/Scrapers';
@@ -26,6 +27,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />
+              <Route path="country/:code" element={<CountryProducts />} />
               <Route
                 path="admin/mapping"
                 element={

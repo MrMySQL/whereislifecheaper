@@ -15,9 +15,10 @@ const currencySymbols: Record<string, string> = {
   UAH: '₴'
 };
 
-export function formatPrice(price: number, currency: string): string {
+export function formatPrice(price: number | string, currency: string): string {
   const symbol = currencySymbols[currency] || currency;
-  return `${symbol}${price.toFixed(2)}`;
+  const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+  return `${symbol}${numPrice.toFixed(2)}`;
 }
 
 export function convertToEUR(price: number, currency: string): number {

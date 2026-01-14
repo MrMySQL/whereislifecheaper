@@ -263,7 +263,7 @@ router.get('/comparison', async (req, res, next) => {
 router.get('/products-by-country/:countryId', async (req, res, next) => {
   try {
     const { countryId } = req.params;
-    const { search, limit = '100', offset = '0' } = req.query;
+    const { search, supermarket_id, limit = '100', offset = '0' } = req.query;
 
     let sql = `
       SELECT DISTINCT ON (p.id)
@@ -299,6 +299,12 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
     const params: any[] = [countryId];
     let paramIndex = 2;
 
+    if (supermarket_id) {
+      sql += ` AND s.id = $${paramIndex}`;
+      params.push(parseInt(supermarket_id as string));
+      paramIndex++;
+    }
+
     if (search) {
       sql += ` AND (p.name ILIKE $${paramIndex} OR p.brand ILIKE $${paramIndex})`;
       params.push(`%${search}%`);
@@ -324,10 +330,18 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
       WHERE c.id = $1
     `;
     const countParams: (string | number)[] = [countryId];
+    let countParamIndex = 2;
+
+    if (supermarket_id) {
+      countSql += ` AND s.id = $${countParamIndex}`;
+      countParams.push(parseInt(supermarket_id as string));
+      countParamIndex++;
+    }
 
     if (search) {
-      countSql += ` AND (p.name ILIKE $2 OR p.brand ILIKE $2)`;
+      countSql += ` AND (p.name ILIKE $${countParamIndex} OR p.brand ILIKE $${countParamIndex})`;
       countParams.push(`%${search}%`);
+      countParamIndex++;
     }
 
     const countResult = await query(countSql, countParams);
