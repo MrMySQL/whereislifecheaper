@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { User, Country, CanonicalProduct, CanonicalProductBasic, PriceStats, Product, AuthStatus } from '../types';
+import type { User, Country, CanonicalProduct, CanonicalProductBasic, PriceStats, Product, AuthStatus, Supermarket } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -29,6 +29,16 @@ export const countriesApi = {
   },
   getById: async (id: number): Promise<Country> => {
     const response = await api.get<{ data: Country }>(`/countries/${id}`);
+    return response.data.data;
+  },
+};
+
+// Supermarkets API
+export const supermarketsApi = {
+  getByCountry: async (countryId: number): Promise<Supermarket[]> => {
+    const response = await api.get<{ data: Supermarket[] }>('/supermarkets', {
+      params: { country_id: countryId },
+    });
     return response.data.data;
   },
 };
@@ -65,7 +75,7 @@ export const canonicalApi = {
   delete: async (id: number): Promise<void> => {
     await api.delete(`/canonical/${id}`);
   },
-  getProductsByCountry: async (countryId: number, params?: { search?: string; limit?: number; offset?: number }): Promise<{
+  getProductsByCountry: async (countryId: number, params?: { search?: string; supermarket_id?: number; limit?: number; offset?: number }): Promise<{
     data: Product[];
     count: number;
   }> => {

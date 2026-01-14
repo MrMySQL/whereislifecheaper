@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Store, Package, Coins, Clock } from 'lucide-react';
 import type { PriceStats } from '../../types';
 import { formatPrice } from '../../utils/currency';
@@ -26,9 +27,10 @@ export default function CountryCard({ stats }: CountryCardProps) {
   const isRecent = stats.last_scrape && new Date(stats.last_scrape).getTime() > Date.now() - 24 * 60 * 60 * 1000;
 
   return (
-    <div className="card !p-4 hover:shadow-md transition-shadow">
-      {/* Header row */}
-      <div className="flex items-center gap-3 mb-3">
+    <Link to={`/country/${stats.country_code.toLowerCase()}`} className="block">
+      <div className="card !p-4 hover:shadow-md transition-shadow cursor-pointer">
+        {/* Header row */}
+        <div className="flex items-center gap-3 mb-3">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cream-100 to-cream-200 flex items-center justify-center text-2xl">
           {stats.flag_emoji}
         </div>
@@ -76,6 +78,7 @@ export default function CountryCard({ stats }: CountryCardProps) {
           <p className="text-[10px] text-charcoal-500">Updated</p>
         </div>
       </div>
-    </div>
+      </div>
+    </Link>
   );
 }
