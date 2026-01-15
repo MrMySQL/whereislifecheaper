@@ -77,6 +77,7 @@ export interface Product {
   country_code: string;
   price: number | null;
   currency: string | null;
+  product_url: string | null;
 }
 
 export interface AuthStatus {

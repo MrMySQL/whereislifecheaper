@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Search, Store, Package } from 'lucide-react';
+import { ArrowLeft, Search, Store, Package, ExternalLink } from 'lucide-react';
 import { countriesApi, supermarketsApi, canonicalApi } from '../services/api';
 import { formatPrice } from '../utils/currency';
 import type { Country, Supermarket, Product } from '../types';
@@ -189,8 +189,8 @@ export default function CountryProducts() {
                 )}
 
                 {/* Price and Supermarket */}
-                <div className="flex items-end justify-between mt-auto pt-2 border-t border-cream-200">
-                  <div>
+                <div className="flex items-end justify-between gap-2 mt-auto pt-2 border-t border-cream-200">
+                  <div className="shrink-0">
                     {product.price ? (
                       <p className="text-lg font-bold text-terracotta-600">
                         {formatPrice(product.price, product.currency || country.currency_code)}
@@ -204,7 +204,23 @@ export default function CountryProducts() {
                       </p>
                     )}
                   </div>
-                  <span className="badge-olive text-xs">{product.supermarket_name}</span>
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="badge-olive text-xs truncate" title={product.supermarket_name}>
+                      {product.supermarket_name}
+                    </span>
+                    {product.product_url && (
+                      <a
+                        href={product.product_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 p-1 text-charcoal-400 hover:text-terracotta-600 transition-colors"
+                        title="View on supermarket website"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
