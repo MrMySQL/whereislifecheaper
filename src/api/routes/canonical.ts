@@ -282,6 +282,7 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
         c.code as country_code,
         pr.price,
         pr.currency,
+        pr.scraped_at as price_updated_at,
         pm.url as product_url
       FROM products p
       INNER JOIN product_mappings pm ON p.id = pm.product_id
@@ -289,7 +290,7 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
       INNER JOIN countries c ON s.country_id = c.id
       LEFT JOIN canonical_products cp ON p.canonical_product_id = cp.id
       LEFT JOIN LATERAL (
-        SELECT price, currency FROM prices
+        SELECT price, currency, scraped_at FROM prices
         WHERE product_mapping_id = pm.id
         ORDER BY scraped_at DESC
         LIMIT 1

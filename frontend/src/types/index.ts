@@ -77,6 +77,7 @@ export interface Product {
   country_code: string;
   price: number | null;
   currency: string | null;
+  price_updated_at: string | null;
   product_url: string | null;
 }
 
