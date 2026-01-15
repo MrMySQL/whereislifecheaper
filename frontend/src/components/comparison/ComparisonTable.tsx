@@ -9,7 +9,7 @@ interface ComparisonTableProps {
   loading?: boolean;
 }
 
-function ProductHoverCard({ priceData }: { priceData: CountryPrice }) {
+function ProductHoverCard({ priceData, showBelow = false }: { priceData: CountryPrice; showBelow?: boolean }) {
   const scrapedDate = priceData.scraped_at
     ? new Date(priceData.scraped_at).toLocaleDateString('en-US', {
         month: 'short',
@@ -18,10 +18,18 @@ function ProductHoverCard({ priceData }: { priceData: CountryPrice }) {
       })
     : null;
 
+  const positionClasses = showBelow
+    ? 'top-full mt-2'
+    : 'bottom-full mb-2';
+
   return (
-    <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-white rounded-lg shadow-xl border border-cream-200 p-3 pointer-events-none">
+    <div className={`absolute z-50 ${positionClasses} left-1/2 -translate-x-1/2 w-64 bg-white rounded-lg shadow-xl border border-cream-200 p-3 pointer-events-none`}>
       {/* Arrow */}
-      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-r border-b border-cream-200 rotate-45" />
+      {showBelow ? (
+        <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-l border-t border-cream-200 rotate-45" />
+      ) : (
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-r border-b border-cream-200 rotate-45" />
+      )}
 
       <div className="relative">
         {/* Product Image */}
@@ -111,9 +119,11 @@ function ProductHoverCard({ priceData }: { priceData: CountryPrice }) {
   );
 }
 
-function PriceCell({ priceData, isCheapest }: { priceData: CountryPrice; isCheapest: boolean }) {
+function PriceCell({ priceData, isCheapest, rowIndex }: { priceData: CountryPrice; isCheapest: boolean; rowIndex: number }) {
   const [isHovered, setIsHovered] = useState(false);
   const eurPrice = convertToEUR(priceData.price, priceData.currency);
+  // Show hover card below for first 2 rows to avoid clipping
+  const showBelow = rowIndex < 2;
 
   return (
     <td
@@ -137,7 +147,7 @@ function PriceCell({ priceData, isCheapest }: { priceData: CountryPrice; isCheap
       )}
 
       {/* Hover Card */}
-      {isHovered && <ProductHoverCard priceData={priceData} />}
+      {isHovered && <ProductHoverCard priceData={priceData} showBelow={showBelow} />}
     </td>
   );
 }
@@ -239,7 +249,7 @@ export default function ComparisonTable({
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => {
+            {products.map((product, rowIndex) => {
               // Only consider selected countries when finding cheapest
               const cheapest = findCheapestCountry(
                 Object.fromEntries(
@@ -306,6 +316,7 @@ export default function ComparisonTable({
                         key={code}
                         priceData={priceData}
                         isCheapest={isCheapest}
+                        rowIndex={rowIndex}
                       />
                     );
                   })}
