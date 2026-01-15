@@ -122,8 +122,8 @@ function ProductHoverCard({ priceData, showBelow = false }: { priceData: Country
 function PriceCell({ priceData, isCheapest, rowIndex }: { priceData: CountryPrice; isCheapest: boolean; rowIndex: number }) {
   const [isHovered, setIsHovered] = useState(false);
   const eurPrice = convertToEUR(priceData.price, priceData.currency);
-  // Show hover card below for first 2 rows to avoid clipping
-  const showBelow = rowIndex < 2;
+  // Show hover card below for first 3 rows to avoid clipping
+  const showBelow = rowIndex < 3;
 
   return (
     <td
