@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { TrendingDown, Tag, Trophy, Package, ImageOff, Store, Calendar, Calculator, ChevronDown } from 'lucide-react';
 import type { CanonicalProduct, CountryPrice } from '../../types';
-import { formatPrice, convertToEUR, findCheapestCountry } from '../../utils/currency';
+import { formatPrice, convertToEUR, findCheapestCountry, isNormalizableUnit, getUnitLabel, formatPackageSize } from '../../utils/currency';
 import PriceHistoryChart from './PriceHistoryChart';
 
 interface ComparisonTableProps {
@@ -122,9 +122,17 @@ function ProductHoverCard({ priceData, showBelow = false }: { priceData: Country
 
 function PriceCell({ priceData, isCheapest, rowIndex }: { priceData: CountryPrice; isCheapest: boolean; rowIndex: number }) {
   const [isHovered, setIsHovered] = useState(false);
-  const eurPrice = convertToEUR(priceData.price, priceData.currency);
   // Show hover card below for first 3 rows to avoid clipping
   const showBelow = rowIndex < 3;
+
+  // Determine if we should show normalized price
+  const hasNormalizedPrice = isNormalizableUnit(priceData.unit) && priceData.price_per_unit != null;
+
+  // EUR conversion - use normalized price if available
+  const displayPrice = hasNormalizedPrice ? priceData.price_per_unit! : priceData.price;
+  const eurPrice = convertToEUR(displayPrice, priceData.currency);
+  const unitLabel = getUnitLabel(priceData.unit);
+  const packageSize = formatPackageSize(priceData.unit_quantity, priceData.unit);
 
   return (
     <td
@@ -132,13 +140,16 @@ function PriceCell({ priceData, isCheapest, rowIndex }: { priceData: CountryPric
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* EUR price (main) */}
+      {/* Primary: EUR per-unit price (or total if no normalization) */}
       <p className={`font-bold ${isCheapest ? 'text-olive-700' : 'text-charcoal-800'}`}>
-        €{eurPrice.toFixed(2)}
+        €{eurPrice.toFixed(2)}{hasNormalizedPrice && unitLabel ? `/${unitLabel}` : ''}
       </p>
-      {/* Original price (small) */}
+      {/* Secondary: Package price in local currency */}
       <p className="text-[10px] text-charcoal-400">
         {formatPrice(priceData.price, priceData.currency)}
+        {hasNormalizedPrice && packageSize ? (
+          <span className="ml-0.5">for {packageSize}</span>
+        ) : null}
       </p>
       {priceData.is_on_sale && (
         <span className="inline-flex items-center gap-0.5 text-[10px] text-terracotta-600">
@@ -184,7 +195,10 @@ export default function ComparisonTable({
       selectedCountries.forEach((code) => {
         const priceData = product.prices_by_country[code];
         if (priceData) {
-          const eurPrice = convertToEUR(priceData.price, priceData.currency);
+          // Use normalized price if available for weight/volume products
+          const hasNormalizedPrice = isNormalizableUnit(priceData.unit) && priceData.price_per_unit != null;
+          const priceToUse = hasNormalizedPrice ? priceData.price_per_unit! : priceData.price;
+          const eurPrice = convertToEUR(priceToUse, priceData.currency);
           totals[code].total += eurPrice;
           totals[code].count += 1;
         }
@@ -272,7 +286,12 @@ export default function ComparisonTable({
                     .filter(([code]) => selectedCountries.includes(code))
                     .map(([code, data]) => [
                       code,
-                      { price: data.price, currency: data.currency },
+                      {
+                        price: data.price,
+                        currency: data.currency,
+                        price_per_unit: data.price_per_unit,
+                        unit: data.unit,
+                      },
                     ])
                 )
               );

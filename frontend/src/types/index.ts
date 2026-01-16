@@ -41,6 +41,7 @@ export interface CountryPrice {
   unit_quantity: number | null;
   image_url: string | null;
   price: number;
+  price_per_unit: number | null;
   currency: string;
   original_price: number | null;
   is_on_sale: boolean;

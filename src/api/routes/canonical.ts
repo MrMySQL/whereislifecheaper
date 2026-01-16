@@ -163,7 +163,8 @@ router.get('/comparison', async (req, res, next) => {
         pr.currency,
         pr.original_price,
         pr.is_on_sale,
-        pr.scraped_at
+        pr.scraped_at,
+        pr.price_per_unit
       FROM canonical_products cp
       LEFT JOIN categories cat ON cp.category_id = cat.id
       INNER JOIN products p ON p.canonical_product_id = cp.id
@@ -171,7 +172,7 @@ router.get('/comparison', async (req, res, next) => {
       INNER JOIN supermarkets s ON pm.supermarket_id = s.id
       INNER JOIN countries c ON s.country_id = c.id
       LEFT JOIN LATERAL (
-        SELECT price, currency, original_price, is_on_sale, scraped_at FROM prices
+        SELECT price, currency, original_price, is_on_sale, scraped_at, price_per_unit FROM prices
         WHERE product_mapping_id = pm.id
         ORDER BY scraped_at DESC
         LIMIT 1
@@ -191,6 +192,24 @@ router.get('/comparison', async (req, res, next) => {
 
     const result = await query(sql, params);
 
+    // Helper to check if unit is normalizable (weight or volume)
+    const isNormalizableUnit = (unit: string | null): boolean => {
+      if (!unit) return false;
+      const normalized = unit.toLowerCase();
+      return [
+        'kg', 'g',
+        // 'l', 'ml'
+      ].includes(normalized);
+    };
+
+    // Helper to get comparable price (normalized for weight/volume, otherwise total)
+    const getComparablePrice = (row: any): number => {
+      if (isNormalizableUnit(row.unit) && row.price_per_unit != null) {
+        return parseFloat(row.price_per_unit);
+      }
+      return parseFloat(row.price);
+    };
+
     // Group by canonical product and organize by country
     const canonicalMap = new Map<number, any>();
 
@@ -208,9 +227,12 @@ router.get('/comparison', async (req, res, next) => {
       const canonical = canonicalMap.get(row.canonical_id);
       const countryCode = row.country_code;
 
-      // Keep the cheapest price per country
-      if (!canonical.prices_by_country[countryCode] ||
-          row.price < canonical.prices_by_country[countryCode].price) {
+      // Keep the cheapest price per country (using normalized price for weight/volume products)
+      const newComparablePrice = getComparablePrice(row);
+      const existingData = canonical.prices_by_country[countryCode];
+      const existingComparablePrice = existingData ? getComparablePrice(existingData) : Infinity;
+
+      if (!existingData || newComparablePrice < existingComparablePrice) {
         canonical.prices_by_country[countryCode] = {
           product_id: row.product_id,
           product_name: row.product_name,
@@ -219,6 +241,7 @@ router.get('/comparison', async (req, res, next) => {
           unit_quantity: row.unit_quantity,
           image_url: row.image_url,
           price: parseFloat(row.price),
+          price_per_unit: row.price_per_unit ? parseFloat(row.price_per_unit) : null,
           currency: row.currency || row.currency_code,
           original_price: row.original_price ? parseFloat(row.original_price) : null,
           is_on_sale: row.is_on_sale,
