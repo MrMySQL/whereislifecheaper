@@ -398,6 +398,9 @@ function ProductRow({
         <p className="font-medium text-slate-900 text-sm">{product.name}</p>
         <p className="text-xs text-slate-500">
           {product.brand || 'No brand'} • {product.supermarket_name}
+          {product.unit && (
+            <> • {product.unit_quantity && product.unit_quantity !== 1 ? `${product.unit_quantity} ` : ''}{product.unit}</>
+          )}
         </p>
       </td>
 
