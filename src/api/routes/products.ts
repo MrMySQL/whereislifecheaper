@@ -133,13 +133,24 @@ router.get('/:id/price-history', async (req, res, next) => {
 
     let sql = `
       SELECT
-        pr.*,
+        pr.id,
+        pr.product_mapping_id,
+        pr.price,
+        pr.currency,
+        pr.original_price,
+        pr.is_on_sale,
+        pr.price_per_unit,
+        pr.scraped_at,
+        pm.product_id,
+        pm.supermarket_id,
         s.name as supermarket_name,
-        c.name as country_name
+        c.name as country_name,
+        c.code as country_code
       FROM prices pr
-      INNER JOIN supermarkets s ON pr.supermarket_id = s.id
+      INNER JOIN product_mappings pm ON pr.product_mapping_id = pm.id
+      INNER JOIN supermarkets s ON pm.supermarket_id = s.id
       INNER JOIN countries c ON s.country_id = c.id
-      WHERE pr.product_id = $1
+      WHERE pm.product_id = $1
       AND pr.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '${parseInt(days as string)} days'
     `;
 
@@ -147,7 +158,7 @@ router.get('/:id/price-history', async (req, res, next) => {
     let paramIndex = 2;
 
     if (supermarket_id) {
-      sql += ` AND pr.supermarket_id = $${paramIndex++}`;
+      sql += ` AND pm.supermarket_id = $${paramIndex++}`;
       params.push(supermarket_id);
     }
 

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { User, Country, CanonicalProduct, CanonicalProductBasic, PriceStats, Product, AuthStatus, Supermarket } from '../types';
+import type { User, Country, CanonicalProduct, CanonicalProductBasic, PriceStats, Product, AuthStatus, Supermarket, PriceHistoryEntry } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -80,6 +80,19 @@ export const canonicalApi = {
     count: number;
   }> => {
     const response = await api.get<{ data: Product[]; count: number }>(`/canonical/products-by-country/${countryId}`, { params });
+    return response.data;
+  },
+};
+
+// Products API
+export const productsApi = {
+  getPriceHistory: async (productId: number, days: number = 30): Promise<{
+    data: PriceHistoryEntry[];
+    count: number;
+  }> => {
+    const response = await api.get(`/products/${productId}/price-history`, {
+      params: { days },
+    });
     return response.data;
   },
 };

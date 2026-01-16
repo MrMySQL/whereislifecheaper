@@ -96,3 +96,19 @@ export interface CanonicalProductBasic {
   linked_products_count: number;
   countries_count: number;
 }
+
+export interface PriceHistoryEntry {
+  id: number;
+  product_mapping_id: number;
+  product_id: number;
+  supermarket_id: number;
+  price: number;
+  currency: string;
+  original_price: number | null;
+  is_on_sale: boolean;
+  price_per_unit: number | null;
+  scraped_at: string;
+  supermarket_name: string;
+  country_name: string;
+  country_code: string;
+}
