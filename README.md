@@ -246,6 +246,10 @@ npm run scraper:test -- --scraper=migros
 - [ ] Currency conversion
 - [ ] Mobile app
 
+## TODO
+
+- [ ] **Spain**: Equalize quantity for cucumbers and apples
+
 ## Contributing
 
 1. Fork the repository

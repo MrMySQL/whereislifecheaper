@@ -24,7 +24,7 @@ export default function Layout() {
 
             <div className="flex items-center gap-4 text-charcoal-500">
               <span className="flex items-center gap-1">
-                Made with <Heart className="w-3 h-3 text-terracotta-500 fill-terracotta-500" /> for smart shoppers
+                Made with <Heart className="w-3 h-3 text-terracotta-500 fill-terracotta-500" /> for people like us
               </span>
               <span className="text-cream-400">|</span>
               <span>&copy; {new Date().getFullYear()}</span>

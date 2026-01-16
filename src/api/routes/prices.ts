@@ -82,12 +82,13 @@ router.get('/stats', async (_req, res, next) => {
         c.name as country_name,
         c.code as country_code,
         c.currency_code,
+        c.flag_emoji,
         COUNT(DISTINCT p.id) as product_count,
         COUNT(DISTINCT s.id) as supermarket_count,
         AVG(pr.price)::numeric(10,2) as avg_price,
         MIN(pr.price)::numeric(10,2) as min_price,
         MAX(pr.price)::numeric(10,2) as max_price,
-        MAX(pr.scraped_at) as last_update
+        MAX(pr.scraped_at) as last_scrape
       FROM countries c
       INNER JOIN supermarkets s ON c.id = s.country_id
       INNER JOIN product_mappings pm ON s.id = pm.supermarket_id
@@ -99,7 +100,7 @@ router.get('/stats', async (_req, res, next) => {
         LIMIT 1
       ) pr ON true
       WHERE s.is_active = true
-      GROUP BY c.id
+      GROUP BY c.id, c.flag_emoji
       ORDER BY c.name
     `);
 

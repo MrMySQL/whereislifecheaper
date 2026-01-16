@@ -12,9 +12,7 @@ export default function Mapping() {
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState('');
   const [productPage, setProductPage] = useState(0);
-  const [showCreateSection, setShowCreateSection] = useState(false);
   const [showManageSection, setShowManageSection] = useState(false);
-  const [newCanonicalName, setNewCanonicalName] = useState('');
   const [canonicalSearch, setCanonicalSearch] = useState('');
   const [dropdownSearch, setDropdownSearch] = useState<{ [key: number]: string }>({});
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
@@ -64,7 +62,7 @@ export default function Mapping() {
     mutationFn: (name: string) => canonicalApi.create({ name }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['canonical'] });
-      setNewCanonicalName('');
+      setCanonicalSearch('');
     },
   });
 
@@ -94,8 +92,9 @@ export default function Mapping() {
   });
 
   const handleCreateCanonical = () => {
-    if (newCanonicalName.trim()) {
-      createMutation.mutate(newCanonicalName.trim());
+    const name = canonicalSearch.trim();
+    if (name) {
+      createMutation.mutate(name);
     }
   };
 
@@ -133,43 +132,6 @@ export default function Mapping() {
         <p className="text-slate-600 mt-1">
           Map products to canonical products for cross-country comparison.
         </p>
-      </div>
-
-      {/* Collapsible Create Canonical Section */}
-      <div className="card">
-        <button
-          onClick={() => setShowCreateSection(!showCreateSection)}
-          className="w-full flex items-center justify-between text-left"
-        >
-          <span className="font-medium text-slate-700">
-            Create New Canonical Product
-          </span>
-          {showCreateSection ? (
-            <ChevronUp className="h-5 w-5 text-slate-400" />
-          ) : (
-            <ChevronDown className="h-5 w-5 text-slate-400" />
-          )}
-        </button>
-        {showCreateSection && (
-          <div className="mt-4 flex gap-2">
-            <input
-              type="text"
-              placeholder="Enter canonical product name..."
-              value={newCanonicalName}
-              onChange={(e) => setNewCanonicalName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateCanonical()}
-              className="input flex-1"
-            />
-            <button
-              onClick={handleCreateCanonical}
-              disabled={!newCanonicalName.trim() || createMutation.isPending}
-              className="btn-primary flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Create
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Collapsible Manage Canonical Products Section */}
@@ -210,9 +172,24 @@ export default function Mapping() {
             {/* Canonical Products List */}
             <div className="max-h-64 overflow-y-auto space-y-2">
               {filteredCanonicalForManage.length === 0 ? (
-                <p className="text-slate-500 text-center py-4">
-                  No canonical products found
-                </p>
+                <div className="py-6 text-center">
+                  <p className="text-sm text-slate-500 mb-3">
+                    No canonical products found
+                    {canonicalSearch && (
+                      <span className="font-medium text-slate-700"> matching "{canonicalSearch}"</span>
+                    )}
+                  </p>
+                  {canonicalSearch.trim() && (
+                    <button
+                      onClick={handleCreateCanonical}
+                      disabled={createMutation.isPending}
+                      className="btn-primary inline-flex items-center gap-1.5 text-sm"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Create "{canonicalSearch}"
+                    </button>
+                  )}
+                </div>
               ) : (
                 filteredCanonicalForManage.map((cp: CanonicalProductBasic) => (
                   <div
