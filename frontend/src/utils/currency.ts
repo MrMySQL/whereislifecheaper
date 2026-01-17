@@ -1,10 +1,12 @@
 // Exchange rates to EUR (approximate, should be fetched from API in production)
+// TODO: Consolidate with public/js/app.js and consider fetching from an API
 const exchangeRates: Record<string, number> = {
   EUR: 1,
   USD: 0.86,
   TRY: 0.020,
   UZS: 0.000071,
   UAH: 0.020,
+  KZT: 0.0019, // ~520 KZT per EUR
 };
 
 const currencySymbols: Record<string, string> = {
@@ -12,7 +14,8 @@ const currencySymbols: Record<string, string> = {
   EUR: '€',
   TRY: '₺',
   UZS: "so'm",
-  UAH: '₴'
+  UAH: '₴',
+  KZT: '₸',
 };
 
 export function formatPrice(price: number | string, currency: string): string {

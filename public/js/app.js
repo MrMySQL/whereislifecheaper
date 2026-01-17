@@ -7,11 +7,13 @@
 const API_URL = '/api';
 
 // Exchange rates to EUR (approximate)
-// TODO: Fetch from an exchange rate API
+// TODO: Consolidate with frontend/src/utils/currency.ts and fetch from an API
 const EXCHANGE_RATES_TO_EUR = {
   EUR: 1,
-  TRY: 0.020,  // 1 TRY = 0.026 EUR (approx 38 TRY per EUR)
-  UZS: 0.000071,  // 1 UZS = 0.000076 EUR
+  TRY: 0.020,  // ~50 TRY per EUR
+  UZS: 0.000071,  // ~14,000 UZS per EUR
+  UAH: 0.020,  // ~50 UAH per EUR
+  KZT: 0.0019,  // ~520 KZT per EUR
   USD: 0.86,
 };
 
@@ -21,6 +23,8 @@ const FLAGS = {
   ME: '\u{1F1F2}\u{1F1EA}',
   ES: '\u{1F1EA}\u{1F1F8}',
   UZ: '\u{1F1FA}\u{1F1FF}',
+  UA: '\u{1F1FA}\u{1F1E6}',
+  KZ: '\u{1F1F0}\u{1F1FF}',
 };
 
 // Country names
@@ -29,6 +33,8 @@ const COUNTRY_NAMES = {
   ME: 'Montenegro',
   ES: 'Spain',
   UZ: 'Uzbekistan',
+  UA: 'Ukraine',
+  KZ: 'Kazakhstan',
 };
 
 // Currency symbols
@@ -37,6 +43,8 @@ const CURRENCY_SYMBOLS = {
   EUR: '\u{20AC}',
   USD: '$',
   UZS: 'UZS',
+  UAH: '\u{20B4}',
+  KZT: '\u{20B8}',
 };
 
 // Currency by country
@@ -45,6 +53,8 @@ const COUNTRY_CURRENCIES = {
   ME: 'EUR',
   ES: 'EUR',
   UZ: 'UZS',
+  UA: 'UAH',
+  KZ: 'KZT',
 };
 
 // State
@@ -190,7 +200,7 @@ async function loadComparison() {
     });
 
     // Use countries that have comparison data, maintain consistent order
-    const orderedCountries = ['TR', 'ME', 'ES', 'UZ'].filter(code => countriesInData.has(code));
+    const orderedCountries = ['TR', 'ME', 'ES', 'UZ', 'UA', 'KZ'].filter(code => countriesInData.has(code));
 
     // Update table headers
     updateTableHeaders(thead, orderedCountries);
@@ -406,7 +416,7 @@ function setupEventListeners() {
       comparisonData.forEach(item => {
         Object.keys(item.prices_by_country).forEach(code => countriesInData.add(code));
       });
-      const orderedCountries = ['TR', 'ME', 'ES', 'UZ'].filter(code => countriesInData.has(code));
+      const orderedCountries = ['TR', 'ME', 'ES', 'UZ', 'UA', 'KZ'].filter(code => countriesInData.has(code));
       renderComparisonTable(comparisonData, orderedCountries);
     }, 300);
   });
