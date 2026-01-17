@@ -23,7 +23,7 @@
       "mcp__playwright__browser_console_messages",
       "mcp__playwright__browser_run_code",
       "Bash(docker ps:*)",
-      "Bash(npx tsc:*)"
+      "Bash(grep:*)"
     ]
   }
 }
