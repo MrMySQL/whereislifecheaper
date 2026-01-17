@@ -101,6 +101,20 @@ export const productsApi = {
   },
 };
 
+// Exchange Rates API
+export interface ExchangeRatesResponse {
+  data: Record<string, number>;
+  source: string;
+  last_updated: string | null;
+}
+
+export const ratesApi = {
+  getRates: async (): Promise<ExchangeRatesResponse> => {
+    const response = await api.get<ExchangeRatesResponse>('/rates');
+    return response.data;
+  },
+};
+
 // Scraper API (admin only)
 export const scraperApi = {
   trigger: async (supermarket_id?: number, categories?: string[]): Promise<{ message: string }> => {

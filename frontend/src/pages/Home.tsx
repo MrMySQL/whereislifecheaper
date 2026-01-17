@@ -5,6 +5,7 @@ import { countriesApi, pricesApi, canonicalApi } from '../services/api';
 import CountrySelector from '../components/comparison/CountrySelector';
 import CountryCard from '../components/comparison/CountryCard';
 import ComparisonTable from '../components/comparison/ComparisonTable';
+import CurrencyRatesTable from '../components/comparison/CurrencyRatesTable';
 import Loading from '../components/common/Loading';
 
 const DEFAULT_COUNTRIES = ['TR', 'ES', 'ME'];
@@ -209,6 +210,9 @@ export default function Home() {
             <span className="font-semibold">{comparisonData.total}</span> products
           </p>
         )}
+
+        {/* Currency Rates Table */}
+        <CurrencyRatesTable />
       </section>
     </div>
   );

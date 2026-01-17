@@ -4,6 +4,14 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  safelist: [
+    // Currency rates table colors
+    { pattern: /from-(sky|amber|indigo)-(50|100)/ },
+    { pattern: /to-(sky|amber|indigo)-(100)/ },
+    { pattern: /text-(sky|amber|indigo)-(600|700|800)/ },
+    { pattern: /bg-(sky|amber|indigo)-(100|200)/ },
+    { pattern: /border-(sky|amber|indigo)-(200|300)/, variants: ['hover'] },
+  ],
   theme: {
     extend: {
       colors: {
