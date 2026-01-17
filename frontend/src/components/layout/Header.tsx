@@ -1,10 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { LogOut, User, Settings, MapPin, Menu, X } from 'lucide-react';
+import { LogOut, User, MapPin, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Header() {
-  const { user, isAdmin, isAuthenticated, login, logout } = useAuth();
+  const { user, isAdmin, isAuthenticated, logout } = useAuth();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -50,7 +50,7 @@ export default function Header() {
 
           {/* User Menu */}
           <div className="flex items-center gap-2">
-            {isAuthenticated ? (
+            {isAuthenticated && (
               <div className="hidden sm:flex items-center gap-2">
                 <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-cream-50 border border-cream-200 text-xs">
                   {user?.picture_url ? (
@@ -73,11 +73,6 @@ export default function Header() {
                   <LogOut className="h-4 w-4" />
                 </button>
               </div>
-            ) : (
-              <button onClick={login} className="btn-primary !py-1.5 !px-3 !text-xs">
-                <Settings className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Admin</span>
-              </button>
             )}
 
             <button
