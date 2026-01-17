@@ -1,13 +1,59 @@
-// Exchange rates to EUR (approximate, should be fetched from API in production)
-// TODO: Consolidate with public/js/app.js and consider fetching from an API
-const exchangeRates: Record<string, number> = {
+// Fallback exchange rates to EUR (used if API fetch fails)
+// NOTE: Keep in sync with src/constants/exchangeRates.ts
+const FALLBACK_RATES: Record<string, number> = {
   EUR: 1,
-  USD: 0.86,
-  TRY: 0.020,
-  UZS: 0.000071,
-  UAH: 0.020,
-  KZT: 0.0019, // ~520 KZT per EUR
+  TRY: 0.01992512,
+  UZS: 0.00007202,
+  UAH: 0.01983600,
+  KZT: 0.00168442,
+  USD: 0.86169064,
 };
+
+// Current exchange rates (mutable, updated via loadExchangeRates)
+let exchangeRates: Record<string, number> = { ...FALLBACK_RATES };
+
+// Track if rates have been loaded from API
+let ratesLoaded = false;
+
+interface RatesResponse {
+  data: Record<string, number>;
+  source: string;
+  last_updated: string | null;
+}
+
+/**
+ * Load exchange rates from the API
+ * Should be called once when the app initializes
+ */
+export async function loadExchangeRates(): Promise<void> {
+  if (ratesLoaded) return;
+
+  try {
+    const response = await fetch('/api/rates');
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status}`);
+    }
+
+    const result: RatesResponse = await response.json();
+    exchangeRates = { ...FALLBACK_RATES, ...result.data };
+    ratesLoaded = true;
+
+    console.log(
+      `Exchange rates loaded from ${result.source}`,
+      result.last_updated ? `(updated: ${result.last_updated})` : ''
+    );
+  } catch (error) {
+    console.warn('Failed to load exchange rates from API, using fallback rates:', error);
+    exchangeRates = { ...FALLBACK_RATES };
+  }
+}
+
+/**
+ * Get the current exchange rates (for debugging/display)
+ */
+export function getExchangeRates(): Record<string, number> {
+  return { ...exchangeRates };
+}
 
 const currencySymbols: Record<string, string> = {
   USD: '$',

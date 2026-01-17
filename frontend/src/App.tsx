@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
@@ -8,6 +9,7 @@ import CountryProducts from './pages/CountryProducts';
 import Login from './pages/Login';
 import Mapping from './pages/admin/Mapping';
 import Scrapers from './pages/admin/Scrapers';
+import { loadExchangeRates } from './utils/currency';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,6 +21,11 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  // Load exchange rates from API on app initialization
+  useEffect(() => {
+    loadExchangeRates();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

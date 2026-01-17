@@ -38,6 +38,12 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run seed
 
+      - name: Sync exchange rates
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_ENV: production
+        run: npm run rates:sync
+
       - name: Run scrapers
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
