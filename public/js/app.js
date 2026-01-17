@@ -10,11 +10,11 @@ const API_URL = '/api';
 // TODO: Consolidate with frontend/src/utils/currency.ts and fetch from an API
 const EXCHANGE_RATES_TO_EUR = {
   EUR: 1,
-  TRY: 0.020,  // ~50 TRY per EUR
-  UZS: 0.000071,  // ~14,000 UZS per EUR
-  UAH: 0.020,  // ~50 UAH per EUR
-  KZT: 0.0019,  // ~520 KZT per EUR
-  USD: 0.86,
+  TRY: 0.01992512,
+  UZS: 0.00007202,
+  UAH: 0.01983600,
+  KZT: 0.00168442,
+  USD: 0.86169064,
 };
 
 // Country flag emojis
