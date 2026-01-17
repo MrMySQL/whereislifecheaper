@@ -45,7 +45,7 @@ export function isNormalizableUnit(unit: string | null): boolean {
   const normalized = unit.toLowerCase();
   return [
     'kg', 'g',
-    // 'l', 'ml'
+    'l', 'ml'
   ].includes(normalized);
 }
 
@@ -56,7 +56,7 @@ export function getUnitLabel(unit: string | null): string | null {
   if (!unit) return null;
   const normalized = unit.toLowerCase();
   if (normalized === 'kg' || normalized === 'g') return 'kg';
-  // if (normalized === 'l' || normalized === 'ml') return 'L';
+  if (normalized === 'l' || normalized === 'ml') return 'L';
   return null;
 }
 

@@ -244,7 +244,7 @@ router.get('/comparison', async (req, res, next) => {
       const normalized = unit.toLowerCase();
       return [
         'kg', 'g',
-        // 'l', 'ml'
+        'l', 'ml'
       ].includes(normalized);
     };
 
