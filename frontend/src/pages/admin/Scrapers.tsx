@@ -79,8 +79,22 @@ export default function Scrapers() {
     return `${mins}m ${secs}s`;
   };
 
-  const getStatusIcon = (logStatus: string) => {
-    switch (logStatus) {
+  const isStaleRunning = (log: ScrapeLog) => {
+    if (log.status !== 'running') return false;
+    const startedAt = new Date(log.started_at).getTime();
+    const now = Date.now();
+    const hours24 = 24 * 60 * 60 * 1000;
+    return now - startedAt > hours24;
+  };
+
+  const getEffectiveStatus = (log: ScrapeLog) => {
+    if (isStaleRunning(log)) return 'failed';
+    return log.status;
+  };
+
+  const getStatusIcon = (log: ScrapeLog) => {
+    const effectiveStatus = getEffectiveStatus(log);
+    switch (effectiveStatus) {
       case 'success':
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'failed':
@@ -142,37 +156,15 @@ export default function Scrapers() {
         </div>
       </div>
 
-      {/* Trigger All */}
-      <div className="card">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">
-              Run All Scrapers
-            </h2>
-            <p className="text-sm text-slate-500">
-              Trigger all active scrapers sequentially
-            </p>
-          </div>
-          <button
-            onClick={() => triggerMutation.mutate(undefined)}
-            disabled={triggerMutation.isPending || (status?.stats_24h?.currently_running || 0) > 0}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Play className="h-4 w-4" />
-            Run All
-          </button>
-        </div>
-      </div>
-
       {/* Running Scrapers */}
-      {status?.running_scrapers && status.running_scrapers.length > 0 && (
+      {status?.running_scrapers && (status.running_scrapers as ScrapeLog[]).filter((s) => !isStaleRunning(s)).length > 0 && (
         <div className="card border-blue-200 bg-blue-50">
           <h2 className="text-lg font-semibold text-blue-900 mb-4 flex items-center gap-2">
             <RefreshCw className="h-5 w-5 animate-spin" />
             Currently Running
           </h2>
           <div className="space-y-2">
-            {(status.running_scrapers as ScrapeLog[]).map((scraper) => (
+            {(status.running_scrapers as ScrapeLog[]).filter((s) => !isStaleRunning(s)).map((scraper) => (
               <div
                 key={scraper.id}
                 className="p-3 bg-white rounded-lg border border-blue-200"
@@ -265,7 +257,7 @@ export default function Scrapers() {
             <tbody className="divide-y divide-slate-100">
               {(status?.recent_logs as ScrapeLog[] || []).map((log) => (
                 <tr key={log.id} className="hover:bg-slate-50">
-                  <td className="py-3 px-4">{getStatusIcon(log.status)}</td>
+                  <td className="py-3 px-4">{getStatusIcon(log)}</td>
                   <td className="py-3 px-4">
                     <p className="font-medium text-slate-900">
                       {log.supermarket_name}

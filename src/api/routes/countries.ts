@@ -9,19 +9,32 @@ const router = Router();
  */
 router.get('/', async (_req, res, next) => {
   try {
-    const result = await query(
-      `SELECT
-        c.*,
-        COUNT(DISTINCT s.id) as supermarket_count
-      FROM countries c
-      LEFT JOIN supermarkets s ON c.id = s.country_id AND s.is_active = true
-      GROUP BY c.id
-      ORDER BY c.name`
+    const countriesResult = await query(
+      `SELECT * FROM countries ORDER BY name`
     );
 
+    const supermarketsResult = await query(
+      `SELECT id, name, country_id, is_active
+       FROM supermarkets
+       ORDER BY name`
+    );
+
+    const supermarketsByCountry = supermarketsResult.rows.reduce((acc: Record<number, typeof supermarketsResult.rows>, sm) => {
+      if (!acc[sm.country_id]) {
+        acc[sm.country_id] = [];
+      }
+      acc[sm.country_id].push(sm);
+      return acc;
+    }, {});
+
+    const data = countriesResult.rows.map((country) => ({
+      ...country,
+      supermarkets: supermarketsByCountry[country.id] || [],
+    }));
+
     res.json({
-      data: result.rows,
-      count: result.rowCount,
+      data,
+      count: countriesResult.rowCount,
     });
   } catch (error) {
     next(error);
