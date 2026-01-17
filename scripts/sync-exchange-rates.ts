@@ -8,42 +8,55 @@ interface CurrencyApiResponse {
   eur: Record<string, number>;
 }
 
+// Primary and fallback URLs for fawazahmed0/currency-api
+const CURRENCY_API_URLS = [
+  'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json',
+  'https://latest.currency-api.pages.dev/v1/currencies/eur.json', // Cloudflare fallback
+];
+
 async function fetchRatesFromApi(): Promise<Record<string, number> | null> {
   // Using fawazahmed0/currency-api - free, no API key, 200+ currencies
   // https://github.com/fawazahmed0/exchange-api
-  const url = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json';
+  let data: CurrencyApiResponse | null = null;
 
-  try {
-    logger.info(`Fetching exchange rates from: ${url}`);
+  for (const url of CURRENCY_API_URLS) {
+    try {
+      logger.info(`Fetching exchange rates from: ${url}`);
+      const response = await fetch(url);
 
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
-    }
-
-    const data: CurrencyApiResponse = await response.json();
-    logger.info(`Currency API response for date ${data.date}`);
-
-    // The API returns how many units of target currency per 1 EUR
-    // We need to invert this to get how many EUR per 1 unit of currency
-    const ratesInEUR: Record<string, number> = { EUR: 1 };
-
-    for (const currency of TRACKED_CURRENCIES) {
-      const lowerCurrency = currency.toLowerCase();
-      if (data.eur[lowerCurrency]) {
-        ratesInEUR[currency] = 1 / data.eur[lowerCurrency];
-        logger.info(`Fetched rate: ${currency} = ${ratesInEUR[currency]} EUR (1 EUR = ${data.eur[lowerCurrency]} ${currency})`);
-      } else {
-        logger.warn(`Currency ${currency} not found in API response`);
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
       }
-    }
 
-    return ratesInEUR;
-  } catch (error) {
-    logger.error('Failed to fetch rates from Currency API:', error);
+      data = await response.json();
+      logger.info(`Currency API response for date ${data!.date}`);
+      break; // Success, no need to try fallback
+    } catch (error) {
+      logger.warn(`Failed to fetch from ${url}:`, error);
+      // Continue to next URL
+    }
+  }
+
+  if (!data) {
+    logger.error('Failed to fetch rates from all Currency API URLs');
     return null;
   }
+
+  // The API returns how many units of target currency per 1 EUR
+  // We need to invert this to get how many EUR per 1 unit of currency
+  const ratesInEUR: Record<string, number> = { EUR: 1 };
+
+  for (const currency of TRACKED_CURRENCIES) {
+    const lowerCurrency = currency.toLowerCase();
+    if (data.eur[lowerCurrency]) {
+      ratesInEUR[currency] = 1 / data.eur[lowerCurrency];
+      logger.info(`Fetched rate: ${currency} = ${ratesInEUR[currency]} EUR (1 EUR = ${data.eur[lowerCurrency]} ${currency})`);
+    } else {
+      logger.warn(`Currency ${currency} not found in API response`);
+    }
+  }
+
+  return ratesInEUR;
 }
 
 async function getLatestRatesFromDB(): Promise<Record<string, number>> {
