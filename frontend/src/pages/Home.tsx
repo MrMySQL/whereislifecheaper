@@ -199,6 +199,7 @@ export default function Home() {
         <ComparisonTable
           products={filteredProducts}
           selectedCountries={selectedCountries}
+          countries={countries}
           loading={comparisonLoading}
         />
 
