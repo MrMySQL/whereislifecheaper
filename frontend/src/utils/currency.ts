@@ -1,4 +1,5 @@
 // Fallback exchange rates to EUR (used if API fetch fails)
+// NOTE: Keep in sync with src/constants/exchangeRates.ts
 const FALLBACK_RATES: Record<string, number> = {
   EUR: 1,
   USD: 0.86,

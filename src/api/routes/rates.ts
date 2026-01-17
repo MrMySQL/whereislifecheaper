@@ -1,16 +1,8 @@
 import { Router } from 'express';
 import { query } from '../../config/database';
+import { FALLBACK_EXCHANGE_RATES } from '../../constants/exchangeRates';
 
 const router = Router();
-
-// Fallback rates if database is empty
-const FALLBACK_RATES: Record<string, number> = {
-  EUR: 1,
-  USD: 0.86,
-  TRY: 0.020,
-  UZS: 0.000071,
-  UAH: 0.020,
-};
 
 /**
  * GET /api/rates
@@ -54,7 +46,7 @@ router.get('/', async (_req, res, next) => {
 
     // Fallback to hardcoded rates if database is empty
     res.json({
-      data: FALLBACK_RATES,
+      data: FALLBACK_EXCHANGE_RATES,
       source: 'fallback',
       last_updated: null,
     });

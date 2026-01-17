@@ -1,17 +1,6 @@
 import { query, closePool } from '../src/config/database';
 import { logger } from '../src/utils/logger';
-
-// Currencies we need to track (used in the application)
-const CURRENCIES = ['USD', 'TRY', 'UZS', 'UAH'];
-
-// Fallback rates in case API fails (rate_to_eur: how many EUR for 1 unit)
-const FALLBACK_RATES: Record<string, number> = {
-  EUR: 1,
-  USD: 0.86,
-  TRY: 0.020,
-  UZS: 0.000071,
-  UAH: 0.020,
-};
+import { TRACKED_CURRENCIES, FALLBACK_EXCHANGE_RATES } from '../src/constants/exchangeRates';
 
 interface FrankfurterResponse {
   amount: number;
@@ -25,7 +14,7 @@ async function fetchRatesFromFrankfurter(): Promise<Record<string, number> | nul
     // Frankfurter API: get EUR rates for our currencies
     // The API returns how many units of target currency per 1 EUR
     // We need to invert this to get how many EUR per 1 unit of currency
-    const url = `https://api.frankfurter.app/latest?from=EUR&to=${CURRENCIES.join(',')}`;
+    const url = `https://api.frankfurter.app/latest?from=EUR&to=${TRACKED_CURRENCIES.join(',')}`;
 
     logger.info(`Fetching exchange rates from: ${url}`);
 
@@ -116,7 +105,7 @@ async function syncExchangeRates(): Promise<void> {
   // Fall back to hardcoded rates if API fails
   if (!rates) {
     logger.warn('Using fallback exchange rates');
-    rates = FALLBACK_RATES;
+    rates = FALLBACK_EXCHANGE_RATES;
     source = 'fallback';
   }
 
