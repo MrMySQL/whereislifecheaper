@@ -19,6 +19,7 @@ import productsRouter from './routes/products';
 import pricesRouter from './routes/prices';
 import scraperRouter from './routes/scraper';
 import canonicalRouter from './routes/canonical';
+import ratesRouter from './routes/rates';
 
 const app = express();
 
@@ -92,6 +93,7 @@ app.use('/api/products', productsRouter);
 app.use('/api/prices', pricesRouter);
 app.use('/api/scraper', scraperRouter);
 app.use('/api/canonical', canonicalRouter);
+app.use('/api/rates', ratesRouter);
 
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
@@ -147,6 +149,7 @@ async function startServer() {
       console.log(`   - GET  /api/prices/stats`);
       console.log(`   - GET  /api/canonical/comparison`);
       console.log(`   - POST /api/scraper/trigger (Admin only)`);
+      console.log(`   - GET  /api/rates`);
       console.log(`\n❤️  Health check: http://localhost:${PORT}/health`);
       scraperLogger.info(`Server started on port ${PORT}`);
     });
