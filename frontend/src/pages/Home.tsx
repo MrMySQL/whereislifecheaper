@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, RefreshCw, Globe2, TrendingDown, Sparkles } from 'lucide-react';
+import { Search, RefreshCw, Globe2, TrendingDown, Sparkles, Layers, Check } from 'lucide-react';
 import { countriesApi, pricesApi, canonicalApi } from '../services/api';
 import CountrySelector from '../components/comparison/CountrySelector';
 import CountryCard from '../components/comparison/CountryCard';
@@ -8,12 +8,13 @@ import ComparisonTable from '../components/comparison/ComparisonTable';
 import CurrencyRatesTable from '../components/comparison/CurrencyRatesTable';
 import Loading from '../components/common/Loading';
 
-const DEFAULT_COUNTRIES = ['TR', 'ES', 'ME'];
+const DEFAULT_COUNTRIES = ['TR', 'ES', 'ME', 'UA'];
 
 export default function Home() {
   const [selectedCountries, setSelectedCountries] = useState<string[]>(DEFAULT_COUNTRIES);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [showOnlyInAllCountries, setShowOnlyInAllCountries] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -63,6 +64,13 @@ export default function Home() {
     const availableCountries = Object.keys(product.prices_by_country).filter(
       (code) => selectedCountries.includes(code)
     );
+
+    if (showOnlyInAllCountries) {
+      // Toggle ON: product must exist in ALL selected countries
+      return availableCountries.length === selectedCountries.length;
+    }
+
+    // Toggle OFF (default): product must exist in at least 2 selected countries
     return availableCountries.length >= 2;
   });
 
@@ -175,6 +183,24 @@ export default function Home() {
           </h2>
 
           <div className="flex gap-2 w-full sm:w-auto">
+            {/* All countries filter toggle */}
+            <button
+              onClick={() => setShowOnlyInAllCountries(!showOnlyInAllCountries)}
+              className={`
+                flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-all duration-200
+                ${showOnlyInAllCountries
+                  ? 'border-terracotta-400 bg-terracotta-50 text-terracotta-700'
+                  : 'border-cream-200 bg-white/80 text-charcoal-600 hover:border-cream-300 hover:bg-cream-50'
+                }
+              `}
+              title="When enabled, only show products available in ALL selected countries"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">All countries</span>
+              {showOnlyInAllCountries && <Check className="w-3 h-3" strokeWidth={3} />}
+            </button>
+
+            {/* Search input */}
             <div className="relative flex-1 sm:flex-initial">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-charcoal-400" />
               <input
