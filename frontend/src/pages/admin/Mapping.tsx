@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings } from 'lucide-react';
+import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info } from 'lucide-react';
 import { countriesApi, canonicalApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
 import type { Product, Country, CanonicalProductBasic } from '../../types';
@@ -88,6 +88,15 @@ export default function Mapping() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['canonical'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+
+  // Update canonical product mutation (for show_per_unit_price toggle)
+  const updateMutation = useMutation({
+    mutationFn: ({ id, show_per_unit_price }: { id: number; show_per_unit_price: boolean }) =>
+      canonicalApi.update(id, { show_per_unit_price }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['canonical'] });
     },
   });
 
@@ -202,14 +211,42 @@ export default function Mapping() {
                         {cp.linked_products_count || 0} products • {cp.countries_count || 0} countries
                       </p>
                     </div>
-                    <button
-                      onClick={() => handleDeleteCanonical(cp)}
-                      disabled={deleteMutation.isPending}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                      title="Delete canonical product"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      {/* Per-unit price toggle */}
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative group">
+                          <Info className="h-3.5 w-3.5 text-slate-400 cursor-help" />
+                          <div className="absolute bottom-full right-0 mb-2 w-64 p-2 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                            When enabled, prices are shown per unit (e.g., €5.20/kg) instead of total package price. Only enable this when all linked products have consistent unit data.
+                            <div className="absolute bottom-0 right-3 translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900" />
+                          </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={cp.show_per_unit_price}
+                            onChange={(e) => {
+                              updateMutation.mutate({
+                                id: cp.id,
+                                show_per_unit_price: e.target.checked,
+                              });
+                            }}
+                            disabled={updateMutation.isPending}
+                          />
+                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                          <span className="ms-1.5 text-xs text-slate-500">/kg</span>
+                        </label>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteCanonical(cp)}
+                        disabled={deleteMutation.isPending}
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title="Delete canonical product"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

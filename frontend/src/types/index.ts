@@ -28,6 +28,7 @@ export interface CanonicalProduct {
   canonical_id: number;
   canonical_name: string;
   canonical_description: string | null;
+  show_per_unit_price: boolean;
   category: string | null;
   prices_by_country: Record<string, CountryPrice>;
   country_count: number;
@@ -93,6 +94,7 @@ export interface CanonicalProductBasic {
   description: string | null;
   category_id: number | null;
   category_name: string | null;
+  show_per_unit_price: boolean;
   created_at: string;
   linked_products_count: number;
   countries_count: number;

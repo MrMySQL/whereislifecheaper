@@ -19,6 +19,7 @@ router.get('/', async (req, res, next) => {
         cp.description,
         cp.category_id,
         c.name as category_name,
+        cp.show_per_unit_price,
         cp.created_at,
         (
           SELECT COUNT(DISTINCT p.id)
@@ -63,7 +64,7 @@ router.get('/', async (req, res, next) => {
  */
 router.post('/', isAdmin, async (req, res, next) => {
   try {
-    const { name, description, category_id } = req.body;
+    const { name, description, category_id, show_per_unit_price } = req.body;
 
     if (!name) {
       res.status(400).json({
@@ -74,13 +75,14 @@ router.post('/', isAdmin, async (req, res, next) => {
     }
 
     const result = await query(
-      `INSERT INTO canonical_products (name, description, category_id)
-       VALUES ($1, $2, $3)
+      `INSERT INTO canonical_products (name, description, category_id, show_per_unit_price)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (name) DO UPDATE SET
          description = COALESCE(EXCLUDED.description, canonical_products.description),
-         category_id = COALESCE(EXCLUDED.category_id, canonical_products.category_id)
+         category_id = COALESCE(EXCLUDED.category_id, canonical_products.category_id),
+         show_per_unit_price = COALESCE(EXCLUDED.show_per_unit_price, canonical_products.show_per_unit_price)
        RETURNING *`,
-      [name, description || null, category_id || null]
+      [name, description || null, category_id || null, show_per_unit_price ?? false]
     );
 
     res.status(201).json({
@@ -134,6 +136,49 @@ router.put('/link', isAdmin, async (req, res, next) => {
 });
 
 /**
+ * PATCH /api/canonical/:id
+ * Update a canonical product (e.g., toggle show_per_unit_price)
+ * @requires Admin
+ */
+router.patch('/:id', isAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { show_per_unit_price } = req.body;
+
+    if (show_per_unit_price === undefined) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'No fields to update',
+      });
+      return;
+    }
+
+    const result = await query(
+      `UPDATE canonical_products
+       SET show_per_unit_price = $1
+       WHERE id = $2
+       RETURNING *`,
+      [show_per_unit_price, id]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Canonical product not found',
+      });
+      return;
+    }
+
+    res.json({
+      message: 'Updated successfully',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/canonical/comparison
  * Get products comparison using canonical products
  * Only shows products that have been linked to canonical products
@@ -147,6 +192,7 @@ router.get('/comparison', async (req, res, next) => {
         cp.id as canonical_id,
         cp.name as canonical_name,
         cp.description as canonical_description,
+        cp.show_per_unit_price,
         cat.name as category_name,
         p.id as product_id,
         p.name as product_name,
@@ -219,6 +265,7 @@ router.get('/comparison', async (req, res, next) => {
           canonical_id: row.canonical_id,
           canonical_name: row.canonical_name,
           canonical_description: row.canonical_description,
+          show_per_unit_price: row.show_per_unit_price ?? false,
           category: row.category_name,
           prices_by_country: {},
         });

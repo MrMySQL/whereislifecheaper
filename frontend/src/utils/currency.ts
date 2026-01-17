@@ -90,15 +90,16 @@ export function findCheapestCountry(
     currency: string;
     price_per_unit?: number | null;
     unit?: string | null;
-  }>
+  }>,
+  usePerUnitPricing: boolean = true
 ): { code: string; savings: number } | null {
   const entries = Object.entries(pricesByCountry);
   if (entries.length < 2) return null;
 
   // Convert all prices to EUR for comparison
-  // Use price_per_unit for normalizable units, otherwise use price
+  // Use price_per_unit for normalizable units when enabled, otherwise use price
   const pricesInEUR = entries.map(([code, data]) => {
-    const useNormalized = isNormalizableUnit(data.unit ?? null) && data.price_per_unit != null;
+    const useNormalized = usePerUnitPricing && isNormalizableUnit(data.unit ?? null) && data.price_per_unit != null;
     const priceToCompare = useNormalized ? data.price_per_unit! : data.price;
     return {
       code,

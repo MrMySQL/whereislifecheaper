@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { TrendingDown, Tag, Trophy, Package, ImageOff, Store, Calendar, Calculator, ChevronDown } from 'lucide-react';
-import type { CanonicalProduct, CountryPrice } from '../../types';
+import type { CanonicalProduct, CountryPrice, Country } from '../../types';
 import { formatPrice, convertToEUR, findCheapestCountry, isNormalizableUnit, getUnitLabel, formatPackageSize } from '../../utils/currency';
 import PriceHistoryChart from './PriceHistoryChart';
 
 interface ComparisonTableProps {
   products: CanonicalProduct[];
   selectedCountries: string[];
+  countries: Country[];
   loading?: boolean;
 }
 
@@ -120,15 +121,15 @@ function ProductHoverCard({ priceData, showBelow = false }: { priceData: Country
   );
 }
 
-function PriceCell({ priceData, isCheapest, rowIndex }: { priceData: CountryPrice; isCheapest: boolean; rowIndex: number }) {
+function PriceCell({ priceData, isCheapest, rowIndex, showPerUnitPrice }: { priceData: CountryPrice; isCheapest: boolean; rowIndex: number; showPerUnitPrice: boolean }) {
   const [isHovered, setIsHovered] = useState(false);
   // Show hover card below for first 3 rows to avoid clipping
   const showBelow = rowIndex < 3;
 
-  // Determine if we should show normalized price
-  const hasNormalizedPrice = isNormalizableUnit(priceData.unit) && priceData.price_per_unit != null;
+  // Determine if we should show normalized price - only if toggle is enabled
+  const hasNormalizedPrice = showPerUnitPrice && isNormalizableUnit(priceData.unit) && priceData.price_per_unit != null;
 
-  // EUR conversion - use normalized price if available
+  // EUR conversion - use normalized price if available and enabled
   const displayPrice = hasNormalizedPrice ? priceData.price_per_unit! : priceData.price;
   const eurPrice = convertToEUR(displayPrice, priceData.currency);
   const unitLabel = getUnitLabel(priceData.unit);
@@ -167,6 +168,7 @@ function PriceCell({ priceData, isCheapest, rowIndex }: { priceData: CountryPric
 export default function ComparisonTable({
   products,
   selectedCountries,
+  countries,
   loading = false,
 }: ComparisonTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -195,8 +197,8 @@ export default function ComparisonTable({
       selectedCountries.forEach((code) => {
         const priceData = product.prices_by_country[code];
         if (priceData) {
-          // Use normalized price if available for weight/volume products
-          const hasNormalizedPrice = isNormalizableUnit(priceData.unit) && priceData.price_per_unit != null;
+          // Use normalized price only if toggle is enabled and unit data is available
+          const hasNormalizedPrice = product.show_per_unit_price && isNormalizableUnit(priceData.unit) && priceData.price_per_unit != null;
           const priceToUse = hasNormalizedPrice ? priceData.price_per_unit! : priceData.price;
           const eurPrice = convertToEUR(priceToUse, priceData.currency);
           totals[code].total += eurPrice;
@@ -293,7 +295,8 @@ export default function ComparisonTable({
                         unit: data.unit,
                       },
                     ])
-                )
+                ),
+                product.show_per_unit_price
               );
 
               const isExpanded = expandedRows.has(product.canonical_id);
@@ -365,6 +368,7 @@ export default function ComparisonTable({
                           priceData={priceData}
                           isCheapest={isCheapest}
                           rowIndex={rowIndex}
+                          showPerUnitPrice={product.show_per_unit_price}
                         />
                       );
                     })}
@@ -420,6 +424,7 @@ export default function ComparisonTable({
               {selectedCountries.map((code) => {
                 const data = summaryData.totals[code];
                 const isCheapest = summaryData.cheapestCode === code;
+                const country = countries.find((c) => c.code === code);
 
                 return (
                   <td
@@ -434,6 +439,11 @@ export default function ComparisonTable({
                         <p className="text-[10px] text-charcoal-400">
                           {data.count} items
                         </p>
+                        {country && (
+                          <p className="text-lg mt-1" title={country.name}>
+                            {country.flag_emoji}
+                          </p>
+                        )}
                       </>
                     ) : (
                       <span className="text-cream-400">—</span>
@@ -451,6 +461,14 @@ export default function ComparisonTable({
                         {summaryData.savings}%
                       </span>
                     )}
+                    {(() => {
+                      const cheapestCountry = countries.find((c) => c.code === summaryData.cheapestCode);
+                      return cheapestCountry ? (
+                        <span className="text-lg mt-0.5" title={cheapestCountry.name}>
+                          {cheapestCountry.flag_emoji}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                 )}
               </td>
