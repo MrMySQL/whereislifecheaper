@@ -2,10 +2,11 @@
 // NOTE: Keep in sync with src/constants/exchangeRates.ts
 const FALLBACK_RATES: Record<string, number> = {
   EUR: 1,
-  USD: 0.86,
-  TRY: 0.020,
-  UZS: 0.000071,
-  UAH: 0.020,
+  TRY: 0.01992512,
+  UZS: 0.00007202,
+  UAH: 0.01983600,
+  KZT: 0.00168442,
+  USD: 0.86169064,
 };
 
 // Current exchange rates (mutable, updated via loadExchangeRates)
@@ -59,7 +60,8 @@ const currencySymbols: Record<string, string> = {
   EUR: '€',
   TRY: '₺',
   UZS: "so'm",
-  UAH: '₴'
+  UAH: '₴',
+  KZT: '₸',
 };
 
 export function formatPrice(price: number | string, currency: string): string {

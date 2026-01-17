@@ -119,6 +119,14 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'AuchanUaGraphQLScraper',
     is_active: true,
   },
+  // Kazakhstan
+  {
+    country_code: 'KZ',
+    name: 'Arbuz',
+    website_url: 'https://arbuz.kz',
+    scraper_class: 'ArbuzScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {
