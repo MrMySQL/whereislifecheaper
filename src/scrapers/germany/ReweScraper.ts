@@ -3,6 +3,7 @@ import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.
 import { scraperLogger } from '../../utils/logger';
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
+import topUserAgents from 'top-user-agents';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -130,9 +131,13 @@ export class ReweScraper extends BaseScraper {
     const viewportWidth = 1920 + Math.floor(Math.random() * 100);
     const viewportHeight = 1080 + Math.floor(Math.random() * 50);
 
+    // Get a random user agent from the top user agents list
+    const userAgent = topUserAgents[Math.floor(Math.random() * Math.min(10, topUserAgents.length))];
+    scraperLogger.debug(`Using user agent: ${userAgent}`);
+
     // Launch with persistent context for session management
     this.browserContext = await chromium.launchPersistentContext(sessionDir, {
-      // headless: false, // Headed mode is more reliable for Cloudflare bypass
+      headless: false, // Headed mode is more reliable for Cloudflare bypass
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -141,7 +146,7 @@ export class ReweScraper extends BaseScraper {
         '--start-maximized',
       ],
       viewport: { width: viewportWidth, height: viewportHeight },
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userAgent,
       locale: 'de-DE',
       timezoneId: 'Europe/Berlin',
       permissions: ['geolocation'],
