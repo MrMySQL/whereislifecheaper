@@ -1,0 +1,641 @@
+import { BaseScraper } from '../base/BaseScraper';
+import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
+import { scraperLogger } from '../../utils/logger';
+
+/**
+ * REWE categories configuration
+ * Uses www.rewe.de/shop/ URLs (not shop.rewe.de which has Cloudflare protection)
+ */
+export const reweCategories: CategoryConfig[] = [
+  { id: 'obst-gemuese', name: 'Obst & Gemüse', url: '/shop/c/obst-gemuese/' },
+  { id: 'fleisch-fisch', name: 'Fleisch & Fisch', url: '/shop/c/fleisch-fisch/' },
+  { id: 'kaese-eier-molkerei', name: 'Käse, Eier & Molkerei', url: '/shop/c/kaese-eier-molkerei/' },
+  { id: 'brot-cerealien-aufstriche', name: 'Brot, Cerealien & Aufstriche', url: '/shop/c/brot-cerealien-aufstriche/' },
+  { id: 'getraenke-genussmittel', name: 'Getränke & Genussmittel', url: '/shop/c/getraenke-genussmittel/' },
+  { id: 'suesses-salziges', name: 'Süßes & Salziges', url: '/shop/c/suesses-salziges/' },
+  { id: 'tiefkuehlkost', name: 'Tiefkühlkost', url: '/shop/c/tiefkuehlkost/' },
+  { id: 'kochen-backen', name: 'Kochen & Backen', url: '/shop/c/kochen-backen/' },
+  { id: 'oele-sossen-gewuerze', name: 'Öle, Soßen & Gewürze', url: '/shop/c/oele-sossen-gewuerze/' },
+  { id: 'fertiggerichte-konserven', name: 'Fertiggerichte & Konserven', url: '/shop/c/fertiggerichte-konserven/' },
+  { id: 'kaffee-tee-kakao', name: 'Kaffee, Tee & Kakao', url: '/shop/c/kaffee-tee-kakao/' },
+  { id: 'drogerie-gesundheit', name: 'Drogerie & Gesundheit', url: '/shop/c/drogerie-gesundheit/' },
+  { id: 'babybedarf', name: 'Babybedarf', url: '/shop/c/babybedarf/' },
+  { id: 'tierbedarf', name: 'Tierbedarf', url: '/shop/c/tierbedarf/' },
+  { id: 'kueche-haushalt', name: 'Küche & Haushalt', url: '/shop/c/kueche-haushalt/' },
+];
+
+/**
+ * REWE scraper configuration
+ */
+export const reweConfig: Partial<ScraperConfig> = {
+  name: 'REWE',
+  baseUrl: 'https://www.rewe.de',
+  categories: reweCategories,
+  selectors: {
+    productCard: '[class*="product-tile"]',
+    productName: '[class*="title"]',
+    productPrice: '[class*="price"]',
+    productImage: 'img',
+    productUrl: 'a',
+  },
+  waitTimes: {
+    pageLoad: 5000,
+    dynamicContent: 3000,
+    betweenRequests: 2000,
+  },
+  maxRetries: 3,
+  concurrentPages: 1,
+  userAgents: [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  ],
+};
+
+/**
+ * REWE product from page
+ */
+interface ReweProduct {
+  id: string;
+  name: string;
+  brand?: string;
+  imageUrl?: string;
+  productUrl: string;
+  price: number;
+  originalPrice?: number;
+  grammage?: string;
+  isAvailable: boolean;
+}
+
+/**
+ * Scraper for REWE Germany (www.rewe.de/shop/)
+ *
+ * This scraper:
+ * 1. Navigates to www.rewe.de/shop/
+ * 2. Selects "Lieferservice" (delivery service) option
+ * 3. Enters postal code 10115 (Berlin) to set delivery zone
+ * 4. Once market is selected, navigates to category pages to scrape products with actual prices
+ *
+ * IMPORTANT REQUIREMENTS:
+ * - MUST run with PLAYWRIGHT_HEADLESS=false (visible browser) to bypass Cloudflare protection
+ * - Prices are only available after selecting a delivery market
+ * - The scraper uses Berlin (10115) as the default delivery zone
+ *
+ * Example: PLAYWRIGHT_HEADLESS=false npm run scraper:run rewe
+ */
+export class ReweScraper extends BaseScraper {
+  private readonly BASE_URL = 'https://www.rewe.de';
+  private readonly POSTAL_CODE = '10115'; // Berlin
+  private marketSelected = false;
+
+  constructor(config: ScraperConfig) {
+    super(config);
+  }
+
+  /**
+   * Initialize the scraper with browser and select delivery market
+   */
+  async initialize(): Promise<void> {
+    scraperLogger.info(`Initializing REWE scraper...`);
+    this.startTime = Date.now();
+
+    // Launch browser (non-headless may help with Cloudflare)
+    await this.launchBrowser();
+    this.page = await this.createPage();
+
+    // Set German locale cookie
+    await this.page.context().addCookies([
+      { name: 'userCountry', value: 'DE', domain: '.rewe.de', path: '/' },
+    ]);
+
+    // Navigate to shop page and select delivery market
+    await this.selectDeliveryMarket();
+
+    scraperLogger.info(`REWE scraper initialized with delivery zone ${this.POSTAL_CODE}`);
+  }
+
+  /**
+   * Select a delivery market by entering postal code
+   * This enables actual prices to be displayed
+   */
+  private async selectDeliveryMarket(): Promise<void> {
+    if (!this.page) return;
+
+    try {
+      scraperLogger.info('Navigating to REWE shop to select delivery market...');
+
+      // Navigate to the shop page
+      await this.page.goto(`${this.BASE_URL}/shop/`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
+      });
+      await this.page.waitForTimeout(2000);
+
+      // Handle cookie consent first
+      await this.handleCookieConsent();
+
+      // Check for Cloudflare challenge
+      const title = await this.page.title();
+      if (title.toLowerCase().includes('moment')) {
+        scraperLogger.warn('Cloudflare challenge detected on shop page. Waiting...');
+        await this.page.waitForTimeout(5000);
+        const newTitle = await this.page.title();
+        if (newTitle.toLowerCase().includes('moment')) {
+          scraperLogger.error('Could not bypass Cloudflare challenge');
+          return;
+        }
+      }
+
+      // Click on "Lieferservice" option
+      scraperLogger.info('Looking for Lieferservice option...');
+
+      // Try different selectors for the Lieferservice button
+      const lieferserviceSelectors = [
+        'text=Lieferservice',
+        'button:has-text("Lieferservice")',
+        '[data-testid*="delivery"]',
+        'a:has-text("Lieferservice")',
+      ];
+
+      let clicked = false;
+      for (const selector of lieferserviceSelectors) {
+        try {
+          const element = await this.page.$(selector);
+          if (element) {
+            await element.click();
+            clicked = true;
+            scraperLogger.info('Clicked Lieferservice option');
+            break;
+          }
+        } catch {
+          // Continue trying other selectors
+        }
+      }
+
+      if (!clicked) {
+        scraperLogger.warn('Could not find Lieferservice button, trying postal code input directly');
+      }
+
+      await this.page.waitForTimeout(1500);
+
+      // Enter postal code
+      scraperLogger.info(`Entering postal code ${this.POSTAL_CODE}...`);
+
+      // Look for postal code input field
+      const postalInputSelectors = [
+        'input[placeholder*="Postleitzahl"]',
+        'input[placeholder*="PLZ"]',
+        'input[type="text"][name*="zip"]',
+        'input[type="text"][name*="postal"]',
+        'input[type="number"]',
+        'input[inputmode="numeric"]',
+      ];
+
+      let inputFound = false;
+      for (const selector of postalInputSelectors) {
+        try {
+          const input = await this.page.$(selector);
+          if (input) {
+            await input.click();
+            await input.fill(this.POSTAL_CODE);
+            inputFound = true;
+            scraperLogger.info('Entered postal code');
+            break;
+          }
+        } catch {
+          // Continue trying other selectors
+        }
+      }
+
+      if (!inputFound) {
+        // Try typing in the focused element or any visible input
+        try {
+          await this.page.keyboard.type(this.POSTAL_CODE);
+          inputFound = true;
+          scraperLogger.info('Typed postal code into focused element');
+        } catch {
+          scraperLogger.warn('Could not find postal code input');
+        }
+      }
+
+      await this.page.waitForTimeout(1000);
+
+      // Click "Lieferservice finden" button
+      scraperLogger.info('Looking for Lieferservice finden button...');
+
+      const findButtonSelectors = [
+        'text=Lieferservice finden',
+        'button:has-text("Lieferservice finden")',
+        'button:has-text("finden")',
+        'button[type="submit"]',
+      ];
+
+      for (const selector of findButtonSelectors) {
+        try {
+          const button = await this.page.$(selector);
+          if (button) {
+            await button.click();
+            scraperLogger.info('Clicked Lieferservice finden button');
+            break;
+          }
+        } catch {
+          // Continue trying other selectors
+        }
+      }
+
+      // Wait for market selection to complete
+      await this.page.waitForTimeout(3000);
+
+      // Verify market was selected by checking for delivery info or prices
+      const pageContent = await this.page.content();
+      if (pageContent.includes('Lieferung') || pageContent.includes('€')) {
+        this.marketSelected = true;
+        scraperLogger.info('Delivery market selected successfully');
+      } else {
+        scraperLogger.warn('Market selection may not have completed successfully');
+      }
+
+    } catch (error) {
+      scraperLogger.error('Failed to select delivery market:', error);
+    }
+  }
+
+  /**
+   * Handle cookie consent dialog if present
+   */
+  private async handleCookieConsent(): Promise<void> {
+    if (!this.page) return;
+
+    try {
+      // Wait a bit for cookie banner to appear
+      await this.page.waitForTimeout(1000);
+
+      const cookieButtonSelectors = [
+        '#uc-btn-accept-banner',
+        'button[data-testid="uc-accept-all-button"]',
+        'button:has-text("Alle akzeptieren")',
+        'button:has-text("Alle annehmen")',
+      ];
+
+      for (const selector of cookieButtonSelectors) {
+        try {
+          const cookieButton = await this.page.$(selector);
+          if (cookieButton) {
+            await cookieButton.click();
+            scraperLogger.debug('Cookie consent accepted');
+            await this.page.waitForTimeout(500);
+            break;
+          }
+        } catch {
+          // Continue trying other selectors
+        }
+      }
+    } catch (error) {
+      scraperLogger.debug('No cookie consent dialog found or already dismissed');
+    }
+  }
+
+
+  /**
+   * Scrape a single category
+   */
+  protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+    const products: ProductData[] = [];
+
+    try {
+      const categoryUrl = `${this.BASE_URL}${category.url}`;
+      scraperLogger.info(`Scraping category: ${category.name} from ${categoryUrl}`);
+
+      if (!this.page) return products;
+
+      // Warn if market wasn't selected
+      if (!this.marketSelected) {
+        scraperLogger.warn('Market not selected - products may not have prices');
+      }
+
+      scraperLogger.debug(`Navigating to ${categoryUrl}`);
+      await this.page.goto(categoryUrl, { waitUntil: 'domcontentloaded' });
+      await this.waitForDynamicContent();
+
+      // Handle cookie consent if it appears again
+      await this.handleCookieConsent();
+
+      // Check page title and URL
+      const title = await this.page.title();
+      scraperLogger.info(`Page title: ${title}`);
+
+      // If Cloudflare challenge is present, skip this category
+      if (title.includes('moment') || title.includes('Moment')) {
+        scraperLogger.warn(`Cloudflare challenge detected for ${category.name}, skipping`);
+        return products;
+      }
+
+      // Scroll to load more products (infinite scroll handling)
+      await this.loadAllProducts();
+
+      // Extract products from the page
+      const pageProducts = await this.extractProductsFromPage();
+
+      // Count products with and without prices
+      const productsWithPrice = pageProducts.filter(p => p.price > 0).length;
+      const productsWithoutPrice = pageProducts.length - productsWithPrice;
+
+      scraperLogger.info(`Category ${category.name}: Found ${pageProducts.length} products (${productsWithPrice} with price, ${productsWithoutPrice} without price)`);
+
+      if (productsWithoutPrice > 0 && productsWithPrice === 0) {
+        scraperLogger.warn(`All products show location-dependent pricing. No market/delivery zone selected.`);
+      }
+
+      // Parse products
+      const parsedProducts = this.parseProducts(pageProducts, category.name);
+
+      // Save products via callback
+      if (this.onPageScraped && parsedProducts.length > 0) {
+        const savedCount = await this.onPageScraped(parsedProducts, {
+          categoryId: category.id,
+          categoryName: category.name,
+          pageNumber: 1,
+          totalProductsOnPage: parsedProducts.length,
+        });
+        scraperLogger.info(`${category.name}: Saved ${savedCount}/${parsedProducts.length} products`);
+      }
+
+      products.push(...parsedProducts);
+    } catch (error) {
+      this.logError(
+        `Failed to scrape category ${category.name}`,
+        `${this.BASE_URL}${category.url}`,
+        error as Error
+      );
+    }
+
+    return products;
+  }
+
+  /**
+   * Load all products by scrolling (handle infinite scroll/lazy loading)
+   */
+  private async loadAllProducts(): Promise<void> {
+    if (!this.page) return;
+
+    const maxScrolls = 15; // Limit scrolls
+    let lastProductCount = 0;
+    let scrollCount = 0;
+    let noChangeCount = 0;
+
+    while (scrollCount < maxScrolls && noChangeCount < 3) {
+      // Get current product count
+      const currentProductCount = await this.page.$$eval(
+        '[class*="product-tile"]',
+        (elements) => elements.length
+      ).catch(() => 0);
+
+      // If no new products loaded, increment no-change counter
+      if (currentProductCount === lastProductCount) {
+        noChangeCount++;
+      } else {
+        noChangeCount = 0;
+      }
+
+      lastProductCount = currentProductCount;
+      scrollCount++;
+
+      // Scroll down
+      await this.page.evaluate(() => {
+        window.scrollBy(0, window.innerHeight);
+      });
+
+      // Wait for content to load
+      await this.page.waitForTimeout(1000);
+
+      scraperLogger.debug(`Scroll ${scrollCount}: ${currentProductCount} products loaded`);
+    }
+  }
+
+  /**
+   * Extract products from the current page
+   */
+  private async extractProductsFromPage(): Promise<ReweProduct[]> {
+    if (!this.page) return [];
+
+    try {
+      const products = await this.page.evaluate(() => {
+        // Select product tiles using the class pattern found in REWE's page
+        const productTiles = document.querySelectorAll('[class*="product-tile"]');
+        const results: ReweProduct[] = [];
+        const seenUrls = new Set<string>();
+
+        productTiles.forEach((tile) => {
+          try {
+            // Find the product link
+            const linkEl = tile.querySelector('a[href*="/shop/p/"]');
+            if (!linkEl) return;
+
+            const productUrl = (linkEl as HTMLAnchorElement).href;
+            if (!productUrl || seenUrls.has(productUrl)) return;
+            seenUrls.add(productUrl);
+
+            // Extract product name from title element
+            const titleEl = tile.querySelector('[class*="title"], h3, h4');
+            const name = titleEl?.textContent?.trim() || '';
+            if (!name) return;
+
+            // Extract price - look for price elements
+            const priceAreaEl = tile.querySelector('[class*="price-area"], [class*="price"]');
+            let price = 0;
+            let originalPrice: number | undefined;
+
+            if (priceAreaEl) {
+              const priceText = priceAreaEl.textContent || '';
+
+              // Check if it's showing "Preis abhängig vom Standort" (price depends on location)
+              if (!priceText.includes('abhängig') && !priceText.includes('Standort')) {
+                // Parse German price format (e.g., "1,99 €" or "1,99€")
+                const priceMatches = priceText.match(/(\d+)[,.](\d{2})\s*€?/g);
+                if (priceMatches && priceMatches.length > 0) {
+                  // First price is usually the current price
+                  const currentPriceMatch = priceMatches[0].match(/(\d+)[,.](\d{2})/);
+                  if (currentPriceMatch) {
+                    price = parseFloat(`${currentPriceMatch[1]}.${currentPriceMatch[2]}`);
+                  }
+
+                  // If there are multiple prices, second might be original (strikethrough)
+                  if (priceMatches.length > 1) {
+                    const originalPriceMatch = priceMatches[1].match(/(\d+)[,.](\d{2})/);
+                    if (originalPriceMatch) {
+                      originalPrice = parseFloat(`${originalPriceMatch[1]}.${originalPriceMatch[2]}`);
+                      // Swap if original is less than current (current should be lower for sales)
+                      if (originalPrice < price) {
+                        [price, originalPrice] = [originalPrice, price];
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            // Extract image URL
+            const imgEl = tile.querySelector('img');
+            const imageUrl = imgEl?.src || imgEl?.getAttribute('data-src') || '';
+
+            // Extract grammage/unit info
+            const grammageEl = tile.querySelector('[class*="grammage"]');
+            const grammage = grammageEl?.textContent?.trim() || '';
+
+            // Extract product ID from URL
+            const urlParts = productUrl.split('/');
+            const id = urlParts[urlParts.length - 1] || `rewe-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            results.push({
+              id,
+              name,
+              imageUrl: imageUrl || undefined,
+              productUrl,
+              price,
+              originalPrice,
+              grammage: grammage || undefined,
+              isAvailable: true,
+            });
+          } catch {
+            // Skip this product if parsing fails
+          }
+        });
+
+        return results;
+      });
+
+      return products;
+    } catch (error) {
+      scraperLogger.error('Failed to extract products from page:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Parse extracted products into ProductData format
+   */
+  private parseProducts(rawProducts: ReweProduct[], categoryName: string): ProductData[] {
+    const products: ProductData[] = [];
+
+    for (const item of rawProducts) {
+      try {
+        // Skip products without price (location-dependent pricing not resolved)
+        if (item.price === 0) {
+          scraperLogger.debug(`Skipping product without price: ${item.name}`);
+          continue;
+        }
+
+        const { unit, unitQuantity } = this.parseUnit(item.grammage);
+
+        const product: ProductData = {
+          name: item.name,
+          price: item.price,
+          currency: 'EUR',
+          originalPrice: item.originalPrice,
+          isOnSale: item.originalPrice !== undefined && item.originalPrice > item.price,
+          imageUrl: item.imageUrl,
+          productUrl: item.productUrl,
+          unit,
+          unitQuantity,
+          isAvailable: item.isAvailable,
+          externalId: item.id,
+          categoryName,
+        };
+
+        products.push(product);
+        this.productsScraped++;
+      } catch (error) {
+        this.productsFailed++;
+        scraperLogger.debug(`Failed to parse product: ${item.name}`, error);
+      }
+    }
+
+    return products;
+  }
+
+  /**
+   * Parse German unit format to standard format
+   */
+  private parseUnit(grammage?: string): { unit?: string; unitQuantity?: number } {
+    if (!grammage) {
+      return { unit: undefined, unitQuantity: undefined };
+    }
+
+    const text = grammage.toLowerCase().trim();
+
+    // Handle multi-pack format first (e.g., "6 x 1,5 l")
+    const multiPackMatch = text.match(/(\d+)\s*x\s*(\d+[,.]?\d*)\s*(kg|g|l|ml|stück|st\.?|stk\.?)/i);
+    if (multiPackMatch) {
+      const count = parseInt(multiPackMatch[1], 10);
+      const unitSize = parseFloat(multiPackMatch[2].replace(',', '.'));
+      const unitType = multiPackMatch[3].toLowerCase();
+      const totalQuantity = count * unitSize;
+
+      return this.normalizeUnit(unitType, totalQuantity);
+    }
+
+    // Standard format (e.g., "500 g", "1,5 l")
+    const standardMatch = text.match(/(\d+[,.]?\d*)\s*(kg|g|l|liter|ml|stück|st\.?|stk\.?)/i);
+    if (standardMatch) {
+      const quantity = parseFloat(standardMatch[1].replace(',', '.'));
+      const unitType = standardMatch[2].toLowerCase();
+
+      return this.normalizeUnit(unitType, quantity);
+    }
+
+    // Just unit without quantity
+    if (text.includes('stück') || text.includes('st.') || text.includes('stk')) {
+      return { unit: 'pieces', unitQuantity: 1 };
+    }
+
+    return { unit: undefined, unitQuantity: undefined };
+  }
+
+  /**
+   * Normalize unit type and quantity
+   */
+  private normalizeUnit(unitType: string, quantity: number): { unit?: string; unitQuantity?: number } {
+    switch (unitType) {
+      case 'kg':
+        return { unit: 'kg', unitQuantity: quantity };
+      case 'g':
+        if (quantity >= 1000) {
+          return { unit: 'kg', unitQuantity: quantity / 1000 };
+        }
+        return { unit: 'g', unitQuantity: quantity };
+      case 'l':
+      case 'liter':
+        return { unit: 'l', unitQuantity: quantity };
+      case 'ml':
+        if (quantity >= 1000) {
+          return { unit: 'l', unitQuantity: quantity / 1000 };
+        }
+        return { unit: 'ml', unitQuantity: quantity };
+      case 'stück':
+      case 'st.':
+      case 'st':
+      case 'stk.':
+      case 'stk':
+        return { unit: 'pieces', unitQuantity: quantity };
+      default:
+        return { unit: unitType, unitQuantity: quantity };
+    }
+  }
+
+  /**
+   * Scrape detailed product information
+   */
+  async scrapeProductDetails(url: string): Promise<ProductData> {
+    throw new Error(`scrapeProductDetails not implemented for page-based scraper. URL: ${url}`);
+  }
+
+  /**
+   * Cleanup resources
+   */
+  async cleanup(): Promise<void> {
+    scraperLogger.info(`Cleaning up REWE scraper...`);
+    await this.closeBrowser();
+
+    const stats = this.getStats();
+    scraperLogger.info('REWE scraping completed:', stats);
+  }
+}

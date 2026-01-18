@@ -127,6 +127,15 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'ArbuzScraper',
     is_active: true,
   },
+  // Germany
+  // NOTE: REWE requires PLAYWRIGHT_HEADLESS=false to bypass Cloudflare
+  {
+    country_code: 'DE',
+    name: 'REWE',
+    website_url: 'https://www.rewe.de/shop/',
+    scraper_class: 'ReweScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {
