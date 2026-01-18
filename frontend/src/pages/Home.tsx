@@ -8,7 +8,7 @@ import ComparisonTable from '../components/comparison/ComparisonTable';
 import CurrencyRatesTable from '../components/comparison/CurrencyRatesTable';
 import Loading from '../components/common/Loading';
 
-const DEFAULT_COUNTRIES = ['TR', 'ES', 'ME', 'UA'];
+const DEFAULT_COUNTRIES = ['TR', 'ES', 'ME', 'UA', 'KZ', 'UZ'];
 
 export default function Home() {
   const [selectedCountries, setSelectedCountries] = useState<string[]>(DEFAULT_COUNTRIES);
