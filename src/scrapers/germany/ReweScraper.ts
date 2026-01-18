@@ -1,6 +1,13 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { scraperLogger } from '../../utils/logger';
+import { chromium } from 'playwright-extra';
+import stealth from 'puppeteer-extra-plugin-stealth';
+import * as path from 'path';
+import * as os from 'os';
+
+// Apply stealth plugin to avoid bot detection
+chromium.use(stealth());
 
 /**
  * REWE categories configuration
@@ -69,48 +76,88 @@ interface ReweProduct {
 /**
  * Scraper for REWE Germany (www.rewe.de/shop/)
  *
- * This scraper:
- * 1. Navigates to www.rewe.de/shop/
- * 2. Selects "Lieferservice" (delivery service) option
- * 3. Enters postal code 10115 (Berlin) to set delivery zone
- * 4. Once market is selected, navigates to category pages to scrape products with actual prices
+ * This scraper uses playwright-extra with stealth plugin to bypass Cloudflare:
+ * 1. Launches browser with stealth mode and persistent session
+ * 2. Navigates to www.rewe.de/shop/
+ * 3. Selects "Lieferservice" (delivery service) option
+ * 4. Enters postal code 10115 (Berlin) to set delivery zone
+ * 5. Once market is selected, navigates to category pages to scrape products with actual prices
  *
- * IMPORTANT REQUIREMENTS:
- * - MUST run with PLAYWRIGHT_HEADLESS=false (visible browser) to bypass Cloudflare protection
- * - Prices are only available after selecting a delivery market
- * - The scraper uses Berlin (10115) as the default delivery zone
+ * STEALTH MODE FEATURES:
+ * - Uses playwright-extra with puppeteer-extra-plugin-stealth
+ * - Persistent browser context to maintain cookies/session
+ * - Randomized viewport and realistic fingerprinting
+ * - German locale and timezone settings
  *
- * Example: PLAYWRIGHT_HEADLESS=false npm run scraper:run rewe
+ * The scraper uses Berlin (10115) as the default delivery zone.
  */
 export class ReweScraper extends BaseScraper {
   private readonly BASE_URL = 'https://www.rewe.de';
   private readonly POSTAL_CODE = '10115'; // Berlin
   private marketSelected = false;
+  private browserContext: Awaited<ReturnType<typeof chromium.launchPersistentContext>> | null = null;
 
   constructor(config: ScraperConfig) {
     super(config);
   }
 
   /**
-   * Initialize the scraper with browser and select delivery market
+   * Initialize the scraper with stealth browser and select delivery market
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing REWE scraper...`);
+    scraperLogger.info(`Initializing REWE scraper with stealth mode...`);
     this.startTime = Date.now();
 
-    // Launch browser (non-headless may help with Cloudflare)
-    await this.launchBrowser();
-    this.page = await this.createPage();
-
-    // Set German locale cookie
-    await this.page.context().addCookies([
-      { name: 'userCountry', value: 'DE', domain: '.rewe.de', path: '/' },
-    ]);
+    // Launch browser with stealth mode
+    await this.launchStealthBrowser();
 
     // Navigate to shop page and select delivery market
     await this.selectDeliveryMarket();
 
     scraperLogger.info(`REWE scraper initialized with delivery zone ${this.POSTAL_CODE}`);
+  }
+
+  /**
+   * Launch browser with stealth plugin and persistent context
+   */
+  private async launchStealthBrowser(): Promise<void> {
+    scraperLogger.info('Launching stealth browser for REWE...');
+
+    // Create persistent session directory
+    const sessionDir = path.join(os.tmpdir(), 'rewe-scraper-session');
+
+    // Randomize viewport slightly for fingerprint variation
+    const viewportWidth = 1920 + Math.floor(Math.random() * 100);
+    const viewportHeight = 1080 + Math.floor(Math.random() * 50);
+
+    // Launch with persistent context for session management
+    this.browserContext = await chromium.launchPersistentContext(sessionDir, {
+      // headless: false, // Headed mode is more reliable for Cloudflare bypass
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--start-maximized',
+      ],
+      viewport: { width: viewportWidth, height: viewportHeight },
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      locale: 'de-DE',
+      timezoneId: 'Europe/Berlin',
+      permissions: ['geolocation'],
+      geolocation: { latitude: 52.52, longitude: 13.405 }, // Berlin coordinates
+    });
+
+    // Get the default page from persistent context
+    const pages = this.browserContext.pages();
+    this.page = pages.length > 0 ? pages[0] : await this.browserContext.newPage();
+
+    // Set German locale cookie
+    await this.browserContext.addCookies([
+      { name: 'userCountry', value: 'DE', domain: '.rewe.de', path: '/' },
+    ]);
+
+    scraperLogger.info('Stealth browser launched successfully');
   }
 
   /**
@@ -737,7 +784,13 @@ export class ReweScraper extends BaseScraper {
    */
   async cleanup(): Promise<void> {
     scraperLogger.info(`Cleaning up REWE scraper...`);
-    await this.closeBrowser();
+
+    // Close persistent browser context
+    if (this.browserContext) {
+      await this.browserContext.close();
+      this.browserContext = null;
+      scraperLogger.info('Stealth browser closed');
+    }
 
     const stats = this.getStats();
     scraperLogger.info('REWE scraping completed:', stats);
