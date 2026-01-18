@@ -28,7 +28,9 @@
       "WebFetch(domain:sellerapi.kaufland.com)",
       "Bash(npx tsc:*)",
       "Bash(npm run scraper:test:*)",
-      "Bash(LOG_LEVEL=debug npm run scraper:test:*)"
+      "Bash(LOG_LEVEL=debug npm run scraper:test:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

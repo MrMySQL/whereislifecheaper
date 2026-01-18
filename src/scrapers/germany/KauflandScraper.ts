@@ -2,8 +2,13 @@ import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { scraperLogger } from '../../utils/logger';
 import { sleep } from '../../utils/retry';
-import { chromium } from 'playwright';
-import { config } from '../../config/env';
+import { chromium } from 'playwright-extra';
+import stealth from 'puppeteer-extra-plugin-stealth';
+import * as path from 'path';
+import * as os from 'os';
+
+// Apply stealth plugin to avoid bot detection
+chromium.use(stealth());
 
 /**
  * Kaufland categories configuration
@@ -101,101 +106,49 @@ export class KauflandScraper extends BaseScraper {
     scraperLogger.info('Kaufland scraper initialized');
   }
 
+  private browserContext: Awaited<ReturnType<typeof chromium.launchPersistentContext>> | null = null;
+
   /**
-   * Launch browser with enhanced stealth settings to avoid Cloudflare detection
+   * Launch browser with playwright-extra stealth plugin and persistent context
+   * Similar approach to ReweScraper for better Cloudflare bypass
    */
   private async launchStealthBrowser(): Promise<void> {
-    scraperLogger.info('Launching browser with stealth settings for Kaufland');
+    scraperLogger.info('Launching stealth browser for Kaufland...');
 
-    // Enhanced stealth args to avoid detection
-    const stealthArgs = [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-features=IsolateOrigins,site-per-process',
-      '--disable-site-isolation-trials',
-      '--disable-web-security',
-      '--disable-features=BlockInsecurePrivateNetworkRequests',
-      '--window-size=1920,1080',
-      '--start-maximized',
-      // Additional stealth args
-      '--disable-infobars',
-      '--disable-background-networking',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-breakpad',
-      '--disable-component-extensions-with-background-pages',
-      '--disable-component-update',
-      '--disable-default-apps',
-      '--disable-extensions',
-      '--disable-hang-monitor',
-      '--disable-ipc-flooding-protection',
-      '--disable-popup-blocking',
-      '--disable-prompt-on-repost',
-      '--disable-renderer-backgrounding',
-      '--disable-sync',
-      '--enable-features=NetworkService,NetworkServiceInProcess',
-      '--force-color-profile=srgb',
-      '--metrics-recording-only',
-      '--no-first-run',
-      '--password-store=basic',
-      '--use-mock-keychain',
-    ];
+    // Create persistent session directory
+    const sessionDir = path.join(os.tmpdir(), 'kaufland-scraper-session');
 
-    this.browser = await chromium.launch({
-      headless: config.scraper.headless,
-      args: stealthArgs,
-    });
+    // Randomize viewport slightly for fingerprint variation
+    const viewportWidth = 1920 + Math.floor(Math.random() * 100);
+    const viewportHeight = 1080 + Math.floor(Math.random() * 50);
 
-    // Create context with specific settings to appear more human
-    const context = await this.browser.newContext({
+    // Launch with persistent context for session management
+    this.browserContext = await chromium.launchPersistentContext(sessionDir, {
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--start-maximized',
+      ],
+      viewport: { width: viewportWidth, height: viewportHeight },
       userAgent: this.config.userAgents?.[0] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      viewport: { width: 1920, height: 1080 },
       locale: 'de-DE',
       timezoneId: 'Europe/Berlin',
-      geolocation: { latitude: 52.52, longitude: 13.405 }, // Berlin
       permissions: ['geolocation'],
-      // Mimic real browser behavior
-      javaScriptEnabled: true,
-      hasTouch: false,
-      isMobile: false,
-      deviceScaleFactor: 1,
+      geolocation: { latitude: 52.52, longitude: 13.405 }, // Berlin coordinates
     });
 
-    // Add init script to mask automation
-    await context.addInitScript(() => {
-      // Override navigator.webdriver
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => undefined,
-      });
+    // Get the default page from persistent context
+    const pages = this.browserContext.pages();
+    this.page = pages.length > 0 ? pages[0] : await this.browserContext.newPage();
 
-      // Override navigator.plugins
-      Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3, 4, 5],
-      });
+    // Set German locale cookie
+    await this.browserContext.addCookies([
+      { name: 'userCountry', value: 'DE', domain: '.kaufland.de', path: '/' },
+    ]);
 
-      // Override navigator.languages
-      Object.defineProperty(navigator, 'languages', {
-        get: () => ['de-DE', 'de', 'en-US', 'en'],
-      });
-
-      // Override chrome
-      (window as any).chrome = {
-        runtime: {},
-      };
-
-      // Override permissions
-      const originalQuery = window.navigator.permissions.query;
-      window.navigator.permissions.query = (parameters: any) =>
-        parameters.name === 'notifications'
-          ? Promise.resolve({ state: Notification.permission } as PermissionStatus)
-          : originalQuery(parameters);
-    });
-
-    this.page = await context.newPage();
-
-    scraperLogger.info('Browser launched with stealth settings for Kaufland');
+    scraperLogger.info('Stealth browser launched successfully for Kaufland');
   }
 
   /**
@@ -756,7 +709,13 @@ export class KauflandScraper extends BaseScraper {
    */
   async cleanup(): Promise<void> {
     scraperLogger.info('Cleaning up Kaufland scraper...');
-    await this.closeBrowser();
+
+    // Close persistent browser context
+    if (this.browserContext) {
+      await this.browserContext.close();
+      this.browserContext = null;
+      scraperLogger.info('Stealth browser closed for Kaufland');
+    }
 
     const stats = this.getStats();
     scraperLogger.info('Kaufland scraping completed:', stats);

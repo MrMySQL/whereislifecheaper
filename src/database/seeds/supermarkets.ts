@@ -128,6 +128,14 @@ export const supermarketsData: SupermarketSeedData[] = [
     is_active: true,
   },
   // Germany
+  // NOTE: German scrapers use stealth mode (playwright-extra) to bypass Cloudflare
+  {
+    country_code: 'DE',
+    name: 'REWE',
+    website_url: 'https://www.rewe.de/shop/',
+    scraper_class: 'ReweScraper',
+    is_active: true,
+  },
   {
     country_code: 'DE',
     name: 'Kaufland',
