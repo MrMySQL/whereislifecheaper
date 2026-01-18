@@ -3,6 +3,7 @@ import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.
 import { scraperLogger } from '../../utils/logger';
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
+import topUserAgents from 'top-user-agents';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -130,9 +131,13 @@ export class ReweScraper extends BaseScraper {
     const viewportWidth = 1920 + Math.floor(Math.random() * 100);
     const viewportHeight = 1080 + Math.floor(Math.random() * 50);
 
+    // Get a random user agent from the top user agents list
+    const userAgent = topUserAgents[Math.floor(Math.random() * Math.min(10, topUserAgents.length))];
+    scraperLogger.debug(`Using user agent: ${userAgent}`);
+
     // Launch with persistent context for session management
     this.browserContext = await chromium.launchPersistentContext(sessionDir, {
-      // headless: false, // Headed mode is more reliable for Cloudflare bypass
+      headless: false, // Headed mode is more reliable for Cloudflare bypass
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -141,7 +146,7 @@ export class ReweScraper extends BaseScraper {
         '--start-maximized',
       ],
       viewport: { width: viewportWidth, height: viewportHeight },
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userAgent,
       locale: 'de-DE',
       timezoneId: 'Europe/Berlin',
       permissions: ['geolocation'],
@@ -475,13 +480,20 @@ export class ReweScraper extends BaseScraper {
       await this.handleCookieConsent();
 
       // Check page title
-      const title = await this.page.title();
+      let title = await this.page.title();
       scraperLogger.info(`Page title: ${title}`);
 
-      // If Cloudflare challenge is present, skip this category
+      // If Cloudflare challenge is present, try to solve it
       if (title.includes('moment') || title.includes('Moment')) {
-        scraperLogger.warn(`Cloudflare challenge detected for ${category.name}, skipping`);
-        return products;
+        scraperLogger.warn(`Cloudflare challenge detected for ${category.name}, attempting to solve...`);
+        const solved = await this.solveCloudflareChallenge();
+        if (!solved) {
+          scraperLogger.error(`Could not solve Cloudflare challenge for ${category.name}, skipping`);
+          return products;
+        }
+        // Update title after solving
+        title = await this.page.title();
+        scraperLogger.info(`Page title after solving: ${title}`);
       }
 
       // Get total pages from pagination
@@ -499,10 +511,16 @@ export class ReweScraper extends BaseScraper {
             await this.waitForDynamicContent();
 
             // Check for Cloudflare on subsequent pages
-            const pageTitle = await this.page.title();
+            let pageTitle = await this.page.title();
             if (pageTitle.includes('moment') || pageTitle.includes('Moment')) {
-              scraperLogger.warn(`Cloudflare challenge on page ${pageNum}, stopping pagination`);
-              break;
+              scraperLogger.warn(`Cloudflare challenge on page ${pageNum}, attempting to solve...`);
+              const solved = await this.solveCloudflareChallenge();
+              if (!solved) {
+                scraperLogger.error(`Could not solve Cloudflare on page ${pageNum}, stopping pagination`);
+                break;
+              }
+              pageTitle = await this.page.title();
+              scraperLogger.info(`Page ${pageNum} title after solving: ${pageTitle}`);
             }
           }
 
