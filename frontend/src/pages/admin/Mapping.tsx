@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info, EyeOff } from 'lucide-react';
 import { countriesApi, canonicalApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
@@ -8,6 +9,7 @@ import type { Product, Country, CanonicalProductBasic } from '../../types';
 const PRODUCTS_PER_PAGE = 50;
 
 export default function Mapping() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState('');
@@ -129,7 +131,7 @@ export default function Mapping() {
   }, [canonicalProducts, canonicalSearch]);
 
   const handleDeleteCanonical = (cp: CanonicalProductBasic) => {
-    if (confirm(`Delete "${cp.name}"? This will unlink all associated products.`)) {
+    if (confirm(t('mapping.deleteConfirm', { name: cp.name }))) {
       deleteMutation.mutate(cp.id);
     }
   };
@@ -137,9 +139,9 @@ export default function Mapping() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Product Mapping</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{t('mapping.productMapping')}</h1>
         <p className="text-slate-600 mt-1">
-          Map products to canonical products for cross-country comparison.
+          {t('mapping.mapDescription')}
         </p>
       </div>
 
@@ -152,10 +154,10 @@ export default function Mapping() {
           <div className="flex items-center gap-2">
             <Settings className="h-4 w-4 text-slate-500" />
             <span className="font-medium text-slate-700">
-              Manage Canonical Products
+              {t('mapping.manageCanonical')}
             </span>
             <span className="text-sm text-slate-500">
-              ({canonicalProducts.length} total)
+              ({canonicalProducts.length} {t('mapping.total')})
             </span>
           </div>
           {showManageSection ? (
@@ -171,7 +173,7 @@ export default function Mapping() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search canonical products..."
+                placeholder={t('mapping.searchCanonical')}
                 value={canonicalSearch}
                 onChange={(e) => setCanonicalSearch(e.target.value)}
                 className="input pl-10"
@@ -183,9 +185,9 @@ export default function Mapping() {
               {filteredCanonicalForManage.length === 0 ? (
                 <div className="py-6 text-center">
                   <p className="text-sm text-slate-500 mb-3">
-                    No canonical products found
+                    {t('mapping.noCanonicalFound')}
                     {canonicalSearch && (
-                      <span className="font-medium text-slate-700"> matching "{canonicalSearch}"</span>
+                      <span className="font-medium text-slate-700"> {t('mapping.matching')} "{canonicalSearch}"</span>
                     )}
                   </p>
                   {canonicalSearch.trim() && (
@@ -195,7 +197,7 @@ export default function Mapping() {
                       className="btn-primary inline-flex items-center gap-1.5 text-sm"
                     >
                       <Plus className="h-4 w-4" />
-                      Create "{canonicalSearch}"
+                      {t('common.create')} "{canonicalSearch}"
                     </button>
                   )}
                 </div>
@@ -212,8 +214,8 @@ export default function Mapping() {
                     <div className={cp.disabled ? 'opacity-60' : ''}>
                       <p className={`font-medium text-sm ${cp.disabled ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{cp.name}</p>
                       <p className="text-xs text-slate-500">
-                        {cp.linked_products_count || 0} products • {cp.countries_count || 0} countries
-                        {cp.disabled && <span className="ml-2 text-orange-600">(hidden from comparison)</span>}
+                        {t('mapping.productsCount', { count: cp.linked_products_count || 0 })} • {t('mapping.countriesCount', { count: cp.countries_count || 0 })}
+                        {cp.disabled && <span className="ml-2 text-orange-600">({t('mapping.hiddenFromComparison')})</span>}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -222,7 +224,7 @@ export default function Mapping() {
                         <div className="relative group">
                           <EyeOff className="h-3.5 w-3.5 text-slate-400 cursor-help" />
                           <div className="absolute bottom-full right-0 mb-2 w-56 p-2 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                            When disabled, this product will not appear in the comparison table.
+                            {t('mapping.disabledTooltip')}
                             <div className="absolute bottom-0 right-3 translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900" />
                           </div>
                         </div>
@@ -247,7 +249,7 @@ export default function Mapping() {
                         <div className="relative group">
                           <Info className="h-3.5 w-3.5 text-slate-400 cursor-help" />
                           <div className="absolute bottom-full right-0 mb-2 w-64 p-2 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                            When enabled, prices are shown per unit (e.g., €5.20/kg) instead of total package price. Only enable this when all linked products have consistent unit data.
+                            {t('mapping.perUnitTooltip')}
                             <div className="absolute bottom-0 right-3 translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900" />
                           </div>
                         </div>
@@ -272,7 +274,7 @@ export default function Mapping() {
                         onClick={() => handleDeleteCanonical(cp)}
                         disabled={deleteMutation.isPending}
                         className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                        title="Delete canonical product"
+                        title={t('mapping.deleteCanonical')}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -288,7 +290,7 @@ export default function Mapping() {
       {/* Products Section - Full Width */}
       <div className="card">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">
-          Products by Country
+          {t('mapping.productsByCountry')}
         </h2>
 
         {/* Filters Row */}
@@ -300,7 +302,7 @@ export default function Mapping() {
               onChange={(e) => handleCountryChange(Number(e.target.value) || null)}
               className="input"
             >
-              <option value="">Choose a country...</option>
+              <option value="">{t('mapping.chooseCountry')}</option>
               {countries.map((country: Country) => (
                 <option key={country.id} value={country.id}>
                   {country.flag_emoji} {country.name} ({country.code})
@@ -315,7 +317,7 @@ export default function Mapping() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search products..."
+                placeholder={t('countryProducts.searchProducts')}
                 value={productSearch}
                 onChange={(e) => handleProductSearch(e.target.value)}
                 className="input pl-10"
@@ -327,28 +329,28 @@ export default function Mapping() {
         {/* Products Table */}
         <div className="overflow-x-auto">
           {productsLoading ? (
-            <Loading text="Loading products..." />
+            <Loading text={t('loading.loadingProducts')} />
           ) : !selectedCountryId ? (
             <p className="text-slate-500 text-center py-12">
-              Select a country to see products
+              {t('mapping.selectCountry')}
             </p>
           ) : productsData?.data.length === 0 ? (
-            <p className="text-slate-500 text-center py-12">No products found</p>
+            <p className="text-slate-500 text-center py-12">{t('countryProducts.noProductsFound')}</p>
           ) : (
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200">
                   <th className="text-left py-3 px-2 text-sm font-medium text-slate-600 w-16">
-                    Image
+                    {t('mapping.image')}
                   </th>
                   <th className="text-left py-3 px-2 text-sm font-medium text-slate-600">
-                    Product
+                    {t('comparison.product')}
                   </th>
                   <th className="text-left py-3 px-2 text-sm font-medium text-slate-600 w-32">
-                    Price
+                    {t('common.price')}
                   </th>
                   <th className="text-left py-3 px-2 text-sm font-medium text-slate-600 w-72">
-                    Canonical Product
+                    {t('mapping.canonicalProduct')}
                   </th>
                 </tr>
               </thead>
@@ -379,9 +381,9 @@ export default function Mapping() {
         {selectedCountryId && productsData && productsData.count > PRODUCTS_PER_PAGE && (
           <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-4">
             <p className="text-sm text-slate-500">
-              Showing {productPage * PRODUCTS_PER_PAGE + 1}-
-              {Math.min((productPage + 1) * PRODUCTS_PER_PAGE, productsData.count)} of{' '}
-              {productsData.count} products
+              {t('common.showing')} {productPage * PRODUCTS_PER_PAGE + 1}-
+              {Math.min((productPage + 1) * PRODUCTS_PER_PAGE, productsData.count)} {t('common.of')}{' '}
+              {productsData.count} {t('common.products').toLowerCase()}
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -392,7 +394,7 @@ export default function Mapping() {
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="text-sm text-slate-600">
-                Page {productPage + 1} of {Math.ceil(productsData.count / PRODUCTS_PER_PAGE)}
+                {t('common.page')} {productPage + 1} {t('common.of')} {Math.ceil(productsData.count / PRODUCTS_PER_PAGE)}
               </span>
               <button
                 onClick={() => setProductPage((p) => p + 1)}
@@ -433,6 +435,7 @@ function ProductRow({
   onLink: (canonicalId: number | null) => void;
   isLinking: boolean;
 }) {
+  const { t } = useTranslation();
   const currentCanonical = useMemo(() => {
     if (!product.canonical_product_id) return null;
     return canonicalProducts.find((cp) => cp.id === product.canonical_product_id);
@@ -464,7 +467,7 @@ function ProductRow({
       <td className="py-2 px-2">
         <p className="font-medium text-slate-900 text-sm">{product.name}</p>
         <p className="text-xs text-slate-500">
-          {product.brand || 'No brand'} • {product.supermarket_name}
+          {product.brand || t('mapping.noBrand')} • {product.supermarket_name}
           {product.unit && (
             <> • {product.unit_quantity && product.unit_quantity !== 1 ? `${product.unit_quantity} ` : ''}{product.unit}</>
           )}
@@ -494,7 +497,7 @@ function ProductRow({
             }`}
           >
             <span className="truncate">
-              {currentCanonical ? currentCanonical.name : 'Select canonical product...'}
+              {currentCanonical ? currentCanonical.name : t('mapping.selectCanonicalProduct')}
             </span>
             <ChevronDown className="h-4 w-4 flex-shrink-0" />
           </button>
@@ -516,7 +519,7 @@ function ProductRow({
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="Search..."
+                      placeholder={t('common.search')}
                       value={searchValue}
                       onChange={(e) => onSearchChange(e.target.value)}
                       className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -535,14 +538,14 @@ function ProductRow({
                       className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                     >
                       <X className="h-4 w-4" />
-                      Remove mapping
+                      {t('mapping.removeMapping')}
                     </button>
                   )}
 
                   {/* Canonical Products */}
                   {filteredCanonical.length === 0 ? (
                     <p className="px-3 py-4 text-sm text-slate-500 text-center">
-                      No matching products
+                      {t('mapping.noMatchingProducts')}
                     </p>
                   ) : (
                     filteredCanonical.map((cp) => (

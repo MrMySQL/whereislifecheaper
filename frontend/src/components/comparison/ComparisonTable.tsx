@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { TrendingDown, Tag, Trophy, Package, ImageOff, Store, Calendar, Calculator, ChevronDown } from 'lucide-react';
 import type { CanonicalProduct, CountryPrice, Country } from '../../types';
 import { formatPrice, convertToEUR, findCheapestCountry, isNormalizableUnit, getUnitLabel, formatPackageSize } from '../../utils/currency';
+import { formatFullDate } from '../../utils/dateFormat';
 import PriceHistoryChart from './PriceHistoryChart';
 
 interface ComparisonTableProps {
@@ -12,12 +14,9 @@ interface ComparisonTableProps {
 }
 
 function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
+  const { t } = useTranslation();
   const scrapedDate = priceData.scraped_at
-    ? new Date(priceData.scraped_at).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
+    ? formatFullDate(priceData.scraped_at)
     : null;
 
   return (
@@ -52,7 +51,7 @@ function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
         {/* Unit */}
         {priceData.unit && (
           <div className="flex justify-between text-charcoal-600">
-            <span>Size:</span>
+            <span>{t('comparison.size')}:</span>
             <span className="font-medium">
               {priceData.unit_quantity && priceData.unit_quantity > 1
                 ? `${priceData.unit_quantity} × `
@@ -67,14 +66,14 @@ function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
         <div className="flex items-center justify-between text-charcoal-600">
           <span className="flex items-center gap-1">
             <Store className="w-3 h-3" />
-            Store:
+            {t('comparison.store')}:
           </span>
           <span className="font-medium">{priceData.supermarket}</span>
         </div>
 
         {/* Price in local currency */}
         <div className="flex justify-between text-charcoal-600">
-          <span>Local price:</span>
+          <span>{t('comparison.localPrice')}:</span>
           <span className="font-semibold text-charcoal-900">
             {formatPrice(priceData.price, priceData.currency)}
           </span>
@@ -85,7 +84,7 @@ function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
           <div className="flex justify-between text-charcoal-600">
             <span className="flex items-center gap-1">
               <Tag className="w-3 h-3 text-terracotta-500" />
-              Was:
+              {t('comparison.was')}:
             </span>
             <span className="line-through text-charcoal-400">
               {formatPrice(priceData.original_price, priceData.currency)}
@@ -98,7 +97,7 @@ function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
           <div className="flex items-center justify-between text-charcoal-400 pt-1 border-t border-cream-100">
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
-              Updated:
+              {t('common.updated')}:
             </span>
             <span>{scrapedDate}</span>
           </div>
@@ -109,6 +108,7 @@ function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
 }
 
 function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
+  const { t } = useTranslation();
   const products = priceData.products || [];
 
   return (
@@ -116,10 +116,10 @@ function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
       {/* Header */}
       <div className="mb-3 pb-2 border-b border-cream-200">
         <p className="font-semibold text-charcoal-900 text-sm">
-          Average of {priceData.product_count} products
+          {t('comparison.averageProducts', { count: priceData.product_count })}
         </p>
         <p className="text-xs text-charcoal-500">
-          Avg: {formatPrice(priceData.price, priceData.currency)}
+          {t('comparison.avg')}: {formatPrice(priceData.price, priceData.currency)}
         </p>
       </div>
 
@@ -190,6 +190,7 @@ function ProductHoverCard({ priceData, showBelow = false }: { priceData: Country
 }
 
 function PriceCell({ priceData, isCheapest, rowIndex, showPerUnitPrice }: { priceData: CountryPrice; isCheapest: boolean; rowIndex: number; showPerUnitPrice: boolean }) {
+  const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   // Show hover card below for first 3 rows to avoid clipping
   const showBelow = rowIndex < 3;
@@ -223,13 +224,13 @@ function PriceCell({ priceData, isCheapest, rowIndex, showPerUnitPrice }: { pric
       {/* Product count indicator for averages */}
       {priceData.product_count > 1 && (
         <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600">
-          (avg of {priceData.product_count})
+          ({t('comparison.avgOf', { count: priceData.product_count })})
         </span>
       )}
       {priceData.is_on_sale && (
         <span className="inline-flex items-center gap-0.5 text-[10px] text-terracotta-600">
           <Tag className="h-2.5 w-2.5" />
-          Sale
+          {t('comparison.sale')}
         </span>
       )}
 
@@ -245,6 +246,7 @@ export default function ComparisonTable({
   countries,
   loading = false,
 }: ComparisonTableProps) {
+  const { t } = useTranslation();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
   const toggleRowExpanded = (canonicalId: number) => {
@@ -325,8 +327,8 @@ export default function ComparisonTable({
     return (
       <div className="card text-center py-8">
         <Package className="w-8 h-8 text-cream-400 mx-auto mb-2" />
-        <p className="text-sm font-medium text-charcoal-600">No products found</p>
-        <p className="text-xs text-charcoal-400 mt-1">Try different countries or search terms</p>
+        <p className="text-sm font-medium text-charcoal-600">{t('comparison.noProducts')}</p>
+        <p className="text-xs text-charcoal-400 mt-1">{t('comparison.tryDifferent')}</p>
       </div>
     );
   }
@@ -338,7 +340,7 @@ export default function ComparisonTable({
           <thead>
             <tr className="bg-cream-50 border-b border-cream-200">
               <th className="text-left py-2.5 px-4 font-display font-semibold text-charcoal-700">
-                Product
+                {t('comparison.product')}
               </th>
               {selectedCountries.map((code) => (
                 <th key={code} className="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[110px]">
@@ -348,7 +350,7 @@ export default function ComparisonTable({
               <th className="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[80px]">
                 <span className="inline-flex items-center gap-1">
                   <Trophy className="w-3.5 h-3.5 text-saffron-500" />
-                  Best
+                  {t('comparison.best')}
                 </span>
               </th>
             </tr>
@@ -488,10 +490,10 @@ export default function ComparisonTable({
                 <div className="flex items-center gap-2">
                   <Calculator className="w-4 h-4 text-charcoal-500" />
                   <span className="font-display font-semibold text-charcoal-700">
-                    Total
+                    {t('common.total')}
                   </span>
                   <span className="text-xs text-charcoal-400">
-                    ({products.length} products)
+                    ({products.length} {t('common.products').toLowerCase()})
                   </span>
                 </div>
               </td>

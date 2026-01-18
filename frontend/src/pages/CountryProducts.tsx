@@ -1,31 +1,17 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Search, Store, Package, ExternalLink } from 'lucide-react';
 import { countriesApi, supermarketsApi, canonicalApi } from '../services/api';
 import { formatPrice } from '../utils/currency';
+import { formatRelativeTime } from '../utils/dateFormat';
 import type { Country, Supermarket, Product } from '../types';
-
-function formatRelativeTime(dateString: string | null): string {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-  if (diffMinutes < 1) return 'just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays === 1) return 'yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
 
 const PRODUCTS_PER_PAGE = 100;
 
 export default function CountryProducts() {
+  const { t } = useTranslation();
   const { code } = useParams<{ code: string }>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -88,9 +74,9 @@ export default function CountryProducts() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
         <Package className="h-16 w-16 text-charcoal-300" />
-        <h2 className="text-xl font-display font-bold text-charcoal-900">Country not found</h2>
+        <h2 className="text-xl font-display font-bold text-charcoal-900">{t('countryProducts.countryNotFound')}</h2>
         <Link to="/" className="btn-primary">
-          Back to Home
+          {t('countryProducts.backToHome')}
         </Link>
       </div>
     );
@@ -105,14 +91,14 @@ export default function CountryProducts() {
           className="inline-flex items-center gap-2 text-charcoal-600 hover:text-terracotta-600 transition-colors mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span>Back to comparison</span>
+          <span>{t('countryProducts.backToComparison')}</span>
         </Link>
         <div className="flex items-center gap-4">
           <span className="text-5xl">{country.flag_emoji}</span>
           <div>
             <h1 className="text-3xl font-display font-bold text-charcoal-900">{country.name}</h1>
             <p className="text-charcoal-600">
-              {totalProducts.toLocaleString()} products available
+              {t('countryCard.productsAvailable', { count: totalProducts })}
             </p>
           </div>
         </div>
@@ -126,7 +112,7 @@ export default function CountryProducts() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-charcoal-400" />
             <input
               type="text"
-              placeholder="Search products..."
+              placeholder={t('countryProducts.searchProducts')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="input pl-10 w-full"
@@ -146,7 +132,7 @@ export default function CountryProducts() {
                   }}
                   className="input pl-10 w-full appearance-none cursor-pointer"
                 >
-                  <option value="">All supermarkets</option>
+                  <option value="">{t('countryProducts.allSupermarkets')}</option>
                   {supermarkets.map((s: Supermarket) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -173,9 +159,9 @@ export default function CountryProducts() {
       ) : products.length === 0 ? (
         <div className="card !p-12 text-center">
           <Package className="h-16 w-16 text-charcoal-300 mx-auto mb-4" />
-          <h3 className="text-lg font-display font-bold text-charcoal-900 mb-2">No products found</h3>
+          <h3 className="text-lg font-display font-bold text-charcoal-900 mb-2">{t('countryProducts.noProductsFound')}</h3>
           <p className="text-charcoal-600">
-            {search ? 'Try adjusting your search terms' : 'No products available for this country'}
+            {search ? t('countryProducts.tryAdjusting') : t('countryProducts.noProductsAvailable')}
           </p>
         </div>
       ) : (
@@ -213,7 +199,7 @@ export default function CountryProducts() {
                         {formatPrice(product.price, product.currency || country.currency_code)}
                       </p>
                     ) : (
-                      <p className="text-sm text-charcoal-400">Price unavailable</p>
+                      <p className="text-sm text-charcoal-400">{t('countryProducts.priceUnavailable')}</p>
                     )}
                     {product.unit && product.unit_quantity && (
                       <p className="text-xs text-charcoal-500">
@@ -222,7 +208,7 @@ export default function CountryProducts() {
                     )}
                     {product.price_updated_at && (
                       <p className="text-[10px] text-charcoal-400 mt-0.5">
-                        Updated {formatRelativeTime(product.price_updated_at)}
+                        {t('common.updated')} {formatRelativeTime(product.price_updated_at)}
                       </p>
                     )}
                   </div>
@@ -236,7 +222,7 @@ export default function CountryProducts() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="shrink-0 p-1 text-charcoal-400 hover:text-terracotta-600 transition-colors"
-                        title="View on supermarket website"
+                        title={t('countryProducts.viewOnSupermarket')}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <ExternalLink className="h-4 w-4" />
@@ -256,17 +242,17 @@ export default function CountryProducts() {
                 disabled={page === 0}
                 className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Previous
+                {t('common.previous')}
               </button>
               <span className="px-4 text-charcoal-600">
-                Page {page + 1} of {totalPages}
+                {t('common.page')} {page + 1} {t('common.of')} {totalPages}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
                 className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Next
+                {t('common.next')}
               </button>
             </div>
           )}

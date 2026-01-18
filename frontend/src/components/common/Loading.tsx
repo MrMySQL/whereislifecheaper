@@ -1,11 +1,14 @@
 import { MapPin } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface LoadingProps {
   text?: string;
   fullScreen?: boolean;
 }
 
-export default function Loading({ text = 'Loading...', fullScreen = false }: LoadingProps) {
+export default function Loading({ text, fullScreen = false }: LoadingProps) {
+  const { t } = useTranslation();
+  const displayText = text || t('common.loading');
   const content = (
     <div className="flex flex-col items-center justify-center gap-3">
       <div className="relative">
@@ -14,7 +17,7 @@ export default function Loading({ text = 'Loading...', fullScreen = false }: Loa
         </div>
         <div className="absolute inset-0 rounded-xl border-2 border-terracotta-200 border-t-terracotta-500 animate-spin" />
       </div>
-      <p className="text-sm text-charcoal-600 font-medium">{text}</p>
+      <p className="text-sm text-charcoal-600 font-medium">{displayText}</p>
     </div>
   );
 

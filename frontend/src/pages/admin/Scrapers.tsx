@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Play, RefreshCw, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { scraperApi, countriesApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
+import { formatDateTime } from '../../utils/dateFormat';
 
 interface ScrapeLog {
   id: number;
@@ -33,6 +35,7 @@ interface Country {
 }
 
 export default function Scrapers() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   // Fetch scraper status
@@ -62,8 +65,7 @@ export default function Scrapers() {
   });
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('en-US', {
+    return formatDateTime(dateStr, {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
@@ -107,16 +109,16 @@ export default function Scrapers() {
   };
 
   if (statusLoading) {
-    return <Loading text="Loading scraper status..." />;
+    return <Loading text={t('loading.loadingScraperStatus')} />;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Scraper Control</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{t('scrapers.scraperControl')}</h1>
           <p className="text-slate-600 mt-1">
-            Monitor and trigger scrapers for each supermarket.
+            {t('scrapers.monitorDescription')}
           </p>
         </div>
         <button
@@ -124,32 +126,32 @@ export default function Scrapers() {
           className="btn-secondary flex items-center gap-2"
         >
           <RefreshCw className="h-4 w-4" />
-          Refresh
+          {t('common.refresh')}
         </button>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card">
-          <p className="text-sm text-slate-500">Currently Running</p>
+          <p className="text-sm text-slate-500">{t('scrapers.currentlyRunning')}</p>
           <p className="text-2xl font-bold text-blue-600">
             {status?.stats_24h?.currently_running || 0}
           </p>
         </div>
         <div className="card">
-          <p className="text-sm text-slate-500">Success (24h)</p>
+          <p className="text-sm text-slate-500">{t('scrapers.success24h')}</p>
           <p className="text-2xl font-bold text-green-600">
             {status?.stats_24h?.success_24h || 0}
           </p>
         </div>
         <div className="card">
-          <p className="text-sm text-slate-500">Failed (24h)</p>
+          <p className="text-sm text-slate-500">{t('scrapers.failed24h')}</p>
           <p className="text-2xl font-bold text-red-600">
             {status?.stats_24h?.failed_24h || 0}
           </p>
         </div>
         <div className="card">
-          <p className="text-sm text-slate-500">Products Scraped (24h)</p>
+          <p className="text-sm text-slate-500">{t('scrapers.productsScraped24h')}</p>
           <p className="text-2xl font-bold text-slate-900">
             {status?.stats_24h?.products_24h?.toLocaleString() || 0}
           </p>
@@ -161,7 +163,7 @@ export default function Scrapers() {
         <div className="card border-blue-200 bg-blue-50">
           <h2 className="text-lg font-semibold text-blue-900 mb-4 flex items-center gap-2">
             <RefreshCw className="h-5 w-5 animate-spin" />
-            Currently Running
+            {t('scrapers.currentlyRunning')}
           </h2>
           <div className="space-y-2">
             {(status.running_scrapers as ScrapeLog[]).filter((s) => !isStaleRunning(s)).map((scraper) => (
@@ -173,7 +175,7 @@ export default function Scrapers() {
                   {scraper.supermarket_name}
                 </p>
                 <p className="text-sm text-slate-500">
-                  Started: {formatDate(scraper.started_at)}
+                  {t('scrapers.started')}: {formatDate(scraper.started_at)}
                 </p>
               </div>
             ))}
@@ -184,7 +186,7 @@ export default function Scrapers() {
       {/* Supermarkets by Country */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold text-slate-900">
-          Supermarkets by Country
+          {t('scrapers.supermarketsByCountry')}
         </h2>
         {countries.map((country: Country) => (
           <div key={country.id} className="card">
@@ -202,7 +204,7 @@ export default function Scrapers() {
                     <div>
                       <p className="font-medium text-slate-900">{sm.name}</p>
                       <p className="text-xs text-slate-500">
-                        {sm.is_active ? 'Active' : 'Inactive'}
+                        {sm.is_active ? t('common.active') : t('common.inactive')}
                       </p>
                     </div>
                     <button
@@ -213,13 +215,13 @@ export default function Scrapers() {
                       className="btn-secondary py-1 px-3 text-sm flex items-center gap-1"
                     >
                       <Play className="h-3 w-3" />
-                      Run
+                      {t('common.run')}
                     </button>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-slate-500 text-sm">No supermarkets configured</p>
+              <p className="text-slate-500 text-sm">{t('scrapers.noSupermarketsConfigured')}</p>
             )}
           </div>
         ))}
@@ -228,29 +230,29 @@ export default function Scrapers() {
       {/* Recent Logs */}
       <div className="card">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">
-          Recent Scrape Logs
+          {t('scrapers.recentScrapeLogs')}
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200">
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">
-                  Status
+                  {t('scrapers.status')}
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">
-                  Supermarket
+                  {t('scrapers.supermarket')}
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">
-                  Started
+                  {t('scrapers.started')}
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">
-                  Duration
+                  {t('scrapers.duration')}
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">
-                  Products
+                  {t('common.products')}
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">
-                  Errors
+                  {t('scrapers.errors')}
                 </th>
               </tr>
             </thead>

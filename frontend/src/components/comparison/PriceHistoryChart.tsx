@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   LineChart,
   Line,
@@ -13,6 +14,7 @@ import {
 import { Calendar } from 'lucide-react';
 import { productsApi } from '../../services/api';
 import { convertToEUR } from '../../utils/currency';
+import { formatDateTime } from '../../utils/dateFormat';
 import type { CanonicalProduct } from '../../types';
 
 interface PriceHistoryChartProps {
@@ -34,6 +36,7 @@ export default function PriceHistoryChart({
   product,
   selectedCountries,
 }: PriceHistoryChartProps) {
+  const { t } = useTranslation();
   const [dateRange, setDateRange] = useState<DateRange>(30);
 
   // Get product IDs for each selected country
@@ -110,7 +113,7 @@ export default function PriceHistoryChart({
     return (
       <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-cream-200 p-3">
         <p className="text-xs text-charcoal-500 mb-2">
-          {new Date(label || '').toLocaleDateString('en-US', {
+          {formatDateTime(label || '', {
             month: 'short',
             day: 'numeric',
             year: 'numeric',
@@ -137,7 +140,7 @@ export default function PriceHistoryChart({
       <div className="p-6 bg-cream-50/50 rounded-xl">
         <div className="flex items-center justify-center gap-3 py-8">
           <div className="w-5 h-5 border-2 border-terracotta-300 border-t-terracotta-600 rounded-full animate-spin" />
-          <span className="text-sm text-charcoal-600">Loading price history...</span>
+          <span className="text-sm text-charcoal-600">{t('priceHistory.loadingHistory')}</span>
         </div>
       </div>
     );
@@ -147,7 +150,7 @@ export default function PriceHistoryChart({
     return (
       <div className="p-6 bg-cream-50/50 rounded-xl">
         <p className="text-sm text-charcoal-500 text-center py-4">
-          No price history available for this product
+          {t('priceHistory.noHistory')}
         </p>
       </div>
     );
@@ -159,7 +162,7 @@ export default function PriceHistoryChart({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-sm text-charcoal-600">
           <Calendar className="w-4 h-4" />
-          <span className="font-medium">Price History</span>
+          <span className="font-medium">{t('priceHistory.priceHistory')}</span>
         </div>
         <div className="flex gap-1">
           {([7, 30, 90] as DateRange[]).map((days) => (
@@ -188,7 +191,7 @@ export default function PriceHistoryChart({
           <XAxis
             dataKey="date"
             tickFormatter={(date) =>
-              new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              formatDateTime(date, { month: 'short', day: 'numeric' })
             }
             tick={{ fontSize: 10, fill: '#6d6d6d' }}
             axisLine={{ stroke: '#d2d8c7' }}
