@@ -1,262 +1,249 @@
 # WhereIsLifeCheaper
 
-A web scraping system to compare grocery basket prices across **Turkey, Montenegro, Spain, and Uzbekistan** by automatically scraping supermarket websites daily and storing price data in a PostgreSQL database with a dashboard for visualization.
+A multi-country grocery price comparison system that scrapes supermarket websites daily to help users compare the cost of living across different countries.
 
 ## Features
 
-- 🌍 Multi-country price comparison (TR, ME, ES, UZ)
-- 🛒 Automated daily scraping of supermarket websites
-- 📊 Historical price tracking
-- 🔄 Product matching across countries
-- 📈 Simple web dashboard for price comparisons
-- ⚡ Built with Node.js, TypeScript, Playwright, and PostgreSQL
+- **Multi-Country Comparison**: Compare grocery prices across Turkey, Montenegro, Spain, Uzbekistan, Ukraine, and Kazakhstan
+- **Automated Scraping**: Daily automated scraping of supermarket websites using Playwright
+- **Historical Tracking**: Track price changes over time with historical data
+- **Product Matching**: Match similar products across different countries using canonical products
+- **Currency Conversion**: Convert prices to a common currency for fair comparison
+- **Web Dashboard**: React-based frontend for viewing comparisons
+- **Admin Panel**: Manage product mappings and trigger scrapers manually
+- **REST API**: Full API for programmatic access to price data
 
 ## Tech Stack
 
-- **Backend**: Node.js + TypeScript + Express.js
-- **Scraping**: Playwright for browser automation
-- **Database**: PostgreSQL 15+
-- **Scheduling**: GitHub Actions for daily automation
-- **Frontend**: React + Vite (coming soon)
-- **Logging**: Winston
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | React 19, Vite 7, TailwindCSS, TanStack Query |
+| **Backend** | Node.js 18+, Express.js, TypeScript |
+| **Scraping** | Playwright (Chromium) |
+| **Database** | PostgreSQL 15 |
+| **Authentication** | Google OAuth 2.0, Passport.js |
+| **Logging** | Winston, Google Cloud Logging |
+| **Deployment** | Vercel (Serverless) |
+
+## Supported Supermarkets
+
+| Country | Supermarket | Status |
+|---------|-------------|--------|
+| Turkey | Migros | Active |
+| Montenegro | Voli | Active |
+| Spain | Mercadona | Active |
+| Ukraine | Auchan | Active |
+| Uzbekistan | Makro | Active |
+| Kazakhstan | Arbuz | Active |
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18+
+- Docker and Docker Compose
+- Git
+
+### Setup
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd whereislifecheaper
+
+# Install dependencies
+npm install
+cd frontend && npm install && cd ..
+
+# Install Playwright
+npx playwright install chromium
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
+
+# Start PostgreSQL
+docker-compose up -d
+
+# Run migrations and seed data
+npm run migrate
+npm run seed
+
+# Start development servers
+npm run api          # API on localhost:3000
+npm run dev:frontend # Frontend on localhost:5173
+```
+
+### Running Scrapers
+
+```bash
+# Run all scrapers
+npm run scraper:run
+
+# Run specific scraper
+npm run scraper:run -- migros
+
+# Test a scraper
+npm run scraper:test -- migros
+```
+
+## Documentation
+
+Detailed documentation is available in the [docs/](docs/) folder:
+
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | System architecture and component overview |
+| [Database Schema](docs/database-schema.md) | Complete database schema documentation |
+| [API Reference](docs/api-reference.md) | REST API endpoints and usage |
+| [Scrapers](docs/scrapers.md) | Scraper architecture and development guide |
+| [Deployment](docs/deployment.md) | Deployment guide for Vercel and local |
+| [Development](docs/development.md) | Development setup and workflow |
+| [Frontend](docs/frontend.md) | React frontend documentation |
 
 ## Project Structure
 
 ```
 whereislifecheaper/
-├── src/
-│   ├── scrapers/          # Scraper implementations per country
-│   ├── database/          # Migrations, models, seeds
+├── api/                    # Vercel serverless entry
+├── docs/                   # Documentation
+├── frontend/               # React SPA
+│   ├── src/
+│   │   ├── components/    # UI components
+│   │   ├── context/       # React context
+│   │   ├── pages/         # Page components
+│   │   └── services/      # API client
+│   └── package.json
+├── scripts/                # CLI scripts
+├── src/                    # Backend source
+│   ├── api/               # Express routes
+│   ├── auth/              # Authentication
+│   ├── config/            # Configuration
+│   ├── database/          # Migrations & seeds
+│   ├── scrapers/          # Web scrapers
 │   ├── services/          # Business logic
-│   ├── api/               # Express REST API
-│   ├── utils/             # Utilities (logger, normalizer, retry)
-│   └── config/            # Configuration
-├── scripts/               # Migration and seed scripts
-├── logs/                  # Application logs
-└── tests/                 # Unit and integration tests
+│   ├── types/             # TypeScript types
+│   └── utils/             # Utilities
+├── tests/                  # Test files
+├── docker-compose.yml      # Local PostgreSQL
+└── vercel.json            # Vercel config
 ```
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ and npm
-- Docker and Docker Compose (for PostgreSQL)
-- Git
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd whereislifecheaper
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Install Playwright browsers**
-   ```bash
-   npx playwright install chromium
-   ```
-
-4. **Setup environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your database credentials
-   ```
-
-5. **Start PostgreSQL with Docker**
-   ```bash
-   docker-compose up -d
-   ```
-
-   This will start:
-   - PostgreSQL on `localhost:5432`
-   - pgAdmin on `localhost:5050` (admin@whereislifecheaper.com / admin)
-
-6. **Run database migrations**
-   ```bash
-   npm run migrate
-   ```
-
-7. **Seed initial data**
-   ```bash
-   npm run seed
-   ```
-
-### Development
-
-```bash
-# Start the API server
-npm run api
-
-# Test a scraper manually
-npm run scraper:test
-
-# Run all scrapers
-npm run scraper:run
-
-# Build TypeScript
-npm run build
-
-# Run in development mode
-npm run dev
-```
-
-## Database Schema
-
-### Core Tables
-
-- **countries** - Turkey, Montenegro, Spain, Uzbekistan
-- **supermarkets** - Supermarket chains with scraper configurations
-- **categories** - Product categories
-- **products** - Master product catalog with normalized names
-- **product_mappings** - Links products to supermarkets
-- **prices** - Historical price data
-- **scrape_logs** - Scraping run logs for monitoring
-
-## Supermarkets
-
-### Turkey 🇹🇷
-- ✅ Migros (active)
-- A101 (planned)
-- BIM (planned)
-- ŞOK (planned)
-- CarrefourSA (planned)
-
-### Montenegro 🇲🇪
-- Voli (planned)
-- Idea (planned)
-
-### Spain 🇪🇸
-- Mercadona (planned)
-- Carrefour (planned)
-- Alcampo (planned)
-- Dia (planned)
-
-### Uzbekistan 🇺🇿
-- Korzinka (planned)
 
 ## API Endpoints
 
-```
-GET /api/countries                     # List all countries
-GET /api/supermarkets                  # List all supermarkets
-GET /api/products                      # List products with filters
-GET /api/products/:id                  # Get product details
-GET /api/prices/latest                 # Get latest prices
-GET /api/prices/history/:productId     # Price history for a product
-GET /api/comparisons/basket            # Compare shopping basket across countries
-```
+### Public Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/countries` | List all countries |
+| GET | `/api/supermarkets` | List supermarkets |
+| GET | `/api/products` | Search products |
+| GET | `/api/prices/latest` | Get latest prices |
+| GET | `/api/canonical` | List canonical products |
+| GET | `/api/rates` | Get exchange rates |
+| GET | `/health` | Health check |
+
+### Admin Endpoints (Requires Authentication)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/canonical` | Create canonical product |
+| PUT | `/api/canonical/:id` | Update canonical product |
+| POST | `/api/canonical/map` | Link product to canonical |
+| POST | `/api/scraper/trigger` | Trigger scraper manually |
+| POST | `/api/rates/sync` | Sync exchange rates |
+
+See [API Reference](docs/api-reference.md) for complete documentation.
+
+## Database Schema
+
+Core tables:
+
+- **countries** - Supported countries (TR, ME, ES, UZ, UA, KZ)
+- **supermarkets** - Supermarket chains with scraper configs
+- **products** - Master product catalog
+- **product_mappings** - Links products to supermarkets
+- **prices** - Historical price data
+- **canonical_products** - Cross-country product identifiers
+- **exchange_rates** - Currency conversion rates
+- **scrape_logs** - Scraper execution logs
+
+See [Database Schema](docs/database-schema.md) for complete documentation.
 
 ## Environment Variables
 
-```env
-# Database
-DATABASE_URL=postgresql://postgres:password@localhost:5432/whereislifecheaper
+```bash
+# Required
+DATABASE_URL=postgresql://user:pass@host:5432/db
+SESSION_SECRET=your-secret-key
 
-# API
+# Optional
 API_PORT=3000
 NODE_ENV=development
-
-# Scraper
 PLAYWRIGHT_HEADLESS=true
 SCRAPER_MAX_RETRIES=3
-SCRAPER_TIMEOUT=30000
-SCRAPER_CONCURRENT_BROWSERS=3
-
-# Logging
 LOG_LEVEL=info
-LOG_DIR=./logs
+
+# OAuth (for authentication)
+GOOGLE_CLIENT_ID=your-client-id
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+ADMIN_EMAILS=admin@example.com
 ```
 
-## Scraping Architecture
+## Development
 
-### BaseScraper
+### NPM Scripts
 
-All scrapers extend the `BaseScraper` abstract class which provides:
-- Browser initialization with Playwright
-- Retry logic for failed requests
-- Error handling and logging
-- Screenshot capture on errors
+| Script | Description |
+|--------|-------------|
+| `npm run build` | Build TypeScript and frontend |
+| `npm run api` | Start API server |
+| `npm run dev:frontend` | Start frontend dev server |
+| `npm run migrate` | Run database migrations |
+| `npm run seed` | Seed initial data |
+| `npm run scraper:run` | Run all scrapers |
+| `npm run scraper:test` | Test scraper |
+| `npm test` | Run tests |
 
 ### Adding a New Scraper
 
-1. Create a new scraper class in `src/scrapers/{country}/`
-2. Extend `BaseScraper`
-3. Implement required methods:
-   - `initialize()`
-   - `scrapeProductList()`
-   - `scrapeProductDetails(url)`
-   - `cleanup()`
-4. Add configuration to `src/config/scrapers.ts`
-5. Update seed data in `src/database/seeds/supermarkets.ts`
+1. Create scraper class extending `BaseScraper`
+2. Register in `scraperRegistry.ts`
+3. Add supermarket seed data
+4. Test with `npm run scraper:test -- <name>`
 
-## Product Matching
+See [Scrapers Guide](docs/scrapers.md) for detailed instructions.
 
-Products are matched across countries using:
-1. **Barcode matching** (highest confidence)
-2. **Brand + normalized name + unit** (high confidence)
-3. **Fuzzy matching within category** (medium confidence)
-4. **Manual mapping** for common products
+## Deployment
 
-## Daily Scraping
+### Vercel (Recommended)
 
-GitHub Actions runs scrapers daily at 3 AM UTC:
-1. Gets all active supermarkets
-2. For each supermarket:
-   - Creates scraper instance
-   - Scrapes all products
-   - Saves prices with timestamps
-   - Logs scrape status
-3. Runs up to 2 scrapers in parallel
+1. Connect repository to Vercel
+2. Configure environment variables
+3. Deploy
 
-## Monitoring
+See [Deployment Guide](docs/deployment.md) for detailed instructions.
 
-- All scraping runs are logged to `scrape_logs` table
-- Winston logs to `logs/` directory
-- Health check endpoint at `/api/admin/health`
+### GitHub Actions (Scrapers)
 
-## Testing
+Scrapers run via GitHub Actions for scheduled execution:
 
-```bash
-# Run unit tests
-npm test
-
-# Run integration tests
-npm run test:integration
-
-# Test specific scraper
-npm run scraper:test -- --scraper=migros
+```yaml
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Daily at 3 AM UTC
 ```
-
-## Roadmap
-
-- [x] Project setup and database schema
-- [x] Base scraper architecture
-- [ ] Migros Turkey scraper
-- [ ] Additional scrapers (1 per country)
-- [ ] Product matching algorithm
-- [ ] REST API
-- [ ] Frontend dashboard
-- [ ] Price trend analysis
-- [ ] Currency conversion
-- [ ] Mobile app
-
-## TODO
-
-- [ ] **Spain**: Equalize quantity for cucumbers and apples
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+See [Development Guide](docs/development.md) for coding standards.
 
 ## License
 
