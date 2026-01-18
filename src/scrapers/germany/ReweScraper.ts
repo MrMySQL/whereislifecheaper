@@ -475,13 +475,20 @@ export class ReweScraper extends BaseScraper {
       await this.handleCookieConsent();
 
       // Check page title
-      const title = await this.page.title();
+      let title = await this.page.title();
       scraperLogger.info(`Page title: ${title}`);
 
-      // If Cloudflare challenge is present, skip this category
+      // If Cloudflare challenge is present, try to solve it
       if (title.includes('moment') || title.includes('Moment')) {
-        scraperLogger.warn(`Cloudflare challenge detected for ${category.name}, skipping`);
-        return products;
+        scraperLogger.warn(`Cloudflare challenge detected for ${category.name}, attempting to solve...`);
+        const solved = await this.solveCloudflareChallenge();
+        if (!solved) {
+          scraperLogger.error(`Could not solve Cloudflare challenge for ${category.name}, skipping`);
+          return products;
+        }
+        // Update title after solving
+        title = await this.page.title();
+        scraperLogger.info(`Page title after solving: ${title}`);
       }
 
       // Get total pages from pagination
@@ -499,10 +506,16 @@ export class ReweScraper extends BaseScraper {
             await this.waitForDynamicContent();
 
             // Check for Cloudflare on subsequent pages
-            const pageTitle = await this.page.title();
+            let pageTitle = await this.page.title();
             if (pageTitle.includes('moment') || pageTitle.includes('Moment')) {
-              scraperLogger.warn(`Cloudflare challenge on page ${pageNum}, stopping pagination`);
-              break;
+              scraperLogger.warn(`Cloudflare challenge on page ${pageNum}, attempting to solve...`);
+              const solved = await this.solveCloudflareChallenge();
+              if (!solved) {
+                scraperLogger.error(`Could not solve Cloudflare on page ${pageNum}, stopping pagination`);
+                break;
+              }
+              pageTitle = await this.page.title();
+              scraperLogger.info(`Page ${pageNum} title after solving: ${pageTitle}`);
             }
           }
 
