@@ -136,9 +136,15 @@ export class ReweScraper extends BaseScraper {
     scraperLogger.debug(`Using user agent: ${userAgent}`);
 
     // Launch with persistent context for session management
+    // Use PLAYWRIGHT_HEADLESS env var to control headless mode
+    // For Cloudflare bypass, headed mode with xvfb works best in CI
+    const isHeadless = process.env.PLAYWRIGHT_HEADLESS === 'true';
+    scraperLogger.info(`Browser mode: ${isHeadless ? 'headless' : 'headed'}`);
+
     this.browserContext = await chromium.launchPersistentContext(sessionDir, {
-      // headless: false, // Headed mode is more reliable for Cloudflare bypass
+      headless: isHeadless,
       args: [
+        ...(isHeadless ? ['--headless=new'] : []), // New headless mode if headless
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
