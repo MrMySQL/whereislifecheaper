@@ -11,7 +11,7 @@ interface ComparisonTableProps {
   loading?: boolean;
 }
 
-function ProductHoverCard({ priceData, showBelow = false }: { priceData: CountryPrice; showBelow?: boolean }) {
+function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
   const scrapedDate = priceData.scraped_at
     ? new Date(priceData.scraped_at).toLocaleDateString('en-US', {
         month: 'short',
@@ -20,12 +20,159 @@ function ProductHoverCard({ priceData, showBelow = false }: { priceData: Country
       })
     : null;
 
+  return (
+    <div className="relative">
+      {/* Product Image */}
+      <div className="flex gap-3 mb-2">
+        <div className="w-16 h-16 bg-cream-100 rounded-lg overflow-hidden flex-shrink-0">
+          {priceData.image_url ? (
+            <img
+              src={priceData.image_url}
+              alt={priceData.product_name}
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Package className="w-6 h-6 text-cream-400" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-charcoal-900 text-sm leading-tight line-clamp-2">
+            {priceData.product_name}
+          </p>
+          {priceData.brand && (
+            <p className="text-xs text-charcoal-500 mt-0.5">{priceData.brand}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Details */}
+      <div className="space-y-1.5 text-xs">
+        {/* Unit */}
+        {priceData.unit && (
+          <div className="flex justify-between text-charcoal-600">
+            <span>Size:</span>
+            <span className="font-medium">
+              {priceData.unit_quantity && priceData.unit_quantity > 1
+                ? `${priceData.unit_quantity} × `
+                : ''
+              }
+              {priceData.unit}
+            </span>
+          </div>
+        )}
+
+        {/* Supermarket */}
+        <div className="flex items-center justify-between text-charcoal-600">
+          <span className="flex items-center gap-1">
+            <Store className="w-3 h-3" />
+            Store:
+          </span>
+          <span className="font-medium">{priceData.supermarket}</span>
+        </div>
+
+        {/* Price in local currency */}
+        <div className="flex justify-between text-charcoal-600">
+          <span>Local price:</span>
+          <span className="font-semibold text-charcoal-900">
+            {formatPrice(priceData.price, priceData.currency)}
+          </span>
+        </div>
+
+        {/* Original price if on sale */}
+        {priceData.is_on_sale && priceData.original_price && (
+          <div className="flex justify-between text-charcoal-600">
+            <span className="flex items-center gap-1">
+              <Tag className="w-3 h-3 text-terracotta-500" />
+              Was:
+            </span>
+            <span className="line-through text-charcoal-400">
+              {formatPrice(priceData.original_price, priceData.currency)}
+            </span>
+          </div>
+        )}
+
+        {/* Last updated */}
+        {scrapedDate && (
+          <div className="flex items-center justify-between text-charcoal-400 pt-1 border-t border-cream-100">
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3 h-3" />
+              Updated:
+            </span>
+            <span>{scrapedDate}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
+  const products = priceData.products || [];
+
+  return (
+    <div className="relative">
+      {/* Header */}
+      <div className="mb-3 pb-2 border-b border-cream-200">
+        <p className="font-semibold text-charcoal-900 text-sm">
+          Average of {priceData.product_count} products
+        </p>
+        <p className="text-xs text-charcoal-500">
+          Avg: {formatPrice(priceData.price, priceData.currency)}
+        </p>
+      </div>
+
+      {/* Product list */}
+      <div className="space-y-2.5">
+        {products.map((product) => (
+          <div key={product.product_id} className="flex gap-2 pb-2 border-b border-cream-100 last:border-0 last:pb-0">
+            {/* Thumbnail */}
+            <div className="w-10 h-10 bg-cream-100 rounded overflow-hidden flex-shrink-0">
+              {product.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt={product.product_name}
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Package className="w-4 h-4 text-cream-400" />
+                </div>
+              )}
+            </div>
+            {/* Product info */}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-charcoal-900 line-clamp-1">
+                {product.product_name}
+              </p>
+              <div className="flex items-center justify-between mt-0.5">
+                <span className="text-[10px] text-charcoal-400 flex items-center gap-0.5">
+                  <Store className="w-2.5 h-2.5" />
+                  {product.supermarket}
+                </span>
+                <span className="text-xs font-semibold text-charcoal-800">
+                  {formatPrice(product.price, priceData.currency)}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProductHoverCard({ priceData, showBelow = false }: { priceData: CountryPrice; showBelow?: boolean }) {
   const positionClasses = showBelow
     ? 'top-full mt-2'
     : 'bottom-full mb-2';
 
+  const isMultiProduct = priceData.product_count > 1;
+  const cardWidth = isMultiProduct ? 'w-72' : 'w-64';
+
   return (
-    <div className={`absolute z-50 ${positionClasses} left-1/2 -translate-x-1/2 w-64 bg-white rounded-lg shadow-xl border border-cream-200 p-3 pointer-events-none`}>
+    <div className={`absolute z-50 ${positionClasses} left-1/2 -translate-x-1/2 ${cardWidth} bg-white rounded-lg shadow-xl border border-cream-200 p-3 pointer-events-none`}>
       {/* Arrow */}
       {showBelow ? (
         <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-l border-t border-cream-200 rotate-45" />
@@ -33,90 +180,11 @@ function ProductHoverCard({ priceData, showBelow = false }: { priceData: Country
         <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-r border-b border-cream-200 rotate-45" />
       )}
 
-      <div className="relative">
-        {/* Product Image */}
-        <div className="flex gap-3 mb-2">
-          <div className="w-16 h-16 bg-cream-100 rounded-lg overflow-hidden flex-shrink-0">
-            {priceData.image_url ? (
-              <img
-                src={priceData.image_url}
-                alt={priceData.product_name}
-                className="w-full h-full object-contain"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Package className="w-6 h-6 text-cream-400" />
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-charcoal-900 text-sm leading-tight line-clamp-2">
-              {priceData.product_name}
-            </p>
-            {priceData.brand && (
-              <p className="text-xs text-charcoal-500 mt-0.5">{priceData.brand}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Details */}
-        <div className="space-y-1.5 text-xs">
-          {/* Unit */}
-          {priceData.unit && (
-            <div className="flex justify-between text-charcoal-600">
-              <span>Size:</span>
-              <span className="font-medium">
-                {priceData.unit_quantity && priceData.unit_quantity > 1
-                  ? `${priceData.unit_quantity} × `
-                  : ''
-                }
-                {priceData.unit}
-              </span>
-            </div>
-          )}
-
-          {/* Supermarket */}
-          <div className="flex items-center justify-between text-charcoal-600">
-            <span className="flex items-center gap-1">
-              <Store className="w-3 h-3" />
-              Store:
-            </span>
-            <span className="font-medium">{priceData.supermarket}</span>
-          </div>
-
-          {/* Price in local currency */}
-          <div className="flex justify-between text-charcoal-600">
-            <span>Local price:</span>
-            <span className="font-semibold text-charcoal-900">
-              {formatPrice(priceData.price, priceData.currency)}
-            </span>
-          </div>
-
-          {/* Original price if on sale */}
-          {priceData.is_on_sale && priceData.original_price && (
-            <div className="flex justify-between text-charcoal-600">
-              <span className="flex items-center gap-1">
-                <Tag className="w-3 h-3 text-terracotta-500" />
-                Was:
-              </span>
-              <span className="line-through text-charcoal-400">
-                {formatPrice(priceData.original_price, priceData.currency)}
-              </span>
-            </div>
-          )}
-
-          {/* Last updated */}
-          {scrapedDate && (
-            <div className="flex items-center justify-between text-charcoal-400 pt-1 border-t border-cream-100">
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                Updated:
-              </span>
-              <span>{scrapedDate}</span>
-            </div>
-          )}
-        </div>
-      </div>
+      {isMultiProduct ? (
+        <MultiProductCard priceData={priceData} />
+      ) : (
+        <SingleProductCard priceData={priceData} />
+      )}
     </div>
   );
 }
@@ -152,6 +220,12 @@ function PriceCell({ priceData, isCheapest, rowIndex, showPerUnitPrice }: { pric
           <span className="ml-0.5">for {packageSize}</span>
         ) : null}
       </p>
+      {/* Product count indicator for averages */}
+      {priceData.product_count > 1 && (
+        <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600">
+          (avg of {priceData.product_count})
+        </span>
+      )}
       {priceData.is_on_sale && (
         <span className="inline-flex items-center gap-0.5 text-[10px] text-terracotta-600">
           <Tag className="h-2.5 w-2.5" />

@@ -34,6 +34,16 @@ export interface CanonicalProduct {
   country_count: number;
 }
 
+export interface ProductDetail {
+  product_id: number;
+  product_name: string;
+  brand: string | null;
+  price: number;
+  price_per_unit: number | null;
+  supermarket: string;
+  image_url: string | null;
+}
+
 export interface CountryPrice {
   product_id: number;
   product_name: string;
@@ -49,6 +59,8 @@ export interface CountryPrice {
   supermarket: string;
   country_name: string;
   scraped_at: string;
+  product_count: number;
+  products?: ProductDetail[];
 }
 
 export interface PriceStats {

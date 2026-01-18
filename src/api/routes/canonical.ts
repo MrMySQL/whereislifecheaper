@@ -257,25 +257,8 @@ router.get('/comparison', async (req, res, next) => {
 
     const result = await query(sql, params);
 
-    // Helper to check if unit is normalizable (weight or volume)
-    const isNormalizableUnit = (unit: string | null): boolean => {
-      if (!unit) return false;
-      const normalized = unit.toLowerCase();
-      return [
-        'kg', 'g',
-        'l', 'ml'
-      ].includes(normalized);
-    };
-
-    // Helper to get comparable price (normalized for weight/volume, otherwise total)
-    const getComparablePrice = (row: any): number => {
-      if (isNormalizableUnit(row.unit) && row.price_per_unit != null) {
-        return parseFloat(row.price_per_unit);
-      }
-      return parseFloat(row.price);
-    };
-
     // Group by canonical product and organize by country
+    // First pass: collect all products per canonical product + country
     const canonicalMap = new Map<number, any>();
 
     result.rows.forEach((row: any) => {
@@ -286,36 +269,89 @@ router.get('/comparison', async (req, res, next) => {
           canonical_description: row.canonical_description,
           show_per_unit_price: row.show_per_unit_price ?? false,
           category: row.category_name,
-          prices_by_country: {},
+          products_by_country: {}, // Temporary: collect all products
         });
       }
 
       const canonical = canonicalMap.get(row.canonical_id);
       const countryCode = row.country_code;
 
-      // Keep the cheapest price per country (using normalized price for weight/volume products)
-      const newComparablePrice = getComparablePrice(row);
-      const existingData = canonical.prices_by_country[countryCode];
-      const existingComparablePrice = existingData ? getComparablePrice(existingData) : Infinity;
-
-      if (!existingData || newComparablePrice < existingComparablePrice) {
-        canonical.prices_by_country[countryCode] = {
-          product_id: row.product_id,
-          product_name: row.product_name,
-          brand: row.brand,
-          unit: row.unit,
-          unit_quantity: row.unit_quantity,
-          image_url: row.image_url,
-          price: parseFloat(row.price),
-          price_per_unit: row.price_per_unit ? parseFloat(row.price_per_unit) : null,
-          currency: row.currency || row.currency_code,
-          original_price: row.original_price ? parseFloat(row.original_price) : null,
-          is_on_sale: row.is_on_sale,
-          supermarket: row.supermarket_name,
-          country_name: row.country_name,
-          scraped_at: row.scraped_at,
-        };
+      // Initialize array for this country if not exists
+      if (!canonical.products_by_country[countryCode]) {
+        canonical.products_by_country[countryCode] = [];
       }
+
+      // Add product to the list
+      canonical.products_by_country[countryCode].push({
+        product_id: row.product_id,
+        product_name: row.product_name,
+        brand: row.brand,
+        unit: row.unit,
+        unit_quantity: row.unit_quantity,
+        image_url: row.image_url,
+        price: parseFloat(row.price),
+        price_per_unit: row.price_per_unit ? parseFloat(row.price_per_unit) : null,
+        currency: row.currency || row.currency_code,
+        original_price: row.original_price ? parseFloat(row.original_price) : null,
+        is_on_sale: row.is_on_sale,
+        supermarket: row.supermarket_name,
+        country_name: row.country_name,
+        scraped_at: row.scraped_at,
+      });
+    });
+
+    // Second pass: calculate averages and build final prices_by_country
+    canonicalMap.forEach((canonical) => {
+      const pricesByCountry: Record<string, any> = {};
+
+      (Object.entries(canonical.products_by_country) as [string, any[]][]).forEach(([countryCode, products]) => {
+        const productCount = products.length;
+
+        // Calculate average price
+        const totalPrice = products.reduce((sum, p) => sum + p.price, 0);
+        const avgPrice = totalPrice / productCount;
+
+        // Calculate average price_per_unit (only for products that have it)
+        const productsWithPricePerUnit = products.filter(p => p.price_per_unit != null);
+        const avgPricePerUnit = productsWithPricePerUnit.length > 0
+          ? productsWithPricePerUnit.reduce((sum, p) => sum + p.price_per_unit, 0) / productsWithPricePerUnit.length
+          : null;
+
+        // Use first product for metadata (unit, currency, country_name, etc.)
+        const firstProduct = products[0];
+
+        pricesByCountry[countryCode] = {
+          product_id: firstProduct.product_id,
+          product_name: firstProduct.product_name,
+          brand: firstProduct.brand,
+          unit: firstProduct.unit,
+          unit_quantity: firstProduct.unit_quantity,
+          image_url: firstProduct.image_url,
+          price: avgPrice,
+          price_per_unit: avgPricePerUnit,
+          currency: firstProduct.currency,
+          original_price: firstProduct.original_price,
+          is_on_sale: products.some(p => p.is_on_sale),
+          supermarket: firstProduct.supermarket,
+          country_name: firstProduct.country_name,
+          scraped_at: firstProduct.scraped_at,
+          // New fields for multiple products
+          product_count: productCount,
+          products: products.map(p => ({
+            product_id: p.product_id,
+            product_name: p.product_name,
+            brand: p.brand,
+            price: p.price,
+            price_per_unit: p.price_per_unit,
+            supermarket: p.supermarket,
+            image_url: p.image_url,
+          })),
+        };
+      });
+
+      // Replace temporary products_by_country with final prices_by_country
+      canonical.prices_by_country = pricesByCountry;
+      delete canonical.products_by_country;
     });
 
     // Convert to array and filter products available in multiple countries
