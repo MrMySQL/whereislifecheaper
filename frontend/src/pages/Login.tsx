@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { ShoppingCart, AlertCircle } from 'lucide-react';
 
 export default function Login() {
+  const { t } = useTranslation();
   const { isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -26,10 +28,10 @@ export default function Login() {
           </div>
 
           <h1 className="text-2xl font-bold text-slate-900 mb-2">
-            Admin Login
+            {t('login.adminLogin')}
           </h1>
           <p className="text-slate-600 mb-6">
-            Sign in with your Google account to access admin features.
+            {t('login.signInDescription')}
           </p>
 
           {error && (
@@ -37,10 +39,10 @@ export default function Login() {
               <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
               <p className="text-sm text-red-700">
                 {error === 'auth_failed'
-                  ? 'Authentication failed. Please try again.'
+                  ? t('login.authFailed')
                   : error === 'oauth_not_configured'
-                  ? 'OAuth is not configured. Please contact the administrator.'
-                  : 'An error occurred. Please try again.'}
+                  ? t('login.oauthNotConfigured')
+                  : t('login.genericError')}
               </p>
             </div>
           )}
@@ -67,11 +69,11 @@ export default function Login() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            Sign in with Google
+            {t('login.signInGoogle')}
           </button>
 
           <p className="text-xs text-slate-500 mt-4">
-            Only authorized administrators can access admin features.
+            {t('login.authorizedOnly')}
           </p>
         </div>
       </div>

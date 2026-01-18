@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation, Trans } from 'react-i18next';
 import { Search, RefreshCw, Globe2, TrendingDown, Sparkles, Layers, Check } from 'lucide-react';
 import { countriesApi, pricesApi, canonicalApi } from '../services/api';
 import CountrySelector from '../components/comparison/CountrySelector';
@@ -11,6 +12,7 @@ import Loading from '../components/common/Loading';
 const DEFAULT_COUNTRIES = ['TR', 'ES', 'ME', 'UA', 'KZ', 'UZ'];
 
 export default function Home() {
+  const { t } = useTranslation();
   const [selectedCountries, setSelectedCountries] = useState<string[]>(DEFAULT_COUNTRIES);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -75,7 +77,7 @@ export default function Home() {
   });
 
   if (countriesLoading) {
-    return <Loading text="Loading countries..." />;
+    return <Loading text={t('loading.loadingCountries')} />;
   }
 
   const totalProducts = priceStats.reduce((sum, s) => sum + (Number(s.product_count) || 0), 0);
@@ -93,17 +95,17 @@ export default function Home() {
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/80 backdrop-blur-sm border border-cream-200 mb-3 text-xs">
               <Sparkles className="w-3 h-3 text-saffron-500" />
               <span className="font-medium text-charcoal-700">
-                Live prices from {totalCountries} countries
+                {t('home.liveFrom', { count: totalCountries })}
               </span>
             </div>
 
             <h1 className="text-2xl md:text-3xl font-display font-bold text-charcoal-900 leading-tight">
-              Discover Where{' '}
-              <span className="text-gradient-warm">Life Costs Less</span>
+              {t('home.title')}{' '}
+              <span className="text-gradient-warm">{t('home.titleHighlight')}</span>
             </h1>
 
             <p className="mt-1.5 text-sm text-charcoal-600 max-w-lg">
-              Compare grocery prices across borders and find the best deals.
+              {t('home.subtitle')}
             </p>
           </div>
 
@@ -115,7 +117,7 @@ export default function Home() {
               </div>
               <div>
                 <p className="text-lg font-display font-bold text-charcoal-900 leading-none">{totalCountries}</p>
-                <p className="text-xs text-charcoal-500">Countries</p>
+                <p className="text-xs text-charcoal-500">{t('common.countries')}</p>
               </div>
             </div>
 
@@ -125,7 +127,7 @@ export default function Home() {
               </div>
               <div>
                 <p className="text-lg font-display font-bold text-charcoal-900 leading-none">{totalProducts.toLocaleString()}</p>
-                <p className="text-xs text-charcoal-500">Products</p>
+                <p className="text-xs text-charcoal-500">{t('common.products')}</p>
               </div>
             </div>
           </div>
@@ -136,10 +138,10 @@ export default function Home() {
       <section className="card !p-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
           <h2 className="text-sm font-display font-semibold text-charcoal-900">
-            Select Countries
+            {t('home.selectCountries')}
           </h2>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cream-100 border border-cream-200 text-xs">
-            <span className="text-charcoal-600">Comparing</span>
+            <span className="text-charcoal-600">{t('home.comparing')}</span>
             <span className="w-5 h-5 rounded-full bg-terracotta-500 text-white flex items-center justify-center text-xs font-bold">
               {selectedCountries.length}
             </span>
@@ -179,7 +181,7 @@ export default function Home() {
       <section className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
           <h2 className="text-lg font-display font-bold text-charcoal-900">
-            Price Comparison
+            {t('home.priceComparison')}
           </h2>
 
           <div className="flex gap-2 w-full sm:w-auto">
@@ -193,10 +195,10 @@ export default function Home() {
                   : 'border-cream-200 bg-white/80 text-charcoal-600 hover:border-cream-300 hover:bg-cream-50'
                 }
               `}
-              title="When enabled, only show products available in ALL selected countries"
+              title={t('home.allCountries')}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">All countries</span>
+              <span className="hidden sm:inline">{t('home.allCountries')}</span>
               {showOnlyInAllCountries && <Check className="w-3 h-3" strokeWidth={3} />}
             </button>
 
@@ -205,7 +207,7 @@ export default function Home() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-charcoal-400" />
               <input
                 type="text"
-                placeholder="Search products..."
+                placeholder={t('home.searchProducts')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="input !py-2 !text-sm pl-9 sm:w-56"
@@ -216,7 +218,7 @@ export default function Home() {
               onClick={() => refetchComparison()}
               className="btn-secondary !py-2 !px-3"
               disabled={comparisonLoading}
-              title="Refresh"
+              title={t('common.refresh')}
             >
               <RefreshCw className={`h-4 w-4 ${comparisonLoading ? 'animate-spin' : ''}`} />
             </button>
@@ -232,8 +234,11 @@ export default function Home() {
 
         {comparisonData && (
           <p className="text-xs text-charcoal-500 text-center">
-            Showing <span className="font-semibold">{filteredProducts.length}</span> of{' '}
-            <span className="font-semibold">{comparisonData.total}</span> products
+            <Trans
+              i18nKey="home.showingProducts"
+              values={{ shown: filteredProducts.length, total: comparisonData.total }}
+              components={{ strong: <span className="font-semibold" /> }}
+            />
           </p>
         )}
 

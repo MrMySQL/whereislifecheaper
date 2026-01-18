@@ -1,9 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { LogOut, User, MapPin, Menu, X } from 'lucide-react';
 import { useState } from 'react';
+import LanguageSwitcher from '../common/LanguageSwitcher';
 
 export default function Header() {
+  const { t } = useTranslation();
   const { user, isAdmin, isAuthenticated, logout } = useAuth();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -34,15 +37,15 @@ export default function Header() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1">
             <Link to="/" className={navLinkClass('/')}>
-              Compare
+              {t('nav.compare')}
             </Link>
             {isAdmin && (
               <>
                 <Link to="/admin/mapping" className={navLinkClass('/admin/mapping')}>
-                  Mapping
+                  {t('nav.mapping')}
                 </Link>
                 <Link to="/admin/scrapers" className={navLinkClass('/admin/scrapers')}>
-                  Scrapers
+                  {t('nav.scrapers')}
                 </Link>
               </>
             )}
@@ -50,6 +53,7 @@ export default function Header() {
 
           {/* User Menu */}
           <div className="flex items-center gap-2">
+            <LanguageSwitcher />
             {isAuthenticated && (
               <div className="hidden sm:flex items-center gap-2">
                 <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-cream-50 border border-cream-200 text-xs">
@@ -63,12 +67,12 @@ export default function Header() {
                   <span className="font-medium text-charcoal-700 max-w-[80px] truncate">
                     {user?.name || user?.email}
                   </span>
-                  {isAdmin && <span className="badge-terracotta !text-[9px] !px-1 !py-0">Admin</span>}
+                  {isAdmin && <span className="badge-terracotta !text-[9px] !px-1 !py-0">{t('common.admin')}</span>}
                 </div>
                 <button
                   onClick={logout}
                   className="p-1.5 text-charcoal-400 hover:text-terracotta-600 hover:bg-terracotta-50 rounded-lg transition-colors"
-                  title="Logout"
+                  title={t('common.logout')}
                 >
                   <LogOut className="h-4 w-4" />
                 </button>
@@ -89,15 +93,15 @@ export default function Header() {
           <div className="md:hidden py-3 border-t border-cream-200">
             <nav className="flex flex-col gap-1">
               <Link to="/" className={navLinkClass('/')} onClick={() => setMobileMenuOpen(false)}>
-                Compare Prices
+                {t('nav.comparePrices')}
               </Link>
               {isAdmin && (
                 <>
                   <Link to="/admin/mapping" className={navLinkClass('/admin/mapping')} onClick={() => setMobileMenuOpen(false)}>
-                    Product Mapping
+                    {t('nav.productMapping')}
                   </Link>
                   <Link to="/admin/scrapers" className={navLinkClass('/admin/scrapers')} onClick={() => setMobileMenuOpen(false)}>
-                    Scrapers
+                    {t('nav.scrapers')}
                   </Link>
                 </>
               )}

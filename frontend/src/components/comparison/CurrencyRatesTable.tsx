@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { ArrowRightLeft, TrendingUp, Clock, RefreshCw, Database, Cloud, AlertCircle } from 'lucide-react';
 import { ratesApi } from '../../services/api';
 
@@ -112,6 +113,7 @@ interface CurrencyCardProps {
 }
 
 function CurrencyCard({ code, rate, index }: CurrencyCardProps) {
+  const { t } = useTranslation();
   const [isFlipped, setIsFlipped] = useState(false);
   const isEuro = code === 'EUR';
   const styles = currencyStyles[code] || currencyStyles.EUR;
@@ -161,7 +163,7 @@ function CurrencyCard({ code, rate, index }: CurrencyCardProps) {
                 opacity-0 group-hover:opacity-100 transition-opacity duration-300
                 hover:bg-white/90 ${styles.flipBtnHover}
               `}
-              title="Flip to see reverse rate"
+              title={t('currencyRates.flipTooltip')}
             >
               <ArrowRightLeft className={`w-3.5 h-3.5 ${styles.flipIcon}`} />
             </button>
@@ -175,7 +177,7 @@ function CurrencyCard({ code, rate, index }: CurrencyCardProps) {
           </span>
           {!isEuro && (
             <span className="text-xs text-charcoal-400">
-              {isFlipped ? 'per €1' : '→ EUR'}
+              {isFlipped ? t('currencyRates.perEuro') : t('currencyRates.toEur')}
             </span>
           )}
         </div>
@@ -184,7 +186,7 @@ function CurrencyCard({ code, rate, index }: CurrencyCardProps) {
         {isEuro ? (
           <div className="flex items-center gap-1.5">
             <span className={`text-xs font-medium ${styles.badge} px-2 py-0.5 rounded-full`}>
-              Base Currency
+              {t('currencyRates.baseCurrency')}
             </span>
           </div>
         ) : (
@@ -248,6 +250,7 @@ function LoadingSkeleton() {
 }
 
 export default function CurrencyRatesTable() {
+  const { t } = useTranslation();
   const { data: ratesData, isLoading, error } = useQuery({
     queryKey: ['exchangeRates'],
     queryFn: ratesApi.getRates,
@@ -307,13 +310,13 @@ export default function CurrencyRatesTable() {
             <TrendingUp className="w-4 h-4 text-saffron-700" />
           </div>
           <h2 className="font-display font-bold text-lg text-charcoal-900">
-            Exchange Rates
+            {t('currencyRates.exchangeRates')}
           </h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 ml-11">
           <p className="text-xs text-charcoal-500">
-            Rates used for price conversion to EUR
+            {t('currencyRates.ratesDescription')}
           </p>
           {ratesData && (
             <>
@@ -342,7 +345,7 @@ export default function CurrencyRatesTable() {
       {error && (
         <div className="text-center py-6 text-charcoal-500">
           <AlertCircle className="w-8 h-8 mx-auto mb-2 text-terracotta-400" />
-          <p className="text-sm">Failed to load exchange rates</p>
+          <p className="text-sm">{t('currencyRates.failedToLoad')}</p>
         </div>
       )}
 
@@ -365,9 +368,9 @@ export default function CurrencyRatesTable() {
       {/* Footer note */}
       <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-charcoal-400">
         <RefreshCw className="w-3 h-3" />
-        <span>Click cards to toggle rate direction</span>
+        <span>{t('currencyRates.clickToToggle')}</span>
         <span className="text-cream-400">|</span>
-        <span>Rates synced daily from ExchangeRate API</span>
+        <span>{t('currencyRates.ratesSyncedDaily')}</span>
       </div>
     </section>
   );
