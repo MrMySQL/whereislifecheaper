@@ -95,6 +95,7 @@ export interface CanonicalProductBasic {
   category_id: number | null;
   category_name: string | null;
   show_per_unit_price: boolean;
+  disabled: boolean;
   created_at: string;
   linked_products_count: number;
   countries_count: number;

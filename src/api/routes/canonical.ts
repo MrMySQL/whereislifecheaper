@@ -20,6 +20,7 @@ router.get('/', async (req, res, next) => {
         cp.category_id,
         c.name as category_name,
         cp.show_per_unit_price,
+        cp.disabled,
         cp.created_at,
         (
           SELECT COUNT(DISTINCT p.id)
@@ -137,15 +138,15 @@ router.put('/link', isAdmin, async (req, res, next) => {
 
 /**
  * PATCH /api/canonical/:id
- * Update a canonical product (e.g., toggle show_per_unit_price)
+ * Update a canonical product (e.g., toggle show_per_unit_price or disabled)
  * @requires Admin
  */
 router.patch('/:id', isAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { show_per_unit_price } = req.body;
+    const { show_per_unit_price, disabled } = req.body;
 
-    if (show_per_unit_price === undefined) {
+    if (show_per_unit_price === undefined && disabled === undefined) {
       res.status(400).json({
         error: 'Bad Request',
         message: 'No fields to update',
@@ -153,12 +154,29 @@ router.patch('/:id', isAdmin, async (req, res, next) => {
       return;
     }
 
+    // Build dynamic update query
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (show_per_unit_price !== undefined) {
+      updates.push(`show_per_unit_price = $${paramIndex++}`);
+      params.push(show_per_unit_price);
+    }
+
+    if (disabled !== undefined) {
+      updates.push(`disabled = $${paramIndex++}`);
+      params.push(disabled);
+    }
+
+    params.push(id);
+
     const result = await query(
       `UPDATE canonical_products
-       SET show_per_unit_price = $1
-       WHERE id = $2
+       SET ${updates.join(', ')}
+       WHERE id = $${paramIndex}
        RETURNING *`,
-      [show_per_unit_price, id]
+      params
     );
 
     if (result.rowCount === 0) {
@@ -223,13 +241,14 @@ router.get('/comparison', async (req, res, next) => {
         ORDER BY scraped_at DESC
         LIMIT 1
       ) pr ON true
+      WHERE (cp.disabled IS NOT TRUE)
     `;
 
     const params: any[] = [];
     let paramIndex = 1;
 
     if (search) {
-      sql += ` WHERE cp.name ILIKE $${paramIndex}`;
+      sql += ` AND cp.name ILIKE $${paramIndex}`;
       params.push(`%${search}%`);
       paramIndex++;
     }

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info } from 'lucide-react';
+import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info, EyeOff } from 'lucide-react';
 import { countriesApi, canonicalApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
 import type { Product, Country, CanonicalProductBasic } from '../../types';
@@ -91,10 +91,10 @@ export default function Mapping() {
     },
   });
 
-  // Update canonical product mutation (for show_per_unit_price toggle)
+  // Update canonical product mutation (for show_per_unit_price and disabled toggles)
   const updateMutation = useMutation({
-    mutationFn: ({ id, show_per_unit_price }: { id: number; show_per_unit_price: boolean }) =>
-      canonicalApi.update(id, { show_per_unit_price }),
+    mutationFn: ({ id, show_per_unit_price, disabled }: { id: number; show_per_unit_price?: boolean; disabled?: boolean }) =>
+      canonicalApi.update(id, { show_per_unit_price, disabled }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['canonical'] });
     },
@@ -203,15 +203,45 @@ export default function Mapping() {
                 filteredCanonicalForManage.map((cp: CanonicalProductBasic) => (
                   <div
                     key={cp.id}
-                    className="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-slate-300"
+                    className={`flex items-center justify-between p-3 rounded-lg border hover:border-slate-300 ${
+                      cp.disabled
+                        ? 'border-orange-200 bg-orange-50/50'
+                        : 'border-slate-200'
+                    }`}
                   >
-                    <div>
-                      <p className="font-medium text-slate-900 text-sm">{cp.name}</p>
+                    <div className={cp.disabled ? 'opacity-60' : ''}>
+                      <p className={`font-medium text-sm ${cp.disabled ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{cp.name}</p>
                       <p className="text-xs text-slate-500">
                         {cp.linked_products_count || 0} products • {cp.countries_count || 0} countries
+                        {cp.disabled && <span className="ml-2 text-orange-600">(hidden from comparison)</span>}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* Disabled toggle */}
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative group">
+                          <EyeOff className="h-3.5 w-3.5 text-slate-400 cursor-help" />
+                          <div className="absolute bottom-full right-0 mb-2 w-56 p-2 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                            When disabled, this product will not appear in the comparison table.
+                            <div className="absolute bottom-0 right-3 translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900" />
+                          </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={cp.disabled}
+                            onChange={(e) => {
+                              updateMutation.mutate({
+                                id: cp.id,
+                                disabled: e.target.checked,
+                              });
+                            }}
+                            disabled={updateMutation.isPending}
+                          />
+                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+                        </label>
+                      </div>
                       {/* Per-unit price toggle */}
                       <div className="flex items-center gap-1.5">
                         <div className="relative group">
