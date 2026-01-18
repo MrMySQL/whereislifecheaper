@@ -34,22 +34,24 @@ export default function Header() {
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-1">
-            <Link to="/" className={navLinkClass('/')}>
-              {t('nav.compare')}
-            </Link>
-            {isAdmin && (
-              <>
-                <Link to="/admin/mapping" className={navLinkClass('/admin/mapping')}>
-                  {t('nav.mapping')}
-                </Link>
-                <Link to="/admin/scrapers" className={navLinkClass('/admin/scrapers')}>
-                  {t('nav.scrapers')}
-                </Link>
-              </>
-            )}
-          </nav>
+          {/* Desktop Navigation - only for authenticated users */}
+          {isAuthenticated && (
+            <nav className="hidden md:flex items-center gap-1">
+              <Link to="/" className={navLinkClass('/')}>
+                {t('nav.compare')}
+              </Link>
+              {isAdmin && (
+                <>
+                  <Link to="/admin/mapping" className={navLinkClass('/admin/mapping')}>
+                    {t('nav.mapping')}
+                  </Link>
+                  <Link to="/admin/scrapers" className={navLinkClass('/admin/scrapers')}>
+                    {t('nav.scrapers')}
+                  </Link>
+                </>
+              )}
+            </nav>
+          )}
 
           {/* User Menu */}
           <div className="flex items-center gap-2">
@@ -78,18 +80,19 @@ export default function Header() {
                 </button>
               </div>
             )}
-
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-1.5 text-charcoal-600 hover:bg-cream-100 rounded-lg"
-            >
-              {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            </button>
+            {isAuthenticated && (
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-1.5 text-charcoal-600 hover:bg-cream-100 rounded-lg"
+              >
+                {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Mobile Navigation */}
-        {mobileMenuOpen && (
+        {/* Mobile Navigation - only for authenticated users */}
+        {isAuthenticated && mobileMenuOpen && (
           <div className="md:hidden py-3 border-t border-cream-200">
             <nav className="flex flex-col gap-1">
               <Link to="/" className={navLinkClass('/')} onClick={() => setMobileMenuOpen(false)}>
