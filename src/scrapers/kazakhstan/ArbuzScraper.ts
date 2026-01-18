@@ -265,12 +265,16 @@ export class ArbuzScraper extends BaseScraper {
           ? item.uri
           : `${this.config.baseUrl}${item.uri}`;
 
-        // Build image URL
-        const imageUrl = item.image?.startsWith('http')
-          ? item.image
-          : item.image
-            ? `${this.config.baseUrl}${item.image}`
-            : undefined;
+        // Build image URL with proper dimensions (replace %w and %h placeholders)
+        let imageUrl: string | undefined;
+        if (item.image) {
+          const processedImage = item.image
+            .replace(/%w/g, '200')
+            .replace(/%h/g, '200');
+          imageUrl = processedImage.startsWith('http')
+            ? processedImage
+            : `${this.config.baseUrl}${processedImage}`;
+        }
 
         const product: ProductData = {
           name: item.name,
