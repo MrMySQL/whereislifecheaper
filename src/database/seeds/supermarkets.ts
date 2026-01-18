@@ -127,6 +127,14 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'ArbuzScraper',
     is_active: true,
   },
+  // Germany
+  {
+    country_code: 'DE',
+    name: 'Kaufland',
+    website_url: 'https://www.kaufland.de',
+    scraper_class: 'KauflandScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {

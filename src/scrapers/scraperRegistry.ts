@@ -7,6 +7,7 @@ import { AuchanUaScraper, auchanUaConfig, auchanUaCategories } from './ukraine/A
 import { AuchanUaGraphQLScraper, auchanUaGraphQLConfig, auchanUaGraphQLCategories } from './ukraine/AuchanUaGraphQLScraper';
 import { MakroScraper, makroConfig, makroCategories } from './uzbekistan/MakroScraper';
 import { ArbuzScraper, arbuzConfig, arbuzCategories } from './kazakhstan/ArbuzScraper';
+import { KauflandScraper, kauflandConfig, kauflandCategories } from './germany/KauflandScraper';
 
 /**
  * Scraper registration entry containing all metadata for a scraper
@@ -93,6 +94,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: ArbuzScraper,
       defaultConfig: arbuzConfig,
       categories: arbuzCategories,
+    },
+  ],
+  [
+    'KauflandScraper',
+    {
+      className: 'KauflandScraper',
+      scraperClass: KauflandScraper,
+      defaultConfig: kauflandConfig,
+      categories: kauflandCategories,
     },
   ],
 ]);
