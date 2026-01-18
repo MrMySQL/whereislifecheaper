@@ -132,7 +132,7 @@ export class ReweScraper extends BaseScraper {
 
     // Launch with persistent context for session management
     this.browserContext = await chromium.launchPersistentContext(sessionDir, {
-      // headless: false, // Headed mode is more reliable for Cloudflare bypass
+      headless: false, // Headed mode is more reliable for Cloudflare bypass
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -161,6 +161,114 @@ export class ReweScraper extends BaseScraper {
   }
 
   /**
+   * Attempt to solve Cloudflare Turnstile challenge by clicking the checkbox
+   * Returns true if challenge was solved, false otherwise
+   */
+  private async solveCloudflareChallenge(): Promise<boolean> {
+    if (!this.page) return false;
+
+    const maxAttempts = 3;
+    const waitBetweenAttempts = 5000;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      scraperLogger.info(`Cloudflare solve attempt ${attempt}/${maxAttempts}...`);
+
+      try {
+        // Wait for the page to stabilize
+        await this.page.waitForTimeout(2000);
+
+        // Look for Turnstile iframe
+        const turnstileSelectors = [
+          'iframe[src*="challenges.cloudflare.com"]',
+          'iframe[src*="turnstile"]',
+          'iframe[title*="challenge"]',
+          '#turnstile-wrapper iframe',
+          '.cf-turnstile iframe',
+        ];
+
+        let iframe = null;
+        for (const selector of turnstileSelectors) {
+          iframe = await this.page.$(selector);
+          if (iframe) {
+            scraperLogger.debug(`Found Turnstile iframe with selector: ${selector}`);
+            break;
+          }
+        }
+
+        if (iframe) {
+          // Get the iframe's content frame
+          const frame = await iframe.contentFrame();
+          if (frame) {
+            scraperLogger.info('Found Cloudflare Turnstile iframe, attempting to click checkbox...');
+
+            // Look for the checkbox inside the iframe
+            const checkboxSelectors = [
+              'input[type="checkbox"]',
+              '.ctp-checkbox-label',
+              '#challenge-stage input',
+              'label',
+            ];
+
+            for (const selector of checkboxSelectors) {
+              try {
+                const checkbox = await frame.$(selector);
+                if (checkbox) {
+                  // Move mouse naturally before clicking
+                  const box = await checkbox.boundingBox();
+                  if (box) {
+                    // Random offset within the element for more human-like click
+                    const x = box.x + box.width / 2 + (Math.random() - 0.5) * 10;
+                    const y = box.y + box.height / 2 + (Math.random() - 0.5) * 10;
+                    await this.page.mouse.move(x, y, { steps: 10 });
+                    await this.page.waitForTimeout(100 + Math.random() * 200);
+                  }
+                  await checkbox.click();
+                  scraperLogger.info('Clicked Turnstile checkbox');
+                  break;
+                }
+              } catch {
+                // Continue trying other selectors
+              }
+            }
+          }
+        } else {
+          // No iframe found - maybe it's a different type of challenge or auto-solving
+          scraperLogger.debug('No Turnstile iframe found, challenge may auto-solve');
+        }
+
+        // Wait for challenge to complete
+        await this.page.waitForTimeout(waitBetweenAttempts);
+
+        // Check if we're past the challenge
+        const newTitle = await this.page.title();
+        if (!newTitle.toLowerCase().includes('moment')) {
+          scraperLogger.info('Cloudflare challenge solved successfully!');
+          return true;
+        }
+
+        // Also check if the page URL changed (redirect after solving)
+        const currentUrl = this.page.url();
+        if (currentUrl.includes('/shop/') && !currentUrl.includes('challenge')) {
+          scraperLogger.info('Cloudflare challenge solved (URL redirect detected)!');
+          return true;
+        }
+
+      } catch (error) {
+        scraperLogger.debug(`Cloudflare solve attempt ${attempt} failed:`, error);
+      }
+
+      // Wait before next attempt
+      if (attempt < maxAttempts) {
+        scraperLogger.info(`Waiting before next attempt...`);
+        await this.page.waitForTimeout(waitBetweenAttempts);
+      }
+    }
+
+    scraperLogger.warn('Could not solve Cloudflare challenge after all attempts');
+    return false;
+  }
+
+  /**
    * Select a delivery market by entering postal code
    * This enables actual prices to be displayed
    */
@@ -180,13 +288,12 @@ export class ReweScraper extends BaseScraper {
       // Handle cookie consent first
       await this.handleCookieConsent();
 
-      // Check for Cloudflare challenge
+      // Check for Cloudflare challenge and try to solve it
       const title = await this.page.title();
       if (title.toLowerCase().includes('moment')) {
-        scraperLogger.warn('Cloudflare challenge detected on shop page. Waiting...');
-        await this.page.waitForTimeout(5000);
-        const newTitle = await this.page.title();
-        if (newTitle.toLowerCase().includes('moment')) {
+        scraperLogger.warn('Cloudflare challenge detected on shop page. Attempting to solve...');
+        const solved = await this.solveCloudflareChallenge();
+        if (!solved) {
           scraperLogger.error('Could not bypass Cloudflare challenge');
           return;
         }

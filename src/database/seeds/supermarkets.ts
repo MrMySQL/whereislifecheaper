@@ -128,7 +128,7 @@ export const supermarketsData: SupermarketSeedData[] = [
     is_active: true,
   },
   // Germany
-  // NOTE: REWE requires PLAYWRIGHT_HEADLESS=false to bypass Cloudflare
+  // NOTE: REWE uses stealth mode (playwright-extra) to bypass Cloudflare
   {
     country_code: 'DE',
     name: 'REWE',
