@@ -137,7 +137,7 @@ export class ReweScraper extends BaseScraper {
 
     // Launch with persistent context for session management
     this.browserContext = await chromium.launchPersistentContext(sessionDir, {
-      headless: false, // Headed mode is more reliable for Cloudflare bypass
+      // headless: false, // Headed mode is more reliable for Cloudflare bypass
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -174,6 +174,16 @@ export class ReweScraper extends BaseScraper {
 
     const maxAttempts = 3;
     const waitBetweenAttempts = 5000;
+    const timestamp = Date.now();
+
+    // Take screenshot of the Cloudflare challenge page
+    try {
+      const screenshotPath = path.join('logs', `cloudflare-challenge-${timestamp}.png`);
+      await this.page.screenshot({ path: screenshotPath, fullPage: true });
+      scraperLogger.info(`Cloudflare challenge screenshot saved: ${screenshotPath}`);
+    } catch (e) {
+      scraperLogger.debug('Could not save challenge screenshot:', e);
+    }
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       scraperLogger.info(`Cloudflare solve attempt ${attempt}/${maxAttempts}...`);
@@ -243,6 +253,15 @@ export class ReweScraper extends BaseScraper {
 
         // Wait for challenge to complete
         await this.page.waitForTimeout(waitBetweenAttempts);
+
+        // Take screenshot after attempt
+        try {
+          const afterScreenshotPath = path.join('logs', `cloudflare-after-attempt-${timestamp}-${attempt}.png`);
+          await this.page.screenshot({ path: afterScreenshotPath, fullPage: true });
+          scraperLogger.info(`Post-attempt screenshot saved: ${afterScreenshotPath}`);
+        } catch (e) {
+          scraperLogger.debug('Could not save post-attempt screenshot:', e);
+        }
 
         // Check if we're past the challenge
         const newTitle = await this.page.title();
