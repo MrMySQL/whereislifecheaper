@@ -132,7 +132,7 @@ export class ReweScraper extends BaseScraper {
 
     // Launch with persistent context for session management
     this.browserContext = await chromium.launchPersistentContext(sessionDir, {
-      headless: false, // Headed mode is more reliable for Cloudflare bypass
+      // headless: false, // Headed mode is more reliable for Cloudflare bypass
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
