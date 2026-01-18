@@ -296,14 +296,14 @@ export class ReweScraper extends BaseScraper {
 
 
   /**
-   * Scrape a single category
+   * Scrape a single category with pagination support
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
     const products: ProductData[] = [];
 
     try {
-      const categoryUrl = `${this.BASE_URL}${category.url}`;
-      scraperLogger.info(`Scraping category: ${category.name} from ${categoryUrl}`);
+      const baseCategoryUrl = `${this.BASE_URL}${category.url}`;
+      scraperLogger.info(`Scraping category: ${category.name} from ${baseCategoryUrl}`);
 
       if (!this.page) return products;
 
@@ -312,14 +312,15 @@ export class ReweScraper extends BaseScraper {
         scraperLogger.warn('Market not selected - products may not have prices');
       }
 
-      scraperLogger.debug(`Navigating to ${categoryUrl}`);
-      await this.page.goto(categoryUrl, { waitUntil: 'domcontentloaded' });
+      // Navigate to first page
+      scraperLogger.debug(`Navigating to ${baseCategoryUrl}`);
+      await this.page.goto(baseCategoryUrl, { waitUntil: 'domcontentloaded' });
       await this.waitForDynamicContent();
 
       // Handle cookie consent if it appears again
       await this.handleCookieConsent();
 
-      // Check page title and URL
+      // Check page title
       const title = await this.page.title();
       scraperLogger.info(`Page title: ${title}`);
 
@@ -329,37 +330,71 @@ export class ReweScraper extends BaseScraper {
         return products;
       }
 
-      // Scroll to load more products (infinite scroll handling)
-      await this.loadAllProducts();
+      // Get total pages from pagination
+      const totalPages = await this.getTotalPages();
+      scraperLogger.info(`Category ${category.name}: Found ${totalPages} pages`);
 
-      // Extract products from the page
-      const pageProducts = await this.extractProductsFromPage();
+      // Scrape each page
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        try {
+          // Navigate to page (skip for first page as we're already there)
+          if (pageNum > 1) {
+            const pageUrl = `${baseCategoryUrl}?page=${pageNum}`;
+            scraperLogger.debug(`Navigating to page ${pageNum}: ${pageUrl}`);
+            await this.page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
+            await this.waitForDynamicContent();
 
-      // Count products with and without prices
-      const productsWithPrice = pageProducts.filter(p => p.price > 0).length;
-      const productsWithoutPrice = pageProducts.length - productsWithPrice;
+            // Check for Cloudflare on subsequent pages
+            const pageTitle = await this.page.title();
+            if (pageTitle.includes('moment') || pageTitle.includes('Moment')) {
+              scraperLogger.warn(`Cloudflare challenge on page ${pageNum}, stopping pagination`);
+              break;
+            }
+          }
 
-      scraperLogger.info(`Category ${category.name}: Found ${pageProducts.length} products (${productsWithPrice} with price, ${productsWithoutPrice} without price)`);
+          // Scroll to load lazy-loaded images
+          await this.loadAllProducts();
 
-      if (productsWithoutPrice > 0 && productsWithPrice === 0) {
-        scraperLogger.warn(`All products show location-dependent pricing. No market/delivery zone selected.`);
+          // Extract products from the page
+          const pageProducts = await this.extractProductsFromPage();
+
+          // Count products with and without prices
+          const productsWithPrice = pageProducts.filter(p => p.price > 0).length;
+          const productsWithoutPrice = pageProducts.length - productsWithPrice;
+
+          scraperLogger.info(`${category.name} page ${pageNum}/${totalPages}: Found ${pageProducts.length} products (${productsWithPrice} with price)`);
+
+          if (productsWithoutPrice > 0 && productsWithPrice === 0 && pageNum === 1) {
+            scraperLogger.warn(`All products show location-dependent pricing. No market/delivery zone selected.`);
+          }
+
+          // Parse products
+          const parsedProducts = this.parseProducts(pageProducts, category.name);
+
+          // Save products via callback
+          if (this.onPageScraped && parsedProducts.length > 0) {
+            const savedCount = await this.onPageScraped(parsedProducts, {
+              categoryId: category.id,
+              categoryName: category.name,
+              pageNumber: pageNum,
+              totalProductsOnPage: parsedProducts.length,
+            });
+            scraperLogger.info(`${category.name} page ${pageNum}: Saved ${savedCount}/${parsedProducts.length} products`);
+          }
+
+          products.push(...parsedProducts);
+
+          // Small delay between pages to avoid rate limiting
+          if (pageNum < totalPages) {
+            await this.page.waitForTimeout(1000);
+          }
+        } catch (pageError) {
+          scraperLogger.error(`Failed to scrape page ${pageNum} of ${category.name}:`, pageError);
+          // Continue to next page on error
+        }
       }
 
-      // Parse products
-      const parsedProducts = this.parseProducts(pageProducts, category.name);
-
-      // Save products via callback
-      if (this.onPageScraped && parsedProducts.length > 0) {
-        const savedCount = await this.onPageScraped(parsedProducts, {
-          categoryId: category.id,
-          categoryName: category.name,
-          pageNumber: 1,
-          totalProductsOnPage: parsedProducts.length,
-        });
-        scraperLogger.info(`${category.name}: Saved ${savedCount}/${parsedProducts.length} products`);
-      }
-
-      products.push(...parsedProducts);
+      scraperLogger.info(`Category ${category.name}: Total ${products.length} products scraped from ${totalPages} pages`);
     } catch (error) {
       this.logError(
         `Failed to scrape category ${category.name}`,
@@ -369,6 +404,75 @@ export class ReweScraper extends BaseScraper {
     }
 
     return products;
+  }
+
+  /**
+   * Get total number of pages from pagination
+   */
+  private async getTotalPages(): Promise<number> {
+    if (!this.page) return 1;
+
+    try {
+      const totalPages = await this.page.evaluate(() => {
+        // Look for pagination navigation
+        const paginationNav = document.querySelector('nav[aria-label*="Suchergebnisse"], nav ul[aria-label*="Suchergebnisse"]');
+        if (!paginationNav) {
+          // Try alternative: look for page number buttons/links
+          const pageLinks = document.querySelectorAll('a[href*="?page="]');
+          if (pageLinks.length === 0) return 1;
+
+          let maxPage = 1;
+          pageLinks.forEach(link => {
+            const href = link.getAttribute('href') || '';
+            const match = href.match(/[?&]page=(\d+)/);
+            if (match) {
+              const pageNum = parseInt(match[1], 10);
+              if (pageNum > maxPage) maxPage = pageNum;
+            }
+          });
+          return maxPage;
+        }
+
+        // Find all page number elements in pagination
+        const pageItems = paginationNav.querySelectorAll('li');
+        let maxPage = 1;
+
+        pageItems.forEach(item => {
+          // Check for page number in link or button
+          const link = item.querySelector('a[href*="?page="]');
+          if (link) {
+            const href = link.getAttribute('href') || '';
+            const match = href.match(/[?&]page=(\d+)/);
+            if (match) {
+              const pageNum = parseInt(match[1], 10);
+              if (pageNum > maxPage) maxPage = pageNum;
+            }
+          }
+
+          // Check for page number in button text
+          const button = item.querySelector('button');
+          if (button) {
+            const text = button.textContent?.trim() || '';
+            const pageNum = parseInt(text, 10);
+            if (!isNaN(pageNum) && pageNum > maxPage) maxPage = pageNum;
+          }
+
+          // Check for plain text page number
+          const text = item.textContent?.trim() || '';
+          if (/^\d+$/.test(text)) {
+            const pageNum = parseInt(text, 10);
+            if (pageNum > maxPage) maxPage = pageNum;
+          }
+        });
+
+        return maxPage;
+      });
+
+      return totalPages;
+    } catch (error) {
+      scraperLogger.debug('Could not determine total pages, defaulting to 1');
+      return 1;
+    }
   }
 
   /**
