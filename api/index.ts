@@ -17,6 +17,7 @@ import productsRouter from '../src/api/routes/products';
 import pricesRouter from '../src/api/routes/prices';
 import canonicalRouter from '../src/api/routes/canonical';
 import scraperRouter from '../src/api/routes/scraper';
+import ratesRouter from '../src/api/routes/rates';
 
 const app = express();
 
@@ -80,6 +81,7 @@ app.use('/api/products', productsRouter);
 app.use('/api/prices', pricesRouter);
 app.use('/api/scraper', scraperRouter);
 app.use('/api/canonical', canonicalRouter);
+app.use('/api/rates', ratesRouter);
 
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
