@@ -281,6 +281,11 @@ router.get('/comparison', async (req, res, next) => {
         canonical.products_by_country[countryCode] = [];
       }
 
+      // Skip products without prices (e.g., products whose prices were deleted during cleanup)
+      if (row.price == null) {
+        return;
+      }
+
       // Add product to the list
       canonical.products_by_country[countryCode].push({
         product_id: row.product_id,
@@ -306,6 +311,11 @@ router.get('/comparison', async (req, res, next) => {
       const usePerUnitPrice = canonical.show_per_unit_price;
 
       (Object.entries(canonical.products_by_country) as [string, any[]][]).forEach(([countryCode, products]) => {
+        // Skip countries with no products (all products may have been filtered due to missing prices)
+        if (products.length === 0) {
+          return;
+        }
+
         const productCount = products.length;
 
         // Calculate average price
