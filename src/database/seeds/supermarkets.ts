@@ -136,6 +136,14 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'ReweScraper',
     is_active: true,
   },
+  // Malaysia
+  {
+    country_code: 'MY',
+    name: "Lotus's",
+    website_url: 'https://www.lotuss.com.my',
+    scraper_class: 'LotussScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {

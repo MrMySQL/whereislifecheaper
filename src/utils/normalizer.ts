@@ -166,7 +166,8 @@ export function parsePrice(priceString: string): number | null {
   // Remove currency symbols, currency codes, and extra spaces
   let cleaned = priceString
     .replace(/[€$£¥₺₽]/g, '')           // Currency symbols
-    .replace(/\b(TL|TRY|EUR|USD|GBP|RUB|UZS)\b/gi, '')  // Currency codes
+    .replace(/\bRM\b/gi, '')             // Malaysian Ringgit symbol
+    .replace(/\b(TL|TRY|EUR|USD|GBP|RUB|UZS|MYR)\b/gi, '')  // Currency codes
     .replace(/\s/g, '')
     .trim();
 

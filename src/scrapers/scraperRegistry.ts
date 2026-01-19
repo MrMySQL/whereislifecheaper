@@ -8,6 +8,7 @@ import { AuchanUaGraphQLScraper, auchanUaGraphQLConfig, auchanUaGraphQLCategorie
 import { MakroScraper, makroConfig, makroCategories } from './uzbekistan/MakroScraper';
 import { ArbuzScraper, arbuzConfig, arbuzCategories } from './kazakhstan/ArbuzScraper';
 import { ReweScraper, reweConfig, reweCategories } from './germany/ReweScraper';
+import { LotussScraper, lotussConfig, lotussCategories } from './malaysia/LotussScraper';
 
 /**
  * Scraper registration entry containing all metadata for a scraper
@@ -103,6 +104,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: ReweScraper,
       defaultConfig: reweConfig,
       categories: reweCategories,
+    },
+  ],
+  [
+    'LotussScraper',
+    {
+      className: 'LotussScraper',
+      scraperClass: LotussScraper,
+      defaultConfig: lotussConfig,
+      categories: lotussCategories,
     },
   ],
 ]);
