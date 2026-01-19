@@ -303,6 +303,7 @@ router.get('/comparison', async (req, res, next) => {
     // Second pass: calculate averages and build final prices_by_country
     canonicalMap.forEach((canonical) => {
       const pricesByCountry: Record<string, any> = {};
+      const usePerUnitPrice = canonical.show_per_unit_price;
 
       (Object.entries(canonical.products_by_country) as [string, any[]][]).forEach(([countryCode, products]) => {
         const productCount = products.length;
@@ -327,7 +328,8 @@ router.get('/comparison', async (req, res, next) => {
           unit: firstProduct.unit,
           unit_quantity: firstProduct.unit_quantity,
           image_url: firstProduct.image_url,
-          price: avgPrice,
+          // Use price_per_unit average when show_per_unit_price is enabled
+          price: (usePerUnitPrice && avgPricePerUnit != null) ? avgPricePerUnit : avgPrice,
           price_per_unit: avgPricePerUnit,
           currency: firstProduct.currency,
           original_price: firstProduct.original_price,
