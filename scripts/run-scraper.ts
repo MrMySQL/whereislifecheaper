@@ -8,8 +8,9 @@ import { closePool } from '../src/config/database';
  * Usage (use -- to pass flags to script):
  *   npm run scraper:run                                   # Run all active scrapers (3 parallel)
  *   npm run scraper:run -- --concurrency=5               # Run all with custom concurrency
- *   npm run scraper:run -- <name|id>                     # Run specific scraper by name or ID
- *   npm run scraper:run -- voli                          # Run Voli scraper (all categories)
+ *   npm run scraper:run -- <name|id|class>               # Run specific scraper by name, ID, or class
+ *   npm run scraper:run -- voli                          # Run Voli scraper (by name)
+ *   npm run scraper:run -- MakroScraper                  # Run Makro scraper (by class name)
  *   npm run scraper:run -- voli --categories=75,76,77    # Run Voli with specific categories
  *   npm run scraper:run -- voli --list-categories        # List available categories for Voli
  *   npm run scraper:run -- voli -l                       # Short form for --list-categories
@@ -53,20 +54,30 @@ async function main() {
       let supermarketId = identifier;
 
       if (!identifier.match(/^[0-9a-f-]{36}$/i)) {
-        // Not a UUID, try to find by name
-        const result = await query<{ id: string }>(
-          `SELECT id FROM supermarkets
+        // Not a UUID, try to find by name or scraper_class
+        const result = await query<{ id: string; name: string }>(
+          `SELECT id, name FROM supermarkets
            WHERE LOWER(name) = LOWER($1)
+              OR LOWER(scraper_class) = LOWER($1)
            LIMIT 1`,
           [identifier]
         );
 
         if (result.rows.length === 0) {
           console.error(`Supermarket not found: ${identifier}`);
+          console.error(`\nAvailable supermarkets:`);
+          const all = await query<{ name: string; scraper_class: string; is_active: boolean }>(
+            `SELECT name, scraper_class, is_active FROM supermarkets ORDER BY name`
+          );
+          all.rows.forEach(s => {
+            const status = s.is_active ? '✓' : '✗';
+            console.error(`  ${status} ${s.name.padEnd(20)} (${s.scraper_class})`);
+          });
           process.exit(1);
         }
 
         supermarketId = result.rows[0].id;
+        scraperLogger.info(`Found supermarket: ${result.rows[0].name}`);
       }
 
       // Handle --list-categories flag
