@@ -23,7 +23,9 @@
       "mcp__plugin_context7_context7__resolve-library-id",
       "mcp__plugin_context7_context7__query-docs",
       "WebFetch(domain:github.com)",
-      "Bash(npx ts-node:*)"
+      "Bash(npx ts-node:*)",
+      "WebFetch(domain:www.lotuss.com.my)",
+      "Bash(npm run scraper:test:*)"
     ]
   }
 }
