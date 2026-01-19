@@ -139,9 +139,9 @@ export const supermarketsData: SupermarketSeedData[] = [
   // Malaysia
   {
     country_code: 'MY',
-    name: "Lotus's",
+    name: "Lotuss",
     website_url: 'https://www.lotuss.com.my',
-    scraper_class: 'LotussScraper',
+    scraper_class: 'LotussApiScraper',
     is_active: true,
   },
 ];
