@@ -825,7 +825,17 @@ export class ReweScraper extends BaseScraper {
           continue;
         }
 
-        const { unit, unitQuantity } = this.parseUnit(item.grammage);
+        let { unit, unitQuantity } = this.parseUnit(item.grammage);
+
+        // Fallback: If unit is "pieces", try to extract weight from product name
+        if (unit === 'pieces') {
+          const weightFromName = this.parseWeightFromName(item.name);
+          if (weightFromName && weightFromName.unit && weightFromName.unitQuantity) {
+            unit = weightFromName.unit;
+            unitQuantity = weightFromName.unitQuantity;
+            scraperLogger.debug(`Extracted weight from name for "${item.name}": ${unitQuantity} ${unit}`);
+          }
+        }
 
         const product: ProductData = {
           name: item.name,
@@ -920,6 +930,32 @@ export class ReweScraper extends BaseScraper {
       default:
         return { unit: unitType, unitQuantity: quantity };
     }
+  }
+
+  /**
+   * Parse weight from product name as fallback when unit is "pieces"
+   * German weight patterns: "500g", "1kg", "1,5kg", "250ml", "1l"
+   */
+  private parseWeightFromName(name: string): { unit?: string; unitQuantity?: number } | null {
+    if (!name) return null;
+
+    const normalized = name.toLowerCase();
+
+    // Pattern: number with optional decimal (comma or dot) + unit
+    // Word boundary to avoid matching partial strings
+    const weightPattern = /\b(\d+[,.]?\d*)\s*(kg|g|ml|l)\b/i;
+    const match = normalized.match(weightPattern);
+
+    if (match) {
+      const quantity = parseFloat(match[1].replace(',', '.'));
+      const unitType = match[2].toLowerCase();
+
+      if (isNaN(quantity) || quantity <= 0) return null;
+
+      return this.normalizeUnit(unitType, quantity);
+    }
+
+    return null;
   }
 
   /**
