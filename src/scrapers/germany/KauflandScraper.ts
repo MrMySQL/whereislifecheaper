@@ -4,6 +4,7 @@ import { scraperLogger } from '../../utils/logger';
 import { sleep } from '../../utils/retry';
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
+import topUserAgents from 'top-user-agents';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -48,10 +49,6 @@ export const kauflandConfig: Partial<ScraperConfig> = {
   },
   maxRetries: 3,
   concurrentPages: 1,
-  userAgents: [
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  ],
 };
 
 /**
@@ -70,47 +67,59 @@ interface KauflandProductData {
 
 /**
  * Scraper for Kaufland Germany (kaufland.de)
- * Uses Playwright browser automation to bypass Cloudflare protection
- * Extracts products from DOM/embedded data on category pages
  *
- * NOTE: Kaufland.de uses Cloudflare Turnstile protection which is difficult
- * to bypass in headless mode. For best results:
- * 1. Run with PLAYWRIGHT_HEADLESS=false to allow manual Turnstile solving
- * 2. Or use a residential proxy service
- * 3. Or wait for the Turnstile to auto-solve (may work on some IPs)
+ * This scraper uses playwright-extra with stealth plugin to bypass Cloudflare:
+ * 1. Launches browser with stealth mode and persistent session
+ * 2. Uses top-user-agents for realistic user agent rotation
+ * 3. Uses headed mode (headless: false) for better Cloudflare bypass
+ * 4. Handles Cloudflare Turnstile challenge automatically
+ *
+ * STEALTH MODE FEATURES:
+ * - Uses playwright-extra with puppeteer-extra-plugin-stealth
+ * - Persistent browser context to maintain cookies/session
+ * - Randomized viewport and realistic fingerprinting
+ * - German locale and timezone settings
  */
 export class KauflandScraper extends BaseScraper {
+  private browserContext: Awaited<ReturnType<typeof chromium.launchPersistentContext>> | null = null;
+
   constructor(config: ScraperConfig) {
     super(config);
   }
 
   /**
-   * Initialize the scraper with browser using enhanced stealth settings
+   * Initialize the scraper with stealth browser
    * Navigate to main page to establish session and pass Cloudflare
    */
   async initialize(): Promise<void> {
-    scraperLogger.info('Initializing Kaufland scraper...');
+    scraperLogger.info('Initializing Kaufland scraper with stealth mode...');
     this.startTime = Date.now();
 
     await this.launchStealthBrowser();
 
     // Navigate to main page to establish session
     scraperLogger.info('Navigating to Kaufland homepage to establish session...');
-    await this.page!.goto(this.config.baseUrl, { waitUntil: 'domcontentloaded' });
-    await this.waitForDynamicContent();
+    await this.page!.goto(this.config.baseUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await this.page!.waitForTimeout(2000);
 
-    // Handle Cloudflare challenge and cookie consent
-    await this.handleAntiBot();
+    // Handle cookie consent first
     await this.handleCookieConsent();
+
+    // Check for Cloudflare challenge and try to solve it
+    const title = await this.page!.title();
+    if (this.isCloudflareChallenge(title)) {
+      scraperLogger.warn('Cloudflare challenge detected on homepage. Attempting to solve...');
+      const solved = await this.solveCloudflareChallenge();
+      if (!solved) {
+        scraperLogger.error('Could not bypass Cloudflare challenge on homepage');
+      }
+    }
 
     scraperLogger.info('Kaufland scraper initialized');
   }
 
-  private browserContext: Awaited<ReturnType<typeof chromium.launchPersistentContext>> | null = null;
-
   /**
    * Launch browser with playwright-extra stealth plugin and persistent context
-   * Similar approach to ReweScraper for better Cloudflare bypass
    */
   private async launchStealthBrowser(): Promise<void> {
     scraperLogger.info('Launching stealth browser for Kaufland...');
@@ -122,8 +131,13 @@ export class KauflandScraper extends BaseScraper {
     const viewportWidth = 1920 + Math.floor(Math.random() * 100);
     const viewportHeight = 1080 + Math.floor(Math.random() * 50);
 
+    // Get a random user agent from the top user agents list
+    const userAgent = topUserAgents[Math.floor(Math.random() * Math.min(10, topUserAgents.length))];
+    scraperLogger.debug(`Using user agent: ${userAgent}`);
+
     // Launch with persistent context for session management
     this.browserContext = await chromium.launchPersistentContext(sessionDir, {
+      headless: false, // Headed mode is more reliable for Cloudflare bypass
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -132,7 +146,7 @@ export class KauflandScraper extends BaseScraper {
         '--start-maximized',
       ],
       viewport: { width: viewportWidth, height: viewportHeight },
-      userAgent: this.config.userAgents?.[0] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      userAgent,
       locale: 'de-DE',
       timezoneId: 'Europe/Berlin',
       permissions: ['geolocation'],
@@ -167,164 +181,128 @@ export class KauflandScraper extends BaseScraper {
   }
 
   /**
-   * Override handleAntiBot to wait for Cloudflare challenge to complete
-   */
-  protected async handleAntiBot(): Promise<void> {
-    if (!this.page) return;
-
-    // Check if we're on a Cloudflare challenge page
-    const title = await this.page.title();
-    if (this.isCloudflareChallenge(title)) {
-      scraperLogger.info(`Cloudflare challenge detected (title: "${title}"), attempting to solve...`);
-
-      // Try to click the Turnstile checkbox
-      await this.handleCloudflareTurnstile();
-
-      // Wait for the title to change (max 30 seconds)
-      const maxWaitTime = 30000;
-      const startTime = Date.now();
-
-      while (Date.now() - startTime < maxWaitTime) {
-        await sleep(2000);
-
-        const currentTitle = await this.page.title();
-        if (!this.isCloudflareChallenge(currentTitle)) {
-          scraperLogger.info(`Cloudflare challenge passed. New title: "${currentTitle}"`);
-          // Wait a bit more for page to fully load
-          await sleep(3000);
-          return;
-        }
-
-        // Try clicking the checkbox again
-        await this.handleCloudflareTurnstile();
-
-        scraperLogger.debug(`Still waiting for Cloudflare... (${Math.round((Date.now() - startTime) / 1000)}s)`);
-      }
-
-      scraperLogger.warn('Cloudflare challenge did not complete in time');
-      await this.takeScreenshot('cloudflare-timeout');
-    }
-
-    // Call parent's anti-bot handling for mouse movements etc.
-    await super.handleAntiBot();
-  }
-
-  /**
    * Attempt to solve Cloudflare Turnstile challenge by clicking the checkbox
+   * Returns true if challenge was solved, false otherwise
    */
-  private async handleCloudflareTurnstile(): Promise<void> {
-    if (!this.page) return;
+  private async solveCloudflareChallenge(): Promise<boolean> {
+    if (!this.page) return false;
 
-    try {
-      // Try to find any checkbox element directly on the page
-      const checkboxSelectors = [
-        'input[type="checkbox"]',
-        '[role="checkbox"]',
-        '[class*="checkbox"]',
-        '[id*="checkbox"]',
-      ];
+    const maxAttempts = 3;
+    const waitBetweenAttempts = 5000;
 
-      for (const selector of checkboxSelectors) {
-        const checkbox = await this.page.$(selector);
-        if (checkbox) {
-          const isVisible = await checkbox.isVisible();
-          if (isVisible) {
-            scraperLogger.info(`Found visible checkbox with selector: ${selector}`);
-            await checkbox.click();
-            await sleep(3000);
-            return;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      scraperLogger.info(`Cloudflare solve attempt ${attempt}/${maxAttempts}...`);
+
+      try {
+        // Wait for the page to stabilize
+        await this.page.waitForTimeout(2000);
+
+        // Look for Turnstile iframe
+        const turnstileSelectors = [
+          'iframe[src*="challenges.cloudflare.com"]',
+          'iframe[src*="turnstile"]',
+          'iframe[title*="challenge"]',
+          '#turnstile-wrapper iframe',
+          '.cf-turnstile iframe',
+        ];
+
+        let iframe = null;
+        for (const selector of turnstileSelectors) {
+          iframe = await this.page.$(selector);
+          if (iframe) {
+            scraperLogger.debug(`Found Turnstile iframe with selector: ${selector}`);
+            break;
           }
         }
-      }
 
-      // Try to find the Turnstile iframe
-      const iframeSelectors = [
-        'iframe[src*="challenges.cloudflare.com"]',
-        'iframe[src*="turnstile"]',
-        'iframe[src*="cf-chl"]',
-        'iframe[title*="challenge"]',
-        'iframe[title*="Widget"]',
-        'iframe', // Any iframe
-      ];
+        if (iframe) {
+          // Get the iframe's content frame
+          const frame = await iframe.contentFrame();
+          if (frame) {
+            scraperLogger.info('Found Cloudflare Turnstile iframe, attempting to click checkbox...');
 
-      for (const selector of iframeSelectors) {
-        const turnstileIframe = await this.page.$(selector);
-        if (turnstileIframe) {
-          const box = await turnstileIframe.boundingBox();
-          if (box && box.width > 50 && box.height > 20) {
-            scraperLogger.info(`Found iframe matching ${selector}, clicking inside...`);
+            // Look for the checkbox inside the iframe
+            const checkboxSelectors = [
+              'input[type="checkbox"]',
+              '.ctp-checkbox-label',
+              '#challenge-stage input',
+              'label',
+            ];
 
-            // Click near the left side where checkbox would be
-            const clickX = box.x + 30;
-            const clickY = box.y + box.height / 2;
-
-            // Human-like movement
-            await this.page.mouse.move(clickX - 30, clickY - 20);
-            await sleep(100);
-            await this.page.mouse.move(clickX, clickY);
-            await sleep(100);
-            await this.page.mouse.click(clickX, clickY);
-            await sleep(3000);
-            return;
+            for (const selector of checkboxSelectors) {
+              try {
+                const checkbox = await frame.$(selector);
+                if (checkbox) {
+                  // Move mouse naturally before clicking
+                  const box = await checkbox.boundingBox();
+                  if (box) {
+                    // Random offset within the element for more human-like click
+                    const x = box.x + box.width / 2 + (Math.random() - 0.5) * 10;
+                    const y = box.y + box.height / 2 + (Math.random() - 0.5) * 10;
+                    await this.page.mouse.move(x, y, { steps: 10 });
+                    await this.page.waitForTimeout(100 + Math.random() * 200);
+                  }
+                  await checkbox.click();
+                  scraperLogger.info('Clicked Turnstile checkbox');
+                  break;
+                }
+              } catch {
+                // Continue trying other selectors
+              }
+            }
+          }
+        } else {
+          // No iframe found - try clicking the captcha-box directly (Kaufland specific)
+          const captchaBox = await this.page.$('.captcha-box');
+          if (captchaBox) {
+            scraperLogger.info('Found captcha-box, attempting to click...');
+            const box = await captchaBox.boundingBox();
+            if (box) {
+              const x = box.x + 30; // Click near the left where checkbox is
+              const y = box.y + box.height / 2;
+              await this.page.mouse.move(x, y, { steps: 10 });
+              await this.page.waitForTimeout(100 + Math.random() * 200);
+              await this.page.mouse.click(x, y);
+              scraperLogger.info('Clicked captcha-box');
+            }
+          } else {
+            scraperLogger.debug('No Turnstile iframe or captcha-box found, challenge may auto-solve');
           }
         }
-      }
 
-      // Look for Turnstile container elements (including Kaufland-specific classes)
-      const containerSelectors = [
-        '.captcha-box',     // Found in Kaufland's Cloudflare page
-        '[class*="captcha"]',
-        '[class*="cf-turnstile"]',
-        '[id*="turnstile"]',
-        '[class*="challenge-container"]',
-        // Specific to Kaufland's Cloudflare page
-        'div[style*="border-radius"][style*="box-shadow"]',
-      ];
+        // Wait for challenge to complete
+        await this.page.waitForTimeout(waitBetweenAttempts);
 
-      for (const selector of containerSelectors) {
-        const element = await this.page.$(selector);
-        if (element) {
-          const box = await element.boundingBox();
-          if (box && box.width > 100 && box.height > 30) {
-            scraperLogger.info(`Found Turnstile container: ${selector}`);
-            const clickX = box.x + 30;
-            const clickY = box.y + box.height / 2;
-            await this.page.mouse.click(clickX, clickY);
-            await sleep(3000);
-            return;
+        // Check if we're past the challenge
+        const newTitle = await this.page.title();
+        if (!this.isCloudflareChallenge(newTitle)) {
+          scraperLogger.info('Cloudflare challenge solved successfully!');
+          return true;
+        }
+
+        // Also check if the page URL changed (redirect after solving)
+        const currentUrl = this.page.url();
+        if (!currentUrl.includes('challenge')) {
+          const pageContent = await this.page.content();
+          if (pageContent.includes('product') || pageContent.includes('Produkt')) {
+            scraperLogger.info('Cloudflare challenge solved (content detected)!');
+            return true;
           }
         }
+
+      } catch (error) {
+        scraperLogger.debug(`Cloudflare solve attempt ${attempt} failed:`, error);
       }
 
-      // Last resort: try clicking at the approximate location of the checkbox
-      // Based on the Kaufland Cloudflare screenshot, the checkbox is in the upper portion
-      // of the page, centered horizontally in a verification widget
-      const viewport = this.page.viewportSize();
-      if (viewport) {
-        // The checkbox appears to be:
-        // - Horizontally: left edge of the centered verification widget (around 1/3 from left)
-        // - Vertically: in the upper quarter of the page
-        const checkboxX = 635;  // Left portion of the centered widget
-        const checkboxY = 267;  // Upper portion where checkbox appears
-
-        scraperLogger.debug(`Attempting blind click at Turnstile checkbox (${checkboxX}, ${checkboxY})`);
-
-        // Human-like mouse movement to the checkbox
-        await this.page.mouse.move(checkboxX - 50, checkboxY - 30);
-        await sleep(80 + Math.random() * 100);
-        await this.page.mouse.move(checkboxX - 20, checkboxY - 10);
-        await sleep(50 + Math.random() * 80);
-        await this.page.mouse.move(checkboxX, checkboxY);
-        await sleep(100 + Math.random() * 150);
-
-        // Click with slight randomization
-        await this.page.mouse.click(checkboxX + Math.random() * 10, checkboxY + Math.random() * 5);
-        await sleep(3000);
+      // Wait before next attempt
+      if (attempt < maxAttempts) {
+        scraperLogger.info('Waiting before next attempt...');
+        await this.page.waitForTimeout(waitBetweenAttempts);
       }
-
-    } catch (error) {
-      scraperLogger.debug('Failed to interact with Turnstile:', error);
     }
+
+    scraperLogger.warn('Could not solve Cloudflare challenge after all attempts');
+    return false;
   }
 
   /**
@@ -334,32 +312,34 @@ export class KauflandScraper extends BaseScraper {
     if (!this.page) return;
 
     try {
-      // Common cookie consent button selectors
-      const consentSelectors = [
-        '[data-testid="cookie-consent-accept"]',
+      // Wait a bit for cookie banner to appear
+      await this.page.waitForTimeout(1000);
+
+      const cookieButtonSelectors = [
         '#onetrust-accept-btn-handler',
-        '[id*="accept"][id*="cookie"]',
-        'button[class*="cookie"][class*="accept"]',
-        '[aria-label*="accept"][aria-label*="cookie"]',
+        '[data-testid="cookie-consent-accept"]',
         'button:has-text("Alle akzeptieren")',
         'button:has-text("Akzeptieren")',
+        'button:has-text("Alle annehmen")',
+        '[id*="accept"][id*="cookie"]',
+        'button[class*="cookie"][class*="accept"]',
       ];
 
-      for (const selector of consentSelectors) {
+      for (const selector of cookieButtonSelectors) {
         try {
-          const button = await this.page.$(selector);
-          if (button) {
-            await button.click();
-            scraperLogger.info('Cookie consent accepted');
-            await sleep(1000);
+          const cookieButton = await this.page.$(selector);
+          if (cookieButton) {
+            await cookieButton.click();
+            scraperLogger.debug('Cookie consent accepted');
+            await this.page.waitForTimeout(500);
             break;
           }
         } catch {
-          // Continue to next selector
+          // Continue trying other selectors
         }
       }
     } catch (error) {
-      scraperLogger.debug('No cookie consent dialog found or already accepted');
+      scraperLogger.debug('No cookie consent dialog found or already dismissed');
     }
   }
 
@@ -383,7 +363,24 @@ export class KauflandScraper extends BaseScraper {
 
         await this.navigateToUrl(pageUrl);
         await this.waitForDynamicContent();
-        await this.handleAntiBot();
+
+        // Handle cookie consent if it appears again
+        await this.handleCookieConsent();
+
+        // Check for Cloudflare challenge
+        let title = await this.page!.title();
+        if (this.isCloudflareChallenge(title)) {
+          scraperLogger.warn(`Cloudflare challenge detected on ${category.name} page ${currentPage}, attempting to solve...`);
+          const solved = await this.solveCloudflareChallenge();
+          if (!solved) {
+            scraperLogger.error(`Could not solve Cloudflare challenge for ${category.name}, skipping`);
+            hasMorePages = false;
+            continue;
+          }
+          title = await this.page!.title();
+        }
+
+        scraperLogger.info(`Page ${currentPage} loaded - Title: "${title}"`);
 
         // Extract products from the page
         const pageProducts = await this.extractProductsFromPage(category);
@@ -438,16 +435,6 @@ export class KauflandScraper extends BaseScraper {
     const products: ProductData[] = [];
 
     try {
-      // Log page title for debugging Cloudflare issues
-      const title = await this.page.title();
-      if (this.isCloudflareChallenge(title)) {
-        scraperLogger.warn(`Still on Cloudflare challenge page: "${title}"`);
-        await this.takeScreenshot('kaufland-cloudflare-blocked');
-        return products;
-      }
-
-      scraperLogger.info(`Page loaded successfully - Title: "${title}"`);
-
       // Try to find products via embedded JSON data first (more reliable)
       const jsonProducts = await this.extractFromEmbeddedJson();
       if (jsonProducts.length > 0) {
@@ -699,8 +686,6 @@ export class KauflandScraper extends BaseScraper {
    * For DOM-based scraping, most details come from the list page
    */
   async scrapeProductDetails(url: string): Promise<ProductData> {
-    // For this implementation, product details are extracted from list pages
-    // This method could be expanded for individual product pages if needed
     throw new Error(`scrapeProductDetails not implemented. URL: ${url}`);
   }
 
