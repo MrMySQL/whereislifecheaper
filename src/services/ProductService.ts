@@ -21,6 +21,7 @@ export class ProductService {
 
     try {
       let productId: string | null = null;
+      let existingMappingId: string | null = null;
 
       // If we have an external_id, first check if a mapping already exists
       // This ensures product variants with different external_ids stay separate
@@ -28,6 +29,7 @@ export class ProductService {
         const existingMapping = await this.findMappingByExternalId(supermarketId, externalId);
         if (existingMapping) {
           productId = existingMapping.productId;
+          existingMappingId = existingMapping.mappingId;
           // Update the product name if it changed (e.g., packaging was added)
           await this.updateProductIfChanged(productId, {
             name: productData.name,
@@ -40,7 +42,9 @@ export class ProductService {
       }
 
       // If no existing mapping found by external_id, try to find by normalized name + brand
-      if (!productId) {
+      // BUT only if we don't have an external_id - products with external_ids from the same
+      // supermarket should NOT be merged by name, as they represent different variants
+      if (!productId && !externalId) {
         productId = await this.findProductByNameAndBrand(normalizedName, productData.brand);
       }
 
@@ -57,6 +61,11 @@ export class ProductService {
         });
 
         scraperLogger.debug(`Created new product: ${productData.name} (${productId})`);
+      }
+
+      // If we already found an existing mapping by external_id, just return it
+      if (existingMappingId) {
+        return existingMappingId;
       }
 
       // Create or update product mapping for this supermarket
