@@ -2,21 +2,13 @@ import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { scraperLogger } from '../../utils/logger';
 import { extractQuantity } from '../../utils/normalizer';
-import { BrowserContext, chromium } from 'playwright';
+import { BrowserContext } from 'playwright';
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
 /**
- * Lotus's API response types
+ * Lotus's API product type
  */
-interface LotussApiResponse {
-  status: { code: number; message: string };
-  meta: { total: number; offset: number; limit: number };
-  data: {
-    sort: string;
-    filters: any[];
-    products: LotussApiProduct[];
-  };
-}
-
 interface LotussApiProduct {
   id: number;
   sku: string;
@@ -63,24 +55,24 @@ interface LotussCategory {
 
 /**
  * Lotus's API categories - using urlKey for API calls
- * These match the actual category IDs from the Lotus's API
+ * IDs fetched from: https://api-o2o.lotuss.com.my/lotuss-mobile-bff/product/v1/categories/4?websiteCode=malaysia_hy
  */
 export const lotussApiCategories: CategoryConfig[] = [
   { id: '3189', name: 'Fresh Produce', url: 'fresh-produce' },
-  { id: '3399', name: 'Meat & Poultry', url: 'meat-poultry' },
+  { id: '5304', name: 'Meat & Poultry', url: 'meat-poultry' },
   { id: '23946', name: 'Chilled & Frozen', url: 'chilled-frozen' },
   { id: '6504', name: 'Bakery', url: 'bakery' },
   { id: '9405', name: 'Beverages', url: 'beverages' },
   { id: '2730', name: 'Grocery', url: 'grocery' },
   { id: '6003', name: 'Baby', url: 'baby' },
-  { id: '3300', name: 'Household', url: 'household' },
+  { id: '49146', name: 'Household', url: 'household' },
   { id: '5763', name: 'Health & Beauty', url: 'health-beauty' },
-  { id: '6195', name: 'Pets', url: 'pets' },
-  { id: '5820', name: 'Home & Gardening', url: 'home-gardening' },
-  { id: '5922', name: 'Appliances', url: 'appliances' },
+  { id: '5475', name: 'Pets', url: 'pets' },
+  { id: '5349', name: 'Home & Gardening', url: 'home-gardening' },
+  { id: '5868', name: 'Appliances', url: 'appliances' },
   { id: '5976', name: 'AV & Tech', url: 'av-tech' },
-  { id: '6138', name: 'Sports & Leisure', url: 'sports-leisure' },
-  { id: '6081', name: 'Office, Bags & Stationery', url: 'office-bags-stationery' },
+  { id: '5499', name: 'Sports & Leisure', url: 'sports-leisure' },
+  { id: '5370', name: 'Office, Bags & Stationery', url: 'office-bags-stationery' },
 ];
 
 /**
@@ -117,8 +109,9 @@ export const lotussApiConfig: Partial<ScraperConfig> = {
  */
 export class LotussApiScraper extends BaseScraper {
   private context: BrowserContext | null = null;
-  private readonly API_LIMIT = 50; // Products per API call
   private readonly WEBSITE_CODE = 'malaysia_hy';
+  private apiHeaders: Record<string, string> = {};
+  private capturedProducts: Map<string, LotussApiProduct[]> = new Map();
 
   constructor(config: ScraperConfig) {
     super(config);
@@ -131,10 +124,30 @@ export class LotussApiScraper extends BaseScraper {
     scraperLogger.info(`Initializing Lotus's API scraper...`);
     this.startTime = Date.now();
 
-    // Launch browser to establish session and get cookies
+    // Set up API headers
+    this.apiHeaders = {
+      'accept': 'application/json, text/plain, */*',
+      'accept-language': 'en',
+      'channel': 'web',
+      'version': '2.3.8',
+      'key': 'SeiRQmEDnaZXOlpfKhCjV4Bo2y6vAcW99QKmzifsgP2uCMN7wF3ahRXex84kH6qUVIWoY5Dp0GEljdAvS1JytOZcLbnBTr',
+    };
+
+    // Launch browser with stealth plugin to bypass bot detection
+    const isHeadless = process.env.PLAYWRIGHT_HEADLESS !== 'false';
+    scraperLogger.info(`Launching browser in ${isHeadless ? 'headless' : 'headed'} mode with stealth plugin`);
+
+    // Add stealth plugin to avoid bot detection
+    chromium.use(StealthPlugin());
+
     this.browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      headless: isHeadless,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-web-security',
+      ],
     });
 
     this.context = await this.browser.newContext({
@@ -144,162 +157,129 @@ export class LotussApiScraper extends BaseScraper {
 
     this.page = await this.context.newPage();
 
-    // Visit homepage to establish session
-    await this.page.goto('https://www.lotuss.com.my/en', {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000,
+    // Set up route interception to capture API responses
+    await this.page.route('**/lotuss-mobile-bff/product/v2/products**', async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+
+      if (body?.data?.products) {
+        // Extract category from the request URL
+        const url = route.request().url();
+        const queryMatch = url.match(/q=([^&]+)/);
+        if (queryMatch) {
+          const query = JSON.parse(decodeURIComponent(queryMatch[1]));
+          const categoryId = query?.filter?.categoryId?.[0] || 'unknown';
+
+          // Store captured products
+          const existing = this.capturedProducts.get(categoryId) || [];
+          this.capturedProducts.set(categoryId, [...existing, ...body.data.products]);
+          scraperLogger.debug(`Captured ${body.data.products.length} products for category ${categoryId}`);
+        }
+      }
+
+      await route.fulfill({ response });
     });
 
-    // Wait for page to be ready for API calls
-    await this.page.waitForTimeout(5000);
+    // Visit homepage first to establish session
+    await this.page.goto('https://www.lotuss.com.my/en', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+
+    await this.page.waitForTimeout(3000);
 
     scraperLogger.info(`Lotus's API scraper initialized`);
   }
 
   /**
-   * Scrape a single category using the API
+   * Scrape a single category by navigating to category pages and capturing API responses
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
-    const products: ProductData[] = [];
-    let offset = 0;
-    let hasMore = true;
-
-    scraperLogger.info(`Scraping category via API: ${category.name} (${category.url})`);
-
-    while (hasMore) {
-      try {
-        const apiProducts = await this.fetchProducts(category.url, offset);
-
-        if (!apiProducts || apiProducts.length === 0) {
-          hasMore = false;
-          continue;
-        }
-
-        // Convert API products to ProductData
-        const convertedProducts = apiProducts
-          .map(p => this.convertApiProduct(p, category.name))
-          .filter((p): p is ProductData => p !== null);
-
-        scraperLogger.info(
-          `${category.name}: Fetched ${apiProducts.length} products (offset: ${offset})`
-        );
-
-        // Save products via callback
-        if (this.onPageScraped && convertedProducts.length > 0) {
-          const pageNumber = Math.floor(offset / this.API_LIMIT) + 1;
-          const savedCount = await this.onPageScraped(convertedProducts, {
-            categoryId: category.id,
-            categoryName: category.name,
-            pageNumber,
-            totalProductsOnPage: convertedProducts.length,
-          });
-          scraperLogger.info(
-            `${category.name}: Saved ${savedCount}/${convertedProducts.length} products`
-          );
-        }
-
-        products.push(...convertedProducts);
-        this.productsScraped += convertedProducts.length;
-
-        // Check if more products available
-        offset += this.API_LIMIT;
-
-        // Limit to prevent infinite loops (max 2000 products per category)
-        if (offset >= 2000) {
-          scraperLogger.warn(`${category.name}: Reached max offset limit`);
-          hasMore = false;
-        }
-
-        // Small delay between API calls
-        await this.waitBetweenRequests();
-      } catch (error) {
-        this.logError(
-          `Failed to fetch products for ${category.name} at offset ${offset}`,
-          undefined,
-          error as Error
-        );
-        hasMore = false;
-      }
-    }
-
-    scraperLogger.info(`${category.name}: Total ${products.length} products scraped`);
-    return products;
-  }
-
-  /**
-   * Fetch products from the API
-   */
-  private async fetchProducts(
-    categoryUrlKey: string,
-    offset: number
-  ): Promise<LotussApiProduct[]> {
     if (!this.page) {
       throw new Error('Page not initialized');
     }
 
-    const query = JSON.stringify({
-      offset,
-      limit: this.API_LIMIT,
-      filter: { categoryUrlKey },
-      websiteCode: this.WEBSITE_CODE,
-    });
+    const products: ProductData[] = [];
 
-    const apiUrl = `${this.config.baseUrl}/product/v2/products?q=${encodeURIComponent(query)}`;
+    scraperLogger.info(`Scraping category: ${category.name} (ID: ${category.id})`);
 
-    // Use hardcoded headers to ensure they're properly passed
-    const apiHeaders = {
-      'accept': 'application/json, text/plain, */*',
-      'accept-language': 'en',
-      'channel': 'web',
-      'version': '2.3.8',
-      'key': 'SeiRQmEDnaZXOlpfKhCjV4Bo2y6vAcW99QKmzifsgP2uCMN7wF3ahRXex84kH6qUVIWoY5Dp0GEljdAvS1JytOZcLbnBTr',
-    };
+    // Clear any previously captured products for this category
+    this.capturedProducts.delete(category.id);
 
-    scraperLogger.debug(`Fetching from API: ${apiUrl}`);
+    // Navigate to the category page - this will trigger API calls that we intercept
+    const categoryUrl = `https://www.lotuss.com.my/en/category/${category.url}`;
+    scraperLogger.info(`Navigating to ${categoryUrl}`);
 
     try {
-      const response = await this.page.evaluate(
-        async ({ url, headers }) => {
-          try {
-            const res = await fetch(url, {
-              method: 'GET',
-              headers: headers as HeadersInit,
-            });
-            const json = await res.json();
-            return { ok: res.ok, status: res.status, body: json };
-          } catch (err: any) {
-            return { error: err.message };
-          }
-        },
-        { url: apiUrl, headers: apiHeaders }
-      );
+      await this.page.goto(categoryUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60000,
+      });
 
-      const result = response as { ok?: boolean; status?: number; body?: LotussApiResponse; error?: string };
+      // Wait for products to load
+      await this.page.waitForSelector('[class*="product"]', { timeout: 30000 });
+      await this.page.waitForTimeout(2000);
 
-      if (result.error) {
-        scraperLogger.error(`API fetch error: ${result.error}`);
-        return [];
+      // Scroll to load more products (trigger lazy loading)
+      let previousHeight = 0;
+      let scrollAttempts = 0;
+      const maxScrollAttempts = 20;
+
+      while (scrollAttempts < maxScrollAttempts) {
+        const currentHeight = await this.page.evaluate(() => document.body.scrollHeight);
+
+        if (currentHeight === previousHeight) {
+          // No more content to load
+          break;
+        }
+
+        previousHeight = currentHeight;
+        await this.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await this.page.waitForTimeout(1500);
+        scrollAttempts++;
+
+        scraperLogger.debug(`${category.name}: Scroll attempt ${scrollAttempts}, captured ${this.capturedProducts.get(category.id)?.length || 0} products`);
       }
 
-      if (!result.body || !result.body.status) {
-        scraperLogger.error(`API error: Invalid response structure`);
-        scraperLogger.debug(`Response: ${JSON.stringify(response).substring(0, 500)}`);
-        return [];
+      // Get captured products
+      const apiProducts = this.capturedProducts.get(category.id) || [];
+      scraperLogger.info(`${category.name}: Captured ${apiProducts.length} products from API intercepts`);
+
+      // Convert and deduplicate products
+      const seenSkus = new Set<string>();
+      for (const p of apiProducts) {
+        if (seenSkus.has(p.sku)) continue;
+        seenSkus.add(p.sku);
+
+        const converted = this.convertApiProduct(p, category.name);
+        if (converted) {
+          products.push(converted);
+        }
       }
 
-      const apiResponse = result.body;
-
-      if (apiResponse.status.code !== 200) {
-        scraperLogger.error(`API error: ${apiResponse.status.code} - ${apiResponse.status.message}`);
-        return [];
+      // Save products via callback
+      if (this.onPageScraped && products.length > 0) {
+        const savedCount = await this.onPageScraped(products, {
+          categoryId: category.id,
+          categoryName: category.name,
+          pageNumber: 1,
+          totalProductsOnPage: products.length,
+        });
+        scraperLogger.info(`${category.name}: Saved ${savedCount}/${products.length} products`);
       }
 
-      scraperLogger.debug(`API returned ${apiResponse.data?.products?.length || 0} products (total: ${apiResponse.meta?.total})`);
-      return apiResponse.data?.products || [];
+      this.productsScraped += products.length;
+
     } catch (error) {
-      scraperLogger.error(`Failed to fetch from API: ${error}`);
-      return [];
+      this.logError(
+        `Failed to scrape category ${category.name}`,
+        categoryUrl,
+        error as Error
+      );
     }
+
+    scraperLogger.info(`${category.name}: Total ${products.length} products scraped`);
+    return products;
   }
 
   /**
@@ -419,7 +399,7 @@ export class LotussApiScraper extends BaseScraper {
           });
           return res.json();
         },
-        { url: apiUrl, headers: this.config.headers }
+        { url: apiUrl, headers: this.apiHeaders }
       );
 
       const apiResponse = response as LotussCategoryResponse;
@@ -442,7 +422,16 @@ export class LotussApiScraper extends BaseScraper {
   async cleanup(): Promise<void> {
     scraperLogger.info(`Cleaning up Lotus's API scraper...`);
 
+    // Clear captured products
+    this.capturedProducts.clear();
+
     if (this.page) {
+      // Unroute all to avoid errors from pending routes
+      try {
+        await this.page.unrouteAll({ behavior: 'ignoreErrors' });
+      } catch {
+        // Ignore errors during unroute
+      }
       await this.page.close();
       this.page = null;
     }
