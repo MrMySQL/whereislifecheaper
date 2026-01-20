@@ -100,12 +100,24 @@ export abstract class BaseScraper {
   }
 
   /**
+   * Parse proxy URL into Playwright proxy config
+   */
+  private parseProxyUrl(proxyUrl: string): { server: string; username?: string; password?: string } {
+    const url = new URL(proxyUrl);
+    return {
+      server: `${url.protocol}//${url.host}`,
+      username: url.username || undefined,
+      password: url.password || undefined,
+    };
+  }
+
+  /**
    * Launch browser with configured options
    */
   protected async launchBrowser(): Promise<void> {
     scraperLogger.info(`Launching browser for ${this.config.name}`);
 
-    this.browser = await chromium.launch({
+    const launchOptions: Parameters<typeof chromium.launch>[0] = {
       headless: config.scraper.headless,
       args: [
         '--no-sandbox',
@@ -113,7 +125,15 @@ export abstract class BaseScraper {
         '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled',
       ],
-    });
+    };
+
+    // Add proxy if configured
+    if (config.scraper.proxyUrl) {
+      launchOptions.proxy = this.parseProxyUrl(config.scraper.proxyUrl);
+      scraperLogger.info(`Using proxy: ${launchOptions.proxy.server}`);
+    }
+
+    this.browser = await chromium.launch(launchOptions);
 
     scraperLogger.info(`Browser launched for ${this.config.name}`);
   }
