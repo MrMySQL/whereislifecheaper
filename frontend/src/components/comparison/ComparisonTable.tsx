@@ -143,7 +143,7 @@ function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
             </div>
             {/* Product info */}
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-charcoal-900 line-clamp-1">
+              <p className="text-xs font-medium text-charcoal-900">
                 {product.product_name}
               </p>
               <div className="flex items-center justify-between mt-0.5">
