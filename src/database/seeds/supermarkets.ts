@@ -136,6 +136,13 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'ReweScraper',
     is_active: true,
   },
+  {
+    country_code: 'DE',
+    name: 'Knuspr',
+    website_url: 'https://www.knuspr.de',
+    scraper_class: 'KnusprScraper',
+    is_active: true,
+  },
   // Malaysia
   {
     country_code: 'MY',
