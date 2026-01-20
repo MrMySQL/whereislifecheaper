@@ -1,6 +1,7 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { scraperLogger } from '../../utils/logger';
+import { config } from '../../config/env';
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
 import topUserAgents from 'top-user-agents';
@@ -141,6 +142,18 @@ export class ReweScraper extends BaseScraper {
     const isHeadless = process.env.PLAYWRIGHT_HEADLESS === 'true';
     scraperLogger.info(`Browser mode: ${isHeadless ? 'headless' : 'headed'}`);
 
+    // Parse proxy URL if configured
+    let proxyConfig: { server: string; username?: string; password?: string } | undefined;
+    if (config.scraper.proxyUrl) {
+      const url = new URL(config.scraper.proxyUrl);
+      proxyConfig = {
+        server: `${url.protocol}//${url.host}`,
+        username: url.username || undefined,
+        password: url.password || undefined,
+      };
+      scraperLogger.info(`Using proxy: ${proxyConfig.server}`);
+    }
+
     this.browserContext = await chromium.launchPersistentContext(sessionDir, {
       headless: isHeadless,
       args: [
@@ -157,6 +170,7 @@ export class ReweScraper extends BaseScraper {
       timezoneId: 'Europe/Berlin',
       permissions: ['geolocation'],
       geolocation: { latitude: 52.52, longitude: 13.405 }, // Berlin coordinates
+      proxy: proxyConfig,
     });
 
     // Get the default page from persistent context

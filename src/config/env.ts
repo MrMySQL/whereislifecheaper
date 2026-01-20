@@ -22,6 +22,8 @@ const envSchema = Joi.object({
   SESSION_SECRET: Joi.string().default('development-secret-change-in-production'),
   // Admin emails (comma-separated)
   ADMIN_EMAILS: Joi.string().default(''),
+  // Proxy configuration (format: http://user:pass@host:port)
+  SCRAPER_PROXY_URL: Joi.string().optional(),
 }).unknown();
 
 const { error, value: envVars } = envSchema.validate(process.env);
@@ -43,6 +45,7 @@ export const config = {
     maxRetries: envVars.SCRAPER_MAX_RETRIES as number,
     timeout: envVars.SCRAPER_TIMEOUT as number,
     concurrentBrowsers: envVars.SCRAPER_CONCURRENT_BROWSERS as number,
+    proxyUrl: envVars.SCRAPER_PROXY_URL as string | undefined,
   },
   logging: {
     level: envVars.LOG_LEVEL as string,
