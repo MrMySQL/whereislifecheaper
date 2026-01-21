@@ -24,7 +24,8 @@
       "mcp__plugin_context7_context7__query-docs",
       "Bash(npm run scraper:test:*)",
       "mcp__playwright__browser_wait_for",
-      "mcp__playwright__browser_network_requests"
+      "mcp__playwright__browser_network_requests",
+      "Bash(ls:*)"
     ]
   }
 }
