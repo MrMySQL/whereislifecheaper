@@ -2,9 +2,9 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info, EyeOff } from 'lucide-react';
-import { countriesApi, canonicalApi } from '../../services/api';
+import { countriesApi, canonicalApi, supermarketsApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
-import type { Product, Country, CanonicalProductBasic } from '../../types';
+import type { Product, Country, CanonicalProductBasic, Supermarket } from '../../types';
 
 const PRODUCTS_PER_PAGE = 50;
 
@@ -12,6 +12,7 @@ export default function Mapping() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
+  const [selectedSupermarketId, setSelectedSupermarketId] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState('');
   const [productPage, setProductPage] = useState(0);
   const [showManageSection, setShowManageSection] = useState(false);
@@ -25,13 +26,21 @@ export default function Mapping() {
     queryFn: countriesApi.getAll,
   });
 
+  // Fetch supermarkets for selected country
+  const { data: supermarkets = [] } = useQuery({
+    queryKey: ['supermarkets', selectedCountryId],
+    queryFn: () => supermarketsApi.getByCountry(selectedCountryId!),
+    enabled: !!selectedCountryId,
+  });
+
   // Fetch products by country with pagination
   const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: ['products', selectedCountryId, productSearch, productPage],
+    queryKey: ['products', selectedCountryId, selectedSupermarketId, productSearch, productPage],
     queryFn: () =>
       selectedCountryId
         ? canonicalApi.getProductsByCountry(selectedCountryId, {
             search: productSearch || undefined,
+            supermarket_id: selectedSupermarketId || undefined,
             limit: PRODUCTS_PER_PAGE,
             offset: productPage * PRODUCTS_PER_PAGE,
           })
@@ -50,8 +59,14 @@ export default function Mapping() {
   const handleCountryChange = (countryId: number | null) => {
     queryClient.cancelQueries({ queryKey: ['products'] });
     setSelectedCountryId(countryId);
+    setSelectedSupermarketId(null);
     setProductPage(0);
     setOpenDropdown(null);
+  };
+
+  const handleSupermarketChange = (supermarketId: number | null) => {
+    setSelectedSupermarketId(supermarketId);
+    setProductPage(0);
   };
 
   const handleProductSearch = (search: string) => {
@@ -310,6 +325,24 @@ export default function Mapping() {
               ))}
             </select>
           </div>
+
+          {/* Supermarket selector */}
+          {selectedCountryId && supermarkets.length > 0 && (
+            <div className="sm:w-64">
+              <select
+                value={selectedSupermarketId || ''}
+                onChange={(e) => handleSupermarketChange(Number(e.target.value) || null)}
+                className="input"
+              >
+                <option value="">{t('countryProducts.allSupermarkets')}</option>
+                {supermarkets.map((s: Supermarket) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Product search */}
           {selectedCountryId && (
