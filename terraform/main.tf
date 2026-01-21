@@ -253,6 +253,10 @@ resource "aws_ecs_task_definition" "scraper" {
         {
           name  = "DISABLE_DEV_SHM"
           value = "true"
+        },
+        {
+          name  = "SCRAPER_PROXY_SUPERMARKETS"
+          value = "migros,rewe"
         }
       ]
 

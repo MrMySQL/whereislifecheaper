@@ -24,6 +24,8 @@ const envSchema = Joi.object({
   ADMIN_EMAILS: Joi.string().default(''),
   // Proxy configuration (format: http://user:pass@host:port)
   SCRAPER_PROXY_URL: Joi.string().optional(),
+  // Comma-separated list of supermarket names that should use proxy (empty = all)
+  SCRAPER_PROXY_SUPERMARKETS: Joi.string().optional(),
 }).unknown();
 
 const { error, value: envVars } = envSchema.validate(process.env);
@@ -46,6 +48,10 @@ export const config = {
     timeout: envVars.SCRAPER_TIMEOUT as number,
     concurrentBrowsers: envVars.SCRAPER_CONCURRENT_BROWSERS as number,
     proxyUrl: envVars.SCRAPER_PROXY_URL as string | undefined,
+    proxySupermarkets: (envVars.SCRAPER_PROXY_SUPERMARKETS as string || '')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean),
   },
   logging: {
     level: envVars.LOG_LEVEL as string,

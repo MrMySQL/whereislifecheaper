@@ -114,6 +114,21 @@ export abstract class BaseScraper {
   }
 
   /**
+   * Check if this supermarket should use the proxy
+   * Returns true if no proxy supermarkets are specified (use for all) or if this supermarket is in the list
+   */
+  private shouldUseProxy(): boolean {
+    const proxySupermarkets = config.scraper.proxySupermarkets;
+    // If no specific supermarkets configured, use proxy for all
+    if (proxySupermarkets.length === 0) {
+      return true;
+    }
+    // Check if this supermarket's name matches any in the list
+    const supermarketName = this.config.name.toLowerCase();
+    return proxySupermarkets.some(name => supermarketName.includes(name));
+  }
+
+  /**
    * Launch browser with configured options
    */
   protected async launchBrowser(): Promise<void> {
@@ -129,8 +144,8 @@ export abstract class BaseScraper {
       ],
     };
 
-    // Add proxy if configured
-    if (config.scraper.proxyUrl) {
+    // Add proxy if configured and supermarket is in the proxy list
+    if (config.scraper.proxyUrl && this.shouldUseProxy()) {
       launchOptions.proxy = this.parseProxyUrl(config.scraper.proxyUrl);
       this.logger.info(`Using proxy: ${launchOptions.proxy.server}`);
     }
