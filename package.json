@@ -17,7 +17,8 @@
     "api": "ts-node src/api/server.ts",
     "rates:sync": "ts-node scripts/sync-exchange-rates.ts",
     "deploy": "scripts/deploy-ecr.sh",
-    "aws:run": "scripts/run-ecs-task.sh"
+    "aws:run": "scripts/run-ecs-task.sh",
+    "aws:stop": "scripts/stop-ecs-task.sh"
   },
   "keywords": [
     "price-comparison",
