@@ -8,6 +8,7 @@ import { AuchanUaGraphQLScraper, auchanUaGraphQLConfig, auchanUaGraphQLCategorie
 import { MakroScraper, makroConfig, makroCategories } from './uzbekistan/MakroScraper';
 import { ArbuzScraper, arbuzConfig, arbuzCategories } from './kazakhstan/ArbuzScraper';
 import { ReweScraper, reweConfig, reweCategories } from './germany/ReweScraper';
+import { KnusprScraper, knusprConfig, knusprCategories } from './germany/KnusprScraper';
 import { LotussScraper, lotussConfig, lotussCategories } from './malaysia/LotussScraper';
 import { LotussApiScraper, lotussApiConfig, lotussApiCategories } from './malaysia/LotussApiScraper';
 
@@ -105,6 +106,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: ReweScraper,
       defaultConfig: reweConfig,
       categories: reweCategories,
+    },
+  ],
+  [
+    'KnusprScraper',
+    {
+      className: 'KnusprScraper',
+      scraperClass: KnusprScraper,
+      defaultConfig: knusprConfig,
+      categories: knusprCategories,
     },
   ],
   [
