@@ -1,0 +1,61 @@
+# Dependencies (will be installed fresh in container)
+node_modules/
+
+# Build output (TypeScript compiled with ts-node)
+dist/
+build/
+
+# Frontend (not needed for scraper)
+frontend/
+
+# Environment variables (secrets managed separately)
+.env
+.env.local
+.env.*
+
+# Logs (fresh in container)
+logs/
+*.log
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Playwright artifacts
+playwright-report/
+test-results/
+.playwright/
+
+# Screenshots (fresh in container)
+screenshots/
+
+# Tests (not needed in production)
+tests/
+
+# Documentation
+*.md
+!README.md
+
+# GitHub workflows (not needed in container)
+.github/
+
+# Docker files (no need to copy these into the image)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Temporary files
+tmp/
+temp/
+.vercel
