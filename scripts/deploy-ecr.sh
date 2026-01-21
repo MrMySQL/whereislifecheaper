@@ -1,8 +1,15 @@
 #!/bin/bash
 set -e
 
-ECR_REPO="685470421486.dkr.ecr.eu-central-1.amazonaws.com/whereislifecheaper-scraper"
-AWS_REGION="eu-central-1"
+# Get ECR URL from Terraform state
+TERRAFORM_DIR="$(dirname "$0")/../terraform"
+
+echo "Getting ECR repository from Terraform..."
+ECR_REPO=$(terraform -chdir="$TERRAFORM_DIR" output -raw ecr_repository_url)
+AWS_REGION=$(aws configure get region || echo "eu-central-1")
+
+echo "ECR Repository: $ECR_REPO"
+echo ""
 
 echo "Building Docker image..."
 docker build -t whereislifecheaper-scraper .
