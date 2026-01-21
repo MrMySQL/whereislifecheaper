@@ -97,6 +97,15 @@ resource "aws_secretsmanager_secret" "google_credentials" {
   tags = var.tags
 }
 
+# Secrets Manager - Proxy URL (optional)
+resource "aws_secretsmanager_secret" "proxy_url" {
+  name                    = "${var.project_name}/proxy-url"
+  description             = "Proxy URL for scrapers (optional)"
+  recovery_window_in_days = 0  # Immediate deletion on destroy
+
+  tags = var.tags
+}
+
 # IAM Role for ECS Task Execution
 resource "aws_iam_role" "ecs_task_execution" {
   name = "${var.project_name}-ecs-task-execution"
@@ -137,7 +146,8 @@ resource "aws_iam_role_policy" "ecs_secrets" {
         ]
         Resource = [
           aws_secretsmanager_secret.database_url.arn,
-          aws_secretsmanager_secret.google_credentials.arn
+          aws_secretsmanager_secret.google_credentials.arn,
+          aws_secretsmanager_secret.proxy_url.arn
         ]
       }
     ]
@@ -254,6 +264,10 @@ resource "aws_ecs_task_definition" "scraper" {
         {
           name      = "GOOGLE_CREDENTIALS_JSON"
           valueFrom = aws_secretsmanager_secret.google_credentials.arn
+        },
+        {
+          name      = "SCRAPER_PROXY_URL"
+          valueFrom = aws_secretsmanager_secret.proxy_url.arn
         }
       ]
 
