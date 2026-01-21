@@ -175,11 +175,25 @@ if (config.api.env === 'development') {
  * This helps identify which supermarket logs belong to when running in parallel
  */
 export const createPrefixedLogger = (prefix: string) => {
+  // Helper to safely merge meta - handles strings, objects, and undefined
+  const mergeMeta = (meta?: any) => {
+    if (meta === undefined || meta === null) {
+      return { prefix };
+    }
+    if (typeof meta === 'string') {
+      return { prefix, message: meta };
+    }
+    if (typeof meta === 'object') {
+      return { prefix, ...meta };
+    }
+    return { prefix, value: meta };
+  };
+
   return {
-    info: (message: string, meta?: any) => scraperLogger.info(message, { prefix, ...meta }),
-    warn: (message: string, meta?: any) => scraperLogger.warn(message, { prefix, ...meta }),
-    error: (message: string, meta?: any) => scraperLogger.error(message, { prefix, ...meta }),
-    debug: (message: string, meta?: any) => scraperLogger.debug(message, { prefix, ...meta }),
+    info: (message: string, meta?: any) => scraperLogger.info(message, mergeMeta(meta)),
+    warn: (message: string, meta?: any) => scraperLogger.warn(message, mergeMeta(meta)),
+    error: (message: string, meta?: any) => scraperLogger.error(message, mergeMeta(meta)),
+    debug: (message: string, meta?: any) => scraperLogger.debug(message, mergeMeta(meta)),
   };
 };
 
