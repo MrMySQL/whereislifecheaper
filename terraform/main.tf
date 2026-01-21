@@ -18,6 +18,7 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+  profile = "default"
 }
 
 # Data sources
@@ -80,16 +81,18 @@ resource "aws_cloudwatch_log_group" "scraper" {
 
 # Secrets Manager - Database URL
 resource "aws_secretsmanager_secret" "database_url" {
-  name        = "${var.project_name}/database-url"
-  description = "PostgreSQL connection string for scrapers"
+  name                    = "${var.project_name}/database-url"
+  description             = "PostgreSQL connection string for scrapers"
+  recovery_window_in_days = 0  # Immediate deletion on destroy
 
   tags = var.tags
 }
 
 # Secrets Manager - Google Cloud credentials (optional)
 resource "aws_secretsmanager_secret" "google_credentials" {
-  name        = "${var.project_name}/google-credentials"
-  description = "Google Cloud credentials JSON for logging"
+  name                    = "${var.project_name}/google-credentials"
+  description             = "Google Cloud credentials JSON for logging"
+  recovery_window_in_days = 0  # Immediate deletion on destroy
 
   tags = var.tags
 }
@@ -236,6 +239,10 @@ resource "aws_ecs_task_definition" "scraper" {
         {
           name  = "SYNC_RATES"
           value = "true"
+        },
+        {
+          name  = "DISABLE_DEV_SHM"
+          value = "true"
         }
       ]
 
@@ -257,11 +264,6 @@ resource "aws_ecs_task_definition" "scraper" {
           "awslogs-region"        = data.aws_region.current.name
           "awslogs-stream-prefix" = "ecs"
         }
-      }
-
-      # Shared memory size for Chromium (critical!)
-      linuxParameters = {
-        sharedMemorySize = 2048
       }
     }
   ])

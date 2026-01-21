@@ -1,6 +1,6 @@
 import { BaseScraper } from './BaseScraper';
 import { ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
+import { createPrefixedLogger } from '../../utils/logger';
 import {
   getScraperRegistration,
   getScraperCategories,
@@ -12,6 +12,8 @@ import {
 export interface CreateScraperOptions {
   categoryIds?: string[];  // Filter to specific category IDs
 }
+
+const logger = createPrefixedLogger('Factory');
 
 /**
  * Factory class for creating scraper instances.
@@ -27,11 +29,11 @@ export class ScraperFactory {
     if (!registration) {
       const available = getRegisteredScraperNames().join(', ');
       const error = `Scraper not found: ${config.name}. Available: ${available}`;
-      scraperLogger.error(error);
+      logger.error(error);
       throw new Error(error);
     }
 
-    scraperLogger.info(`Creating scraper instance: ${config.name}`);
+    logger.info(`Creating scraper instance: ${config.name}`);
     return new registration.scraperClass(config);
   }
 
@@ -52,7 +54,7 @@ export class ScraperFactory {
 
     if (!registration) {
       const error = `Scraper class not found: ${supermarket.scraper_class} for ${supermarket.name}`;
-      scraperLogger.error(error);
+      logger.error(error);
       throw new Error(error);
     }
 
@@ -80,12 +82,12 @@ export class ScraperFactory {
       );
 
       if (filteredCategories.length === 0) {
-        scraperLogger.warn(
+        logger.warn(
           `No matching categories found for IDs: ${options.categoryIds.join(', ')}. ` +
           `Available: ${categories.map(c => c.id).join(', ')}`
         );
       } else {
-        scraperLogger.info(
+        logger.info(
           `Filtering to categories: ${filteredCategories.map(c => c.name).join(', ')}`
         );
         categories = filteredCategories;
@@ -116,7 +118,7 @@ export class ScraperFactory {
       userAgents: dbConfig.userAgents || defaultConfig.userAgents,
     };
 
-    scraperLogger.info(`Creating scraper for supermarket: ${supermarket.name}`);
+    logger.info(`Creating scraper for supermarket: ${supermarket.name}`);
     return new registration.scraperClass(config);
   }
 

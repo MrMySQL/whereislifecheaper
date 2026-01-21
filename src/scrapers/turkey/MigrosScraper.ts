@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 
 /**
  * Migros categories configuration
@@ -107,7 +106,7 @@ export class MigrosScraper extends BaseScraper {
    * Initialize the scraper with browser (needed for Cloudflare bypass)
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Migros API scraper...`);
+    this.logger.info(`Initializing Migros API scraper...`);
     this.startTime = Date.now();
 
     // Launch browser to handle Cloudflare
@@ -115,14 +114,14 @@ export class MigrosScraper extends BaseScraper {
     this.page = await this.createPage();
 
     // Navigate to main page first to get cookies/pass Cloudflare
-    scraperLogger.info('Navigating to Migros homepage to establish session...');
+    this.logger.info('Navigating to Migros homepage to establish session...');
     await this.page.goto(this.config.baseUrl, { waitUntil: 'domcontentloaded' });
     await this.waitForDynamicContent();
 
     // Handle any Cloudflare challenge
     await this.handleAntiBot();
 
-    scraperLogger.info(`Migros API scraper initialized`);
+    this.logger.info(`Migros API scraper initialized`);
   }
 
   /**
@@ -149,14 +148,14 @@ export class MigrosScraper extends BaseScraper {
     const firstPageData = await this.fetchCategoryPage(categorySlug, 1);
 
     if (!firstPageData?.successful) {
-      scraperLogger.warn(`Failed to fetch category ${categoryName}: API returned unsuccessful`);
+      this.logger.warn(`Failed to fetch category ${categoryName}: API returned unsuccessful`);
       return products;
     }
 
     const totalPages = firstPageData.data.searchInfo.pageCount;
     const totalProducts = firstPageData.data.searchInfo.hitCount;
 
-    scraperLogger.info(`Category ${categoryName}: ${totalProducts} products across ${totalPages} pages`);
+    this.logger.info(`Category ${categoryName}: ${totalProducts} products across ${totalPages} pages`);
 
     // Process first page
     const firstPageProducts = this.parseProducts(firstPageData.data.searchInfo.storeProductInfos);
@@ -169,7 +168,7 @@ export class MigrosScraper extends BaseScraper {
         pageNumber: 1,
         totalProductsOnPage: firstPageProducts.length,
       });
-      scraperLogger.info(
+      this.logger.info(
         `Page 1/${totalPages} of ${categoryName}: Saved ${savedCount}/${firstPageProducts.length} products`
       );
     }
@@ -184,7 +183,7 @@ export class MigrosScraper extends BaseScraper {
         const pageData = await this.fetchCategoryPage(categorySlug, page);
 
         if (!pageData?.successful) {
-          scraperLogger.warn(`Failed to fetch page ${page} of ${categoryName}`);
+          this.logger.warn(`Failed to fetch page ${page} of ${categoryName}`);
           continue;
         }
 
@@ -198,7 +197,7 @@ export class MigrosScraper extends BaseScraper {
             pageNumber: page,
             totalProductsOnPage: pageProducts.length,
           });
-          scraperLogger.info(
+          this.logger.info(
             `Page ${page}/${totalPages} of ${categoryName}: Saved ${savedCount}/${pageProducts.length} products`
           );
         }
@@ -240,14 +239,14 @@ export class MigrosScraper extends BaseScraper {
       });
 
       if (!response.ok()) {
-        scraperLogger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
+        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
         return null;
       }
 
       const data: MigrosApiResponse = await response.json();
       return data;
     } catch (error) {
-      scraperLogger.error(`Failed to fetch ${url}:`, error);
+      this.logger.error(`Failed to fetch ${url}:`, error);
       return null;
     }
   }
@@ -259,7 +258,7 @@ export class MigrosScraper extends BaseScraper {
     const products: ProductData[] = [];
 
     if (!apiProducts || !Array.isArray(apiProducts)) {
-      scraperLogger.warn(`No products array in API response`);
+      this.logger.warn(`No products array in API response`);
       return products;
     }
 
@@ -303,7 +302,7 @@ export class MigrosScraper extends BaseScraper {
         this.productsScraped++;
       } catch (error) {
         this.productsFailed++;
-        scraperLogger.debug(`Failed to parse product: ${item.name}`, error);
+        this.logger.debug(`Failed to parse product: ${item.name}`, error);
       }
     }
 
@@ -352,10 +351,10 @@ export class MigrosScraper extends BaseScraper {
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Migros API scraper...`);
+    this.logger.info(`Cleaning up Migros API scraper...`);
     await this.closeBrowser();
 
     const stats = this.getStats();
-    scraperLogger.info('Migros scraping completed:', stats);
+    this.logger.info('Migros scraping completed:', stats);
   }
 }

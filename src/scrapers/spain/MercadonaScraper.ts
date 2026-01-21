@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 
 /**
  * Mercadona categories configuration
@@ -267,7 +266,7 @@ export class MercadonaScraper extends BaseScraper {
    * Initialize the scraper with browser (needed to set postal code)
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Mercadona API scraper...`);
+    this.logger.info(`Initializing Mercadona API scraper...`);
     this.startTime = Date.now();
 
     // Launch browser to handle postal code entry
@@ -275,14 +274,14 @@ export class MercadonaScraper extends BaseScraper {
     this.page = await this.createPage();
 
     // Navigate to main page to trigger postal code dialog
-    scraperLogger.info('Navigating to Mercadona to establish session...');
+    this.logger.info('Navigating to Mercadona to establish session...');
     await this.page.goto('https://tienda.mercadona.es', { waitUntil: 'domcontentloaded' });
     await this.waitForDynamicContent();
 
     // Enter postal code to unlock the site
     await this.enterPostalCode();
 
-    scraperLogger.info(`Mercadona API scraper initialized`);
+    this.logger.info(`Mercadona API scraper initialized`);
   }
 
   /**
@@ -298,7 +297,7 @@ export class MercadonaScraper extends BaseScraper {
       }).catch(() => null);
 
       if (postalInput) {
-        scraperLogger.info(`Entering postal code: ${this.POSTAL_CODE}`);
+        this.logger.info(`Entering postal code: ${this.POSTAL_CODE}`);
         await postalInput.fill(this.POSTAL_CODE);
 
         // Click the submit button
@@ -308,13 +307,13 @@ export class MercadonaScraper extends BaseScraper {
           await this.waitForDynamicContent();
         }
 
-        scraperLogger.info('Postal code entered successfully');
+        this.logger.info('Postal code entered successfully');
       } else {
         // Postal code may already be set from previous session
-        scraperLogger.debug('Postal code input not found - session may already be established');
+        this.logger.debug('Postal code input not found - session may already be established');
       }
     } catch (error) {
-      scraperLogger.warn('Failed to enter postal code:', error);
+      this.logger.warn('Failed to enter postal code:', error);
     }
   }
 
@@ -341,14 +340,14 @@ export class MercadonaScraper extends BaseScraper {
       const categoryData = await this.fetchCategory(categoryId);
 
       if (!categoryData) {
-        scraperLogger.warn(`Failed to fetch category ${categoryName}`);
+        this.logger.warn(`Failed to fetch category ${categoryName}`);
         return products;
       }
 
       // Recursively collect products from nested categories
       const allProducts = this.collectProductsRecursively(categoryData);
 
-      scraperLogger.info(`Category ${categoryName}: Found ${allProducts.length} products`);
+      this.logger.info(`Category ${categoryName}: Found ${allProducts.length} products`);
 
       // Parse and save products
       const parsedProducts = this.parseProducts(allProducts);
@@ -361,7 +360,7 @@ export class MercadonaScraper extends BaseScraper {
           pageNumber: 1,
           totalProductsOnPage: parsedProducts.length,
         });
-        scraperLogger.info(
+        this.logger.info(
           `${categoryName}: Saved ${savedCount}/${parsedProducts.length} products`
         );
       }
@@ -397,14 +396,14 @@ export class MercadonaScraper extends BaseScraper {
       });
 
       if (!response.ok()) {
-        scraperLogger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
+        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
         return null;
       }
 
       const data: MercadonaCategoryResponse = await response.json();
       return data;
     } catch (error) {
-      scraperLogger.error(`Failed to fetch ${url}:`, error);
+      this.logger.error(`Failed to fetch ${url}:`, error);
       return null;
     }
   }
@@ -437,7 +436,7 @@ export class MercadonaScraper extends BaseScraper {
     const products: ProductData[] = [];
 
     if (!apiProducts || !Array.isArray(apiProducts)) {
-      scraperLogger.warn(`No products array in API response`);
+      this.logger.warn(`No products array in API response`);
       return products;
     }
 
@@ -448,7 +447,7 @@ export class MercadonaScraper extends BaseScraper {
         // Parse unit price (string to number)
         const price = parseFloat(priceInfo.unit_price);
         if (isNaN(price)) {
-          scraperLogger.debug(`Could not parse price for product: ${item.display_name}`);
+          this.logger.debug(`Could not parse price for product: ${item.display_name}`);
           continue;
         }
 
@@ -492,7 +491,7 @@ export class MercadonaScraper extends BaseScraper {
         this.productsScraped++;
       } catch (error) {
         this.productsFailed++;
-        scraperLogger.debug(`Failed to parse product: ${item.display_name}`, error);
+        this.logger.debug(`Failed to parse product: ${item.display_name}`, error);
       }
     }
 
@@ -607,10 +606,10 @@ export class MercadonaScraper extends BaseScraper {
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Mercadona API scraper...`);
+    this.logger.info(`Cleaning up Mercadona API scraper...`);
     await this.closeBrowser();
 
     const stats = this.getStats();
-    scraperLogger.info('Mercadona scraping completed:', stats);
+    this.logger.info('Mercadona scraping completed:', stats);
   }
 }

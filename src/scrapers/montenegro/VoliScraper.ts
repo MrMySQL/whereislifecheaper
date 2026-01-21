@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 import { extractQuantity, parsePrice } from '../../utils/normalizer';
 
 /**
@@ -142,11 +141,11 @@ export class VoliScraper extends BaseScraper {
    * Initialize the scraper
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Voli scraper...`);
+    this.logger.info(`Initializing Voli scraper...`);
     this.startTime = Date.now();
     await this.launchBrowser();
     this.page = await this.createPage();
-    scraperLogger.info(`Voli scraper initialized`);
+    this.logger.info(`Voli scraper initialized`);
   }
 
   /**
@@ -182,7 +181,7 @@ export class VoliScraper extends BaseScraper {
       // Get products from current page
       const pageProducts = await this.extractProductsFromPage();
 
-      scraperLogger.debug(`Found ${pageProducts.length} products`);
+      this.logger.debug(`Found ${pageProducts.length} products`);
 
       // Save products via callback (Voli loads all products at once, so pageNumber is always 1)
       if (this.onPageScraped && pageProducts.length > 0) {
@@ -192,7 +191,7 @@ export class VoliScraper extends BaseScraper {
           pageNumber: 1,
           totalProductsOnPage: pageProducts.length,
         });
-        scraperLogger.info(
+        this.logger.info(
           `${categoryName}: Saved ${savedCount}/${pageProducts.length} products`
         );
       }
@@ -220,12 +219,12 @@ export class VoliScraper extends BaseScraper {
       const cookieButton = await this.page.$('button:has-text("Prihvatite kolačiće")');
       if (cookieButton) {
         await cookieButton.click();
-        scraperLogger.debug('Accepted cookie consent');
+        this.logger.debug('Accepted cookie consent');
         await this.page.waitForTimeout(500);
       }
     } catch (error) {
       // Cookie consent may not appear, that's fine
-      scraperLogger.debug('No cookie consent found or already accepted');
+      this.logger.debug('No cookie consent found or already accepted');
     }
   }
 
@@ -246,14 +245,14 @@ export class VoliScraper extends BaseScraper {
         timeout: 1000,
       }).catch(() => {
         // Products may already be loaded or category may be empty
-        scraperLogger.debug('Product selector wait timed out (may already be loaded)');
+        this.logger.debug('Product selector wait timed out (may already be loaded)');
       });
 
       // Get all product containers - they are parent elements of product links
       // Looking for elements that contain product link, name, and price
       const productContainers = await this.page.$$('a[href*="/proizvod/"]');
 
-      scraperLogger.debug(`Found ${productContainers.length} product links`);
+      this.logger.debug(`Found ${productContainers.length} product links`);
 
       // Group by unique product URLs to avoid duplicates
       const seenUrls = new Set<string>();
@@ -267,7 +266,7 @@ export class VoliScraper extends BaseScraper {
         }
       }
 
-      scraperLogger.debug(`Found ${productLinks.length} unique products`);
+      this.logger.debug(`Found ${productLinks.length} unique products`);
 
       // Extract product data from each unique product
       for (const { url, element } of productLinks) {
@@ -279,11 +278,11 @@ export class VoliScraper extends BaseScraper {
           }
         } catch (error) {
           this.productsFailed++;
-          scraperLogger.debug('Failed to extract product:', error);
+          this.logger.debug('Failed to extract product:', error);
         }
       }
     } catch (error) {
-      scraperLogger.error('Failed to extract products from page:', error);
+      this.logger.error('Failed to extract products from page:', error);
       await this.takeScreenshot('extract-products-error');
       throw error;
     }
@@ -314,7 +313,7 @@ export class VoliScraper extends BaseScraper {
       });
 
       if (!parentContainer) {
-        scraperLogger.debug(`No parent container found for ${productUrl}`);
+        this.logger.debug(`No parent container found for ${productUrl}`);
         return null;
       }
 
@@ -334,7 +333,7 @@ export class VoliScraper extends BaseScraper {
       name = name.trim();
 
       if (!name) {
-        scraperLogger.debug(`Product name not found for ${productUrl}`);
+        this.logger.debug(`Product name not found for ${productUrl}`);
         return null;
       }
 
@@ -346,7 +345,7 @@ export class VoliScraper extends BaseScraper {
       const priceMatches = containerText.match(/(\d+[.,]\d{2})€/g);
 
       if (!priceMatches || priceMatches.length === 0) {
-        scraperLogger.debug(`Price not found for product: ${name}`);
+        this.logger.debug(`Price not found for product: ${name}`);
         return null;
       }
 
@@ -364,7 +363,7 @@ export class VoliScraper extends BaseScraper {
       }
 
       if (!price) {
-        scraperLogger.debug(`Could not parse price for product: ${name}`);
+        this.logger.debug(`Could not parse price for product: ${name}`);
         return null;
       }
 
@@ -412,7 +411,7 @@ export class VoliScraper extends BaseScraper {
 
       return productData;
     } catch (error) {
-      scraperLogger.debug('Error extracting product data:', error);
+      this.logger.debug('Error extracting product data:', error);
       return null;
     }
   }
@@ -499,10 +498,10 @@ export class VoliScraper extends BaseScraper {
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Voli scraper...`);
+    this.logger.info(`Cleaning up Voli scraper...`);
     await this.closeBrowser();
 
     const stats = this.getStats();
-    scraperLogger.info('Voli scraping completed:', stats);
+    this.logger.info('Voli scraping completed:', stats);
   }
 }

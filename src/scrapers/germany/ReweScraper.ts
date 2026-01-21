@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 import { config } from '../../config/env';
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
@@ -107,7 +106,7 @@ export class ReweScraper extends BaseScraper {
    * Initialize the scraper with stealth browser and select delivery market
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing REWE scraper with stealth mode...`);
+    this.logger.info(`Initializing REWE scraper with stealth mode...`);
     this.startTime = Date.now();
 
     // Launch browser with stealth mode
@@ -116,14 +115,14 @@ export class ReweScraper extends BaseScraper {
     // Navigate to shop page and select delivery market
     await this.selectDeliveryMarket();
 
-    scraperLogger.info(`REWE scraper initialized with delivery zone ${this.POSTAL_CODE}`);
+    this.logger.info(`REWE scraper initialized with delivery zone ${this.POSTAL_CODE}`);
   }
 
   /**
    * Launch browser with stealth plugin and persistent context
    */
   private async launchStealthBrowser(): Promise<void> {
-    scraperLogger.info('Launching stealth browser for REWE...');
+    this.logger.info('Launching stealth browser for REWE...');
 
     // Create persistent session directory
     const sessionDir = path.join(os.tmpdir(), 'rewe-scraper-session');
@@ -134,13 +133,13 @@ export class ReweScraper extends BaseScraper {
 
     // Get a random user agent from the top user agents list
     const userAgent = topUserAgents[Math.floor(Math.random() * Math.min(10, topUserAgents.length))];
-    scraperLogger.debug(`Using user agent: ${userAgent}`);
+    this.logger.debug(`Using user agent: ${userAgent}`);
 
     // Launch with persistent context for session management
     // Use PLAYWRIGHT_HEADLESS env var to control headless mode
     // For Cloudflare bypass, headed mode with xvfb works best in CI
     const isHeadless = process.env.PLAYWRIGHT_HEADLESS === 'true';
-    scraperLogger.info(`Browser mode: ${isHeadless ? 'headless' : 'headed'}`);
+    this.logger.info(`Browser mode: ${isHeadless ? 'headless' : 'headed'}`);
 
     // Parse proxy URL if configured
     let proxyConfig: { server: string; username?: string; password?: string } | undefined;
@@ -151,7 +150,7 @@ export class ReweScraper extends BaseScraper {
         username: url.username || undefined,
         password: url.password || undefined,
       };
-      scraperLogger.info(`Using proxy: ${proxyConfig.server}`);
+      this.logger.info(`Using proxy: ${proxyConfig.server}`);
     }
 
     this.browserContext = await chromium.launchPersistentContext(sessionDir, {
@@ -182,7 +181,7 @@ export class ReweScraper extends BaseScraper {
       { name: 'userCountry', value: 'DE', domain: '.rewe.de', path: '/' },
     ]);
 
-    scraperLogger.info('Stealth browser launched successfully');
+    this.logger.info('Stealth browser launched successfully');
   }
 
   /**
@@ -200,13 +199,13 @@ export class ReweScraper extends BaseScraper {
     try {
       const screenshotPath = path.join('logs', `cloudflare-challenge-${timestamp}.png`);
       await this.page.screenshot({ path: screenshotPath, fullPage: true });
-      scraperLogger.info(`Cloudflare challenge screenshot saved: ${screenshotPath}`);
+      this.logger.info(`Cloudflare challenge screenshot saved: ${screenshotPath}`);
     } catch (e) {
-      scraperLogger.debug('Could not save challenge screenshot:', e);
+      this.logger.debug('Could not save challenge screenshot:', e);
     }
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      scraperLogger.info(`Cloudflare solve attempt ${attempt}/${maxAttempts}...`);
+      this.logger.info(`Cloudflare solve attempt ${attempt}/${maxAttempts}...`);
 
       try {
         // Wait for the page to stabilize
@@ -225,7 +224,7 @@ export class ReweScraper extends BaseScraper {
         for (const selector of turnstileSelectors) {
           iframe = await this.page.$(selector);
           if (iframe) {
-            scraperLogger.debug(`Found Turnstile iframe with selector: ${selector}`);
+            this.logger.debug(`Found Turnstile iframe with selector: ${selector}`);
             break;
           }
         }
@@ -234,7 +233,7 @@ export class ReweScraper extends BaseScraper {
           // Get the iframe's content frame
           const frame = await iframe.contentFrame();
           if (frame) {
-            scraperLogger.info('Found Cloudflare Turnstile iframe, attempting to click checkbox...');
+            this.logger.info('Found Cloudflare Turnstile iframe, attempting to click checkbox...');
 
             // Look for the checkbox inside the iframe
             const checkboxSelectors = [
@@ -258,7 +257,7 @@ export class ReweScraper extends BaseScraper {
                     await this.page.waitForTimeout(100 + Math.random() * 200);
                   }
                   await checkbox.click();
-                  scraperLogger.info('Clicked Turnstile checkbox');
+                  this.logger.info('Clicked Turnstile checkbox');
                   break;
                 }
               } catch {
@@ -268,7 +267,7 @@ export class ReweScraper extends BaseScraper {
           }
         } else {
           // No iframe found - maybe it's a different type of challenge or auto-solving
-          scraperLogger.debug('No Turnstile iframe found, challenge may auto-solve');
+          this.logger.debug('No Turnstile iframe found, challenge may auto-solve');
         }
 
         // Wait for challenge to complete
@@ -278,37 +277,37 @@ export class ReweScraper extends BaseScraper {
         try {
           const afterScreenshotPath = path.join('logs', `cloudflare-after-attempt-${timestamp}-${attempt}.png`);
           await this.page.screenshot({ path: afterScreenshotPath, fullPage: true });
-          scraperLogger.info(`Post-attempt screenshot saved: ${afterScreenshotPath}`);
+          this.logger.info(`Post-attempt screenshot saved: ${afterScreenshotPath}`);
         } catch (e) {
-          scraperLogger.debug('Could not save post-attempt screenshot:', e);
+          this.logger.debug('Could not save post-attempt screenshot:', e);
         }
 
         // Check if we're past the challenge
         const newTitle = await this.page.title();
         if (!newTitle.toLowerCase().includes('moment')) {
-          scraperLogger.info('Cloudflare challenge solved successfully!');
+          this.logger.info('Cloudflare challenge solved successfully!');
           return true;
         }
 
         // Also check if the page URL changed (redirect after solving)
         const currentUrl = this.page.url();
         if (currentUrl.includes('/shop/') && !currentUrl.includes('challenge')) {
-          scraperLogger.info('Cloudflare challenge solved (URL redirect detected)!');
+          this.logger.info('Cloudflare challenge solved (URL redirect detected)!');
           return true;
         }
 
       } catch (error) {
-        scraperLogger.debug(`Cloudflare solve attempt ${attempt} failed:`, error);
+        this.logger.debug(`Cloudflare solve attempt ${attempt} failed:`, error);
       }
 
       // Wait before next attempt
       if (attempt < maxAttempts) {
-        scraperLogger.info(`Waiting before next attempt...`);
+        this.logger.info(`Waiting before next attempt...`);
         await this.page.waitForTimeout(waitBetweenAttempts);
       }
     }
 
-    scraperLogger.warn('Could not solve Cloudflare challenge after all attempts');
+    this.logger.warn('Could not solve Cloudflare challenge after all attempts');
     return false;
   }
 
@@ -320,7 +319,7 @@ export class ReweScraper extends BaseScraper {
     if (!this.page) return;
 
     try {
-      scraperLogger.info('Navigating to REWE shop to select delivery market...');
+      this.logger.info('Navigating to REWE shop to select delivery market...');
 
       // Navigate to the shop page
       await this.page.goto(`${this.BASE_URL}/shop/`, {
@@ -335,16 +334,16 @@ export class ReweScraper extends BaseScraper {
       // Check for Cloudflare challenge and try to solve it
       const title = await this.page.title();
       if (title.toLowerCase().includes('moment')) {
-        scraperLogger.warn('Cloudflare challenge detected on shop page. Attempting to solve...');
+        this.logger.warn('Cloudflare challenge detected on shop page. Attempting to solve...');
         const solved = await this.solveCloudflareChallenge();
         if (!solved) {
-          scraperLogger.error('Could not bypass Cloudflare challenge');
+          this.logger.error('Could not bypass Cloudflare challenge');
           return;
         }
       }
 
       // Click on "Lieferservice" option
-      scraperLogger.info('Looking for Lieferservice option...');
+      this.logger.info('Looking for Lieferservice option...');
 
       // Try different selectors for the Lieferservice button
       const lieferserviceSelectors = [
@@ -361,7 +360,7 @@ export class ReweScraper extends BaseScraper {
           if (element) {
             await element.click();
             clicked = true;
-            scraperLogger.info('Clicked Lieferservice option');
+            this.logger.info('Clicked Lieferservice option');
             break;
           }
         } catch {
@@ -370,13 +369,13 @@ export class ReweScraper extends BaseScraper {
       }
 
       if (!clicked) {
-        scraperLogger.warn('Could not find Lieferservice button, trying postal code input directly');
+        this.logger.warn('Could not find Lieferservice button, trying postal code input directly');
       }
 
       await this.page.waitForTimeout(1500);
 
       // Enter postal code
-      scraperLogger.info(`Entering postal code ${this.POSTAL_CODE}...`);
+      this.logger.info(`Entering postal code ${this.POSTAL_CODE}...`);
 
       // Look for postal code input field
       const postalInputSelectors = [
@@ -396,7 +395,7 @@ export class ReweScraper extends BaseScraper {
             await input.click();
             await input.fill(this.POSTAL_CODE);
             inputFound = true;
-            scraperLogger.info('Entered postal code');
+            this.logger.info('Entered postal code');
             break;
           }
         } catch {
@@ -409,16 +408,16 @@ export class ReweScraper extends BaseScraper {
         try {
           await this.page.keyboard.type(this.POSTAL_CODE);
           inputFound = true;
-          scraperLogger.info('Typed postal code into focused element');
+          this.logger.info('Typed postal code into focused element');
         } catch {
-          scraperLogger.warn('Could not find postal code input');
+          this.logger.warn('Could not find postal code input');
         }
       }
 
       await this.page.waitForTimeout(1000);
 
       // Click "Lieferservice finden" button
-      scraperLogger.info('Looking for Lieferservice finden button...');
+      this.logger.info('Looking for Lieferservice finden button...');
 
       const findButtonSelectors = [
         'text=Lieferservice finden',
@@ -432,7 +431,7 @@ export class ReweScraper extends BaseScraper {
           const button = await this.page.$(selector);
           if (button) {
             await button.click();
-            scraperLogger.info('Clicked Lieferservice finden button');
+            this.logger.info('Clicked Lieferservice finden button');
             break;
           }
         } catch {
@@ -447,13 +446,13 @@ export class ReweScraper extends BaseScraper {
       const pageContent = await this.page.content();
       if (pageContent.includes('Lieferung') || pageContent.includes('€')) {
         this.marketSelected = true;
-        scraperLogger.info('Delivery market selected successfully');
+        this.logger.info('Delivery market selected successfully');
       } else {
-        scraperLogger.warn('Market selection may not have completed successfully');
+        this.logger.warn('Market selection may not have completed successfully');
       }
 
     } catch (error) {
-      scraperLogger.error('Failed to select delivery market:', error);
+      this.logger.error('Failed to select delivery market:', error);
     }
   }
 
@@ -479,7 +478,7 @@ export class ReweScraper extends BaseScraper {
           const cookieButton = await this.page.$(selector);
           if (cookieButton) {
             await cookieButton.click();
-            scraperLogger.debug('Cookie consent accepted');
+            this.logger.debug('Cookie consent accepted');
             await this.page.waitForTimeout(500);
             break;
           }
@@ -488,7 +487,7 @@ export class ReweScraper extends BaseScraper {
         }
       }
     } catch (error) {
-      scraperLogger.debug('No cookie consent dialog found or already dismissed');
+      this.logger.debug('No cookie consent dialog found or already dismissed');
     }
   }
 
@@ -501,17 +500,17 @@ export class ReweScraper extends BaseScraper {
 
     try {
       const baseCategoryUrl = `${this.BASE_URL}${category.url}`;
-      scraperLogger.info(`Scraping category: ${category.name} from ${baseCategoryUrl}`);
+      this.logger.info(`Scraping category: ${category.name} from ${baseCategoryUrl}`);
 
       if (!this.page) return products;
 
       // Warn if market wasn't selected
       if (!this.marketSelected) {
-        scraperLogger.warn('Market not selected - products may not have prices');
+        this.logger.warn('Market not selected - products may not have prices');
       }
 
       // Navigate to first page
-      scraperLogger.debug(`Navigating to ${baseCategoryUrl}`);
+      this.logger.debug(`Navigating to ${baseCategoryUrl}`);
       await this.page.goto(baseCategoryUrl, { waitUntil: 'domcontentloaded' });
       await this.waitForDynamicContent();
 
@@ -520,24 +519,24 @@ export class ReweScraper extends BaseScraper {
 
       // Check page title
       let title = await this.page.title();
-      scraperLogger.info(`Page title: ${title}`);
+      this.logger.info(`Page title: ${title}`);
 
       // If Cloudflare challenge is present, try to solve it
       if (title.includes('moment') || title.includes('Moment')) {
-        scraperLogger.warn(`Cloudflare challenge detected for ${category.name}, attempting to solve...`);
+        this.logger.warn(`Cloudflare challenge detected for ${category.name}, attempting to solve...`);
         const solved = await this.solveCloudflareChallenge();
         if (!solved) {
-          scraperLogger.error(`Could not solve Cloudflare challenge for ${category.name}, skipping`);
+          this.logger.error(`Could not solve Cloudflare challenge for ${category.name}, skipping`);
           return products;
         }
         // Update title after solving
         title = await this.page.title();
-        scraperLogger.info(`Page title after solving: ${title}`);
+        this.logger.info(`Page title after solving: ${title}`);
       }
 
       // Get total pages from pagination
       const totalPages = await this.getTotalPages();
-      scraperLogger.info(`Category ${category.name}: Found ${totalPages} pages`);
+      this.logger.info(`Category ${category.name}: Found ${totalPages} pages`);
 
       // Scrape each page
       for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
@@ -545,21 +544,21 @@ export class ReweScraper extends BaseScraper {
           // Navigate to page (skip for first page as we're already there)
           if (pageNum > 1) {
             const pageUrl = `${baseCategoryUrl}?page=${pageNum}`;
-            scraperLogger.debug(`Navigating to page ${pageNum}: ${pageUrl}`);
+            this.logger.debug(`Navigating to page ${pageNum}: ${pageUrl}`);
             await this.page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
             await this.waitForDynamicContent();
 
             // Check for Cloudflare on subsequent pages
             let pageTitle = await this.page.title();
             if (pageTitle.includes('moment') || pageTitle.includes('Moment')) {
-              scraperLogger.warn(`Cloudflare challenge on page ${pageNum}, attempting to solve...`);
+              this.logger.warn(`Cloudflare challenge on page ${pageNum}, attempting to solve...`);
               const solved = await this.solveCloudflareChallenge();
               if (!solved) {
-                scraperLogger.error(`Could not solve Cloudflare on page ${pageNum}, stopping pagination`);
+                this.logger.error(`Could not solve Cloudflare on page ${pageNum}, stopping pagination`);
                 break;
               }
               pageTitle = await this.page.title();
-              scraperLogger.info(`Page ${pageNum} title after solving: ${pageTitle}`);
+              this.logger.info(`Page ${pageNum} title after solving: ${pageTitle}`);
             }
           }
 
@@ -573,10 +572,10 @@ export class ReweScraper extends BaseScraper {
           const productsWithPrice = pageProducts.filter(p => p.price > 0).length;
           const productsWithoutPrice = pageProducts.length - productsWithPrice;
 
-          scraperLogger.info(`${category.name} page ${pageNum}/${totalPages}: Found ${pageProducts.length} products (${productsWithPrice} with price)`);
+          this.logger.info(`${category.name} page ${pageNum}/${totalPages}: Found ${pageProducts.length} products (${productsWithPrice} with price)`);
 
           if (productsWithoutPrice > 0 && productsWithPrice === 0 && pageNum === 1) {
-            scraperLogger.warn(`All products show location-dependent pricing. No market/delivery zone selected.`);
+            this.logger.warn(`All products show location-dependent pricing. No market/delivery zone selected.`);
           }
 
           // Parse products
@@ -590,7 +589,7 @@ export class ReweScraper extends BaseScraper {
               pageNumber: pageNum,
               totalProductsOnPage: parsedProducts.length,
             });
-            scraperLogger.info(`${category.name} page ${pageNum}: Saved ${savedCount}/${parsedProducts.length} products`);
+            this.logger.info(`${category.name} page ${pageNum}: Saved ${savedCount}/${parsedProducts.length} products`);
           }
 
           products.push(...parsedProducts);
@@ -600,12 +599,12 @@ export class ReweScraper extends BaseScraper {
             await this.page.waitForTimeout(1000);
           }
         } catch (pageError) {
-          scraperLogger.error(`Failed to scrape page ${pageNum} of ${category.name}:`, pageError);
+          this.logger.error(`Failed to scrape page ${pageNum} of ${category.name}:`, pageError);
           // Continue to next page on error
         }
       }
 
-      scraperLogger.info(`Category ${category.name}: Total ${products.length} products scraped from ${totalPages} pages`);
+      this.logger.info(`Category ${category.name}: Total ${products.length} products scraped from ${totalPages} pages`);
     } catch (error) {
       this.logError(
         `Failed to scrape category ${category.name}`,
@@ -681,7 +680,7 @@ export class ReweScraper extends BaseScraper {
 
       return totalPages;
     } catch (error) {
-      scraperLogger.debug('Could not determine total pages, defaulting to 1');
+      this.logger.debug('Could not determine total pages, defaulting to 1');
       return 1;
     }
   }
@@ -722,7 +721,7 @@ export class ReweScraper extends BaseScraper {
       // Wait for content to load
       await this.page.waitForTimeout(1000);
 
-      scraperLogger.debug(`Scroll ${scrollCount}: ${currentProductCount} products loaded`);
+      this.logger.debug(`Scroll ${scrollCount}: ${currentProductCount} products loaded`);
     }
   }
 
@@ -820,7 +819,7 @@ export class ReweScraper extends BaseScraper {
 
       return products;
     } catch (error) {
-      scraperLogger.error('Failed to extract products from page:', error);
+      this.logger.error('Failed to extract products from page:', error);
       return [];
     }
   }
@@ -835,7 +834,7 @@ export class ReweScraper extends BaseScraper {
       try {
         // Skip products without price (location-dependent pricing not resolved)
         if (item.price === 0) {
-          scraperLogger.debug(`Skipping product without price: ${item.name}`);
+          this.logger.debug(`Skipping product without price: ${item.name}`);
           continue;
         }
 
@@ -847,7 +846,7 @@ export class ReweScraper extends BaseScraper {
           if (weightFromName && weightFromName.unit && weightFromName.unitQuantity) {
             unit = weightFromName.unit;
             unitQuantity = weightFromName.unitQuantity;
-            scraperLogger.debug(`Extracted weight from name for "${item.name}": ${unitQuantity} ${unit}`);
+            this.logger.debug(`Extracted weight from name for "${item.name}": ${unitQuantity} ${unit}`);
           }
         }
 
@@ -870,7 +869,7 @@ export class ReweScraper extends BaseScraper {
         this.productsScraped++;
       } catch (error) {
         this.productsFailed++;
-        scraperLogger.debug(`Failed to parse product: ${item.name}`, error);
+        this.logger.debug(`Failed to parse product: ${item.name}`, error);
       }
     }
 
@@ -983,16 +982,16 @@ export class ReweScraper extends BaseScraper {
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up REWE scraper...`);
+    this.logger.info(`Cleaning up REWE scraper...`);
 
     // Close persistent browser context
     if (this.browserContext) {
       await this.browserContext.close();
       this.browserContext = null;
-      scraperLogger.info('Stealth browser closed');
+      this.logger.info('Stealth browser closed');
     }
 
     const stats = this.getStats();
-    scraperLogger.info('REWE scraping completed:', stats);
+    this.logger.info('REWE scraping completed:', stats);
   }
 }

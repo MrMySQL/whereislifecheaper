@@ -1,5 +1,5 @@
 import { Browser, Page, chromium } from 'playwright';
-import { scraperLogger } from '../../utils/logger';
+import { createPrefixedLogger } from '../../utils/logger';
 import { retry, sleep } from '../../utils/retry';
 import { config } from '../../config/env';
 import {
@@ -26,9 +26,11 @@ export abstract class BaseScraper {
   protected productsFailed: number = 0;
   protected errors: ScrapeError[] = [];
   protected onPageScraped?: OnPageScrapedCallback;
+  protected logger: ReturnType<typeof createPrefixedLogger>;
 
   constructor(config: ScraperConfig) {
     this.config = config;
+    this.logger = createPrefixedLogger(config.name);
   }
 
   /**
@@ -69,18 +71,18 @@ export abstract class BaseScraper {
   async scrapeProductList(): Promise<ProductData[]> {
     const allProducts: ProductData[] = [];
 
-    scraperLogger.info(
+    this.logger.info(
       `Starting to scrape ${this.config.name} (${this.config.categories.length} categories)...`
     );
 
     for (const category of this.config.categories) {
       try {
-        scraperLogger.info(`Scraping category: ${category.name} (${category.id})`);
+        this.logger.info(`Scraping category: ${category.name} (${category.id})`);
 
         const categoryProducts = await this.scrapeCategory(category);
         allProducts.push(...categoryProducts);
 
-        scraperLogger.info(
+        this.logger.info(
           `Scraped ${categoryProducts.length} products from ${category.name}`
         );
 
@@ -95,7 +97,7 @@ export abstract class BaseScraper {
       }
     }
 
-    scraperLogger.info(`Total products scraped: ${allProducts.length}`);
+    this.logger.info(`Total products scraped: ${allProducts.length}`);
     return allProducts;
   }
 
@@ -115,7 +117,7 @@ export abstract class BaseScraper {
    * Launch browser with configured options
    */
   protected async launchBrowser(): Promise<void> {
-    scraperLogger.info(`Launching browser for ${this.config.name}`);
+    this.logger.info(`Launching browser for ${this.config.name}`);
 
     const launchOptions: Parameters<typeof chromium.launch>[0] = {
       headless: config.scraper.headless,
@@ -130,12 +132,12 @@ export abstract class BaseScraper {
     // Add proxy if configured
     if (config.scraper.proxyUrl) {
       launchOptions.proxy = this.parseProxyUrl(config.scraper.proxyUrl);
-      scraperLogger.info(`Using proxy: ${launchOptions.proxy.server}`);
+      this.logger.info(`Using proxy: ${launchOptions.proxy.server}`);
     }
 
     this.browser = await chromium.launch(launchOptions);
 
-    scraperLogger.info(`Browser launched for ${this.config.name}`);
+    this.logger.info(`Browser launched for ${this.config.name}`);
   }
 
   /**
@@ -165,7 +167,7 @@ export abstract class BaseScraper {
     // Handle console messages
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
-        scraperLogger.debug(`Browser console error: ${msg.text()}`);
+        this.logger.debug(`Browser console error: ${msg.text()}`);
       }
     });
 
@@ -195,7 +197,7 @@ export abstract class BaseScraper {
 
     await retry(
       async () => {
-        scraperLogger.debug(`Navigating to: ${url}`);
+        this.logger.debug(`Navigating to: ${url}`);
         await this.page!.goto(url, {
           waitUntil: 'domcontentloaded',
           timeout: config.scraper.timeout,
@@ -206,7 +208,7 @@ export abstract class BaseScraper {
         maxRetries: this.config.maxRetries,
         initialDelay: 2000,
         onRetry: (attempt, error) => {
-          scraperLogger.warn(`Navigation retry ${attempt} for ${url}:`, error.message);
+          this.logger.warn(`Navigation retry ${attempt} for ${url}:`, error.message);
         },
       }
     );
@@ -267,9 +269,9 @@ export abstract class BaseScraper {
       const filepath = path.join(screenshotsDir, filename);
 
       await this.page.screenshot({ path: filepath, fullPage: true });
-      scraperLogger.info(`Screenshot saved: ${filepath}`);
+      this.logger.info(`Screenshot saved: ${filepath}`);
     } catch (error) {
-      scraperLogger.error('Failed to take screenshot:', error);
+      this.logger.error('Failed to take screenshot:', error);
     }
   }
 
@@ -289,7 +291,7 @@ export abstract class BaseScraper {
       const text = await element.textContent();
       return text?.trim() || defaultValue;
     } catch (error) {
-      scraperLogger.debug(`Failed to extract text from ${selector}:`, error);
+      this.logger.debug(`Failed to extract text from ${selector}:`, error);
       return defaultValue;
     }
   }
@@ -311,7 +313,7 @@ export abstract class BaseScraper {
       const value = await element.getAttribute(attribute);
       return value || defaultValue;
     } catch (error) {
-      scraperLogger.debug(`Failed to extract ${attribute} from ${selector}:`, error);
+      this.logger.debug(`Failed to extract ${attribute} from ${selector}:`, error);
       return defaultValue;
     }
   }
@@ -341,7 +343,7 @@ export abstract class BaseScraper {
       maxRetries: this.config.maxRetries,
       initialDelay: 1000,
       onRetry: (attempt, error) => {
-        scraperLogger.warn(`${context} - Retry ${attempt}:`, error.message);
+        this.logger.warn(`${context} - Retry ${attempt}:`, error.message);
       },
     });
   }
@@ -360,7 +362,7 @@ export abstract class BaseScraper {
     this.errors.push(scrapeError);
     this.productsFailed++;
 
-    scraperLogger.error(message, {
+    this.logger.error(message, {
       productUrl,
       error: error?.message,
       supermarket: this.config.name,
@@ -404,7 +406,7 @@ export abstract class BaseScraper {
       this.browser = null;
     }
 
-    scraperLogger.info(`Browser closed for ${this.config.name}`);
+    this.logger.info(`Browser closed for ${this.config.name}`);
   }
 
   /**

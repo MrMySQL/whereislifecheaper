@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 
 /**
  * Knuspr categories configuration
@@ -126,7 +125,7 @@ export class KnusprScraper extends BaseScraper {
    * Initialize the scraper with browser (needed for cookies/session)
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Knuspr API scraper...`);
+    this.logger.info(`Initializing Knuspr API scraper...`);
     this.startTime = Date.now();
 
     // Launch browser to handle cookie consent and session
@@ -134,14 +133,14 @@ export class KnusprScraper extends BaseScraper {
     this.page = await this.createPage();
 
     // Navigate to main page
-    scraperLogger.info('Navigating to Knuspr to establish session...');
+    this.logger.info('Navigating to Knuspr to establish session...');
     await this.page.goto('https://www.knuspr.de/en-DE/', { waitUntil: 'domcontentloaded' });
     await this.waitForDynamicContent();
 
     // Handle cookie consent if present
     await this.handleCookieConsent();
 
-    scraperLogger.info(`Knuspr API scraper initialized`);
+    this.logger.info(`Knuspr API scraper initialized`);
   }
 
   /**
@@ -170,7 +169,7 @@ export class KnusprScraper extends BaseScraper {
           const cookieButton = await this.page.$(selector);
           if (cookieButton) {
             await cookieButton.click();
-            scraperLogger.debug('Cookie consent accepted');
+            this.logger.debug('Cookie consent accepted');
             await this.page.waitForTimeout(500);
             break;
           }
@@ -179,7 +178,7 @@ export class KnusprScraper extends BaseScraper {
         }
       }
     } catch (error) {
-      scraperLogger.debug('No cookie consent dialog found or already dismissed');
+      this.logger.debug('No cookie consent dialog found or already dismissed');
     }
   }
 
@@ -191,7 +190,7 @@ export class KnusprScraper extends BaseScraper {
     const categoryId = category.id;
 
     try {
-      scraperLogger.info(`Scraping category: ${category.name} (ID: ${categoryId})`);
+      this.logger.info(`Scraping category: ${category.name} (ID: ${categoryId})`);
 
       let page = 0; // Knuspr API uses 0-indexed pagination
       let hasMorePages = true;
@@ -201,12 +200,12 @@ export class KnusprScraper extends BaseScraper {
         const categoryResponse = await this.fetchCategoryProductIds(categoryId, page);
 
         if (!categoryResponse || categoryResponse.productIds.length === 0) {
-          scraperLogger.debug(`No more products in category ${category.name} at page ${page}`);
+          this.logger.debug(`No more products in category ${category.name} at page ${page}`);
           break;
         }
 
         const productIds = categoryResponse.productIds;
-        scraperLogger.info(
+        this.logger.info(
           `${category.name}: Page ${page + 1}, found ${productIds.length} product IDs`
         );
 
@@ -226,7 +225,7 @@ export class KnusprScraper extends BaseScraper {
             pageNumber: page + 1,
             totalProductsOnPage: pageProducts.length,
           });
-          scraperLogger.info(
+          this.logger.info(
             `${category.name} page ${page + 1}: Saved ${savedCount}/${pageProducts.length} products`
           );
         }
@@ -245,7 +244,7 @@ export class KnusprScraper extends BaseScraper {
         }
       }
 
-      scraperLogger.info(`Category ${category.name}: Total ${products.length} products scraped`);
+      this.logger.info(`Category ${category.name}: Total ${products.length} products scraped`);
     } catch (error) {
       this.logError(
         `Failed to scrape category ${category.name}`,
@@ -279,14 +278,14 @@ export class KnusprScraper extends BaseScraper {
       });
 
       if (!response.ok()) {
-        scraperLogger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
+        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
         return null;
       }
 
       const data: KnusprCategoryResponse = await response.json();
       return data;
     } catch (error) {
-      scraperLogger.error(`Failed to fetch ${url}:`, error);
+      this.logger.error(`Failed to fetch ${url}:`, error);
       return null;
     }
   }
@@ -318,7 +317,7 @@ export class KnusprScraper extends BaseScraper {
         ]);
 
         if (!productsResponse.ok() || !pricesResponse.ok()) {
-          scraperLogger.warn(`Failed to fetch batch: products=${productsResponse.status()}, prices=${pricesResponse.status()}`);
+          this.logger.warn(`Failed to fetch batch: products=${productsResponse.status()}, prices=${pricesResponse.status()}`);
           continue;
         }
 
@@ -337,11 +336,11 @@ export class KnusprScraper extends BaseScraper {
           if (priceInfo) {
             results.push({ product, priceInfo });
           } else {
-            scraperLogger.debug(`No price found for product ${product.id}: ${product.name}`);
+            this.logger.debug(`No price found for product ${product.id}: ${product.name}`);
           }
         }
       } catch (error) {
-        scraperLogger.error(`Failed to fetch product batch:`, error);
+        this.logger.error(`Failed to fetch product batch:`, error);
       }
 
       // Small delay between batches
@@ -499,10 +498,10 @@ export class KnusprScraper extends BaseScraper {
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Knuspr API scraper...`);
+    this.logger.info(`Cleaning up Knuspr API scraper...`);
     await this.closeBrowser();
 
     const stats = this.getStats();
-    scraperLogger.info('Knuspr scraping completed:', stats);
+    this.logger.info('Knuspr scraping completed:', stats);
   }
 }

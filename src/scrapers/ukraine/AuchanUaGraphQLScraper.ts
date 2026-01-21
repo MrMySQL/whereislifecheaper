@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 import { extractQuantity } from '../../utils/normalizer';
 import { retry, sleep } from '../../utils/retry';
 import https from 'https';
@@ -176,9 +175,9 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
    * Initialize the scraper (no browser needed)
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Auchan Ukraine GraphQL scraper...`);
+    this.logger.info(`Initializing Auchan Ukraine GraphQL scraper...`);
     this.startTime = Date.now();
-    scraperLogger.info(`Auchan Ukraine GraphQL scraper initialized (no browser required)`);
+    this.logger.info(`Auchan Ukraine GraphQL scraper initialized (no browser required)`);
   }
 
   /**
@@ -191,7 +190,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
     const categoryId = graphqlCategory.graphqlId || this.getCategoryIdFromUrl(category.url);
 
     if (!categoryId) {
-      scraperLogger.warn(`No GraphQL ID found for category: ${category.id}`);
+      this.logger.warn(`No GraphQL ID found for category: ${category.id}`);
       return [];
     }
 
@@ -225,7 +224,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
       const firstPage = await this.fetchProductsPage(categoryId, 1);
 
       if (!firstPage?.data?.search) {
-        scraperLogger.warn(`No data returned for category ${categoryName}`);
+        this.logger.warn(`No data returned for category ${categoryName}`);
         return [];
       }
 
@@ -234,7 +233,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
         this.MAX_PAGES_PER_CATEGORY
       );
 
-      scraperLogger.info(
+      this.logger.info(
         `Category ${categoryName}: ${totalPages} pages to fetch (${this.PAGE_SIZE} products/page)`
       );
 
@@ -248,7 +247,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
           pageNumber: 1,
           totalProductsOnPage: firstPageProducts.length,
         });
-        scraperLogger.info(
+        this.logger.info(
           `${categoryName} page 1/${totalPages}: Saved ${savedCount}/${firstPageProducts.length} products`
         );
       }
@@ -279,7 +278,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
                 const products = this.transformProducts(pageData.data.search.items);
                 return { pageNum, products };
               } catch (error) {
-                scraperLogger.warn(
+                this.logger.warn(
                   `Failed to fetch page ${pageNum} of ${categoryName}:`,
                   (error as Error).message
                 );
@@ -299,7 +298,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
                   pageNumber: pageNum,
                   totalProductsOnPage: products.length,
                 });
-                scraperLogger.info(
+                this.logger.info(
                   `${categoryName} page ${pageNum}/${totalPages}: Saved ${savedCount}/${products.length} products`
                 );
               }
@@ -316,11 +315,11 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
         }
       }
 
-      scraperLogger.info(
+      this.logger.info(
         `Category ${categoryName}: scraped ${allProducts.length} total products from ${totalPages} pages`
       );
     } catch (error) {
-      scraperLogger.error(
+      this.logger.error(
         `Failed to scrape category ${categoryName}:`,
         (error as Error).message
       );
@@ -401,7 +400,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
         maxRetries: this.config.maxRetries,
         initialDelay: 1000,
         onRetry: (attempt, error) => {
-          scraperLogger.warn(
+          this.logger.warn(
             `GraphQL request retry ${attempt} for category ${categoryId}, page ${pageNum}:`,
             error.message
           );
@@ -464,7 +463,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
 
       return productData;
     } catch (error) {
-      scraperLogger.debug('Error transforming product:', error);
+      this.logger.debug('Error transforming product:', error);
       return null;
     }
   }
@@ -497,9 +496,9 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
    * Cleanup resources (no browser to close)
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Auchan Ukraine GraphQL scraper...`);
+    this.logger.info(`Cleaning up Auchan Ukraine GraphQL scraper...`);
 
     const stats = this.getStats();
-    scraperLogger.info('Auchan Ukraine GraphQL scraping completed:', stats);
+    this.logger.info('Auchan Ukraine GraphQL scraping completed:', stats);
   }
 }

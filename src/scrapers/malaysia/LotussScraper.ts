@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 import { extractQuantity, parsePrice } from '../../utils/normalizer';
 
 /**
@@ -70,7 +69,7 @@ export class LotussScraper extends BaseScraper {
    * Initialize the scraper
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Lotus's scraper...`);
+    this.logger.info(`Initializing Lotus's scraper...`);
     this.startTime = Date.now();
     await this.launchBrowser();
     this.page = await this.createPage();
@@ -82,7 +81,7 @@ export class LotussScraper extends BaseScraper {
     // Handle cookie consent
     await this.handleCookieConsent();
 
-    scraperLogger.info(`Lotus's scraper initialized`);
+    this.logger.info(`Lotus's scraper initialized`);
   }
 
   /**
@@ -108,7 +107,7 @@ export class LotussScraper extends BaseScraper {
     while (hasMorePages) {
       try {
         const url = pageNumber === 1 ? baseUrl : `${baseUrl}?page=${pageNumber}`;
-        scraperLogger.info(`Scraping ${categoryName} page ${pageNumber}: ${url}`);
+        this.logger.info(`Scraping ${categoryName} page ${pageNumber}: ${url}`);
 
         await this.navigateToUrl(url);
         await this.waitForDynamicContent();
@@ -118,7 +117,7 @@ export class LotussScraper extends BaseScraper {
         const productsLoaded = await this.waitForProducts();
 
         if (!productsLoaded) {
-          scraperLogger.warn(`No products found on ${categoryName} page ${pageNumber}`);
+          this.logger.warn(`No products found on ${categoryName} page ${pageNumber}`);
           hasMorePages = false;
           continue;
         }
@@ -126,7 +125,7 @@ export class LotussScraper extends BaseScraper {
         // Extract products from current page
         const pageProducts = await this.extractProductsFromPage(categoryName);
 
-        scraperLogger.info(`Found ${pageProducts.length} products on page ${pageNumber}`);
+        this.logger.info(`Found ${pageProducts.length} products on page ${pageNumber}`);
 
         if (pageProducts.length === 0) {
           hasMorePages = false;
@@ -141,7 +140,7 @@ export class LotussScraper extends BaseScraper {
             pageNumber,
             totalProductsOnPage: pageProducts.length,
           });
-          scraperLogger.info(
+          this.logger.info(
             `${categoryName} page ${pageNumber}: Saved ${savedCount}/${pageProducts.length} products`
           );
         }
@@ -158,7 +157,7 @@ export class LotussScraper extends BaseScraper {
 
         // Limit pages to prevent infinite loops
         if (pageNumber > 10) {
-          scraperLogger.warn(`Reached page limit for ${categoryName}`);
+          this.logger.warn(`Reached page limit for ${categoryName}`);
           hasMorePages = false;
         }
       } catch (error) {
@@ -191,7 +190,7 @@ export class LotussScraper extends BaseScraper {
       for (const selector of selectors) {
         try {
           await this.page.waitForSelector(selector, { timeout: 10000 });
-          scraperLogger.debug(`Found products using selector: ${selector}`);
+          this.logger.debug(`Found products using selector: ${selector}`);
           return true;
         } catch {
           // Try next selector
@@ -202,7 +201,7 @@ export class LotussScraper extends BaseScraper {
       await this.takeScreenshot('no-products-found');
       return false;
     } catch (error) {
-      scraperLogger.debug('Error waiting for products:', error);
+      this.logger.debug('Error waiting for products:', error);
       return false;
     }
   }
@@ -229,7 +228,7 @@ export class LotussScraper extends BaseScraper {
           const button = await this.page.$(selector);
           if (button) {
             await button.click();
-            scraperLogger.debug(`Accepted cookies using: ${selector}`);
+            this.logger.debug(`Accepted cookies using: ${selector}`);
             await this.page.waitForTimeout(1000);
             return;
           }
@@ -238,9 +237,9 @@ export class LotussScraper extends BaseScraper {
         }
       }
 
-      scraperLogger.debug('No cookie consent found or already accepted');
+      this.logger.debug('No cookie consent found or already accepted');
     } catch (error) {
-      scraperLogger.debug('Error handling cookie consent:', error);
+      this.logger.debug('Error handling cookie consent:', error);
     }
   }
 
@@ -294,12 +293,12 @@ export class LotussScraper extends BaseScraper {
       // Get all product grid items (Lotus's specific selector)
       const productCards = await this.page.$$('.product-grid-item');
 
-      scraperLogger.debug(`Found ${productCards.length} product cards`);
+      this.logger.debug(`Found ${productCards.length} product cards`);
 
       if (productCards.length === 0) {
         // Fallback to product links
         const productLinks = await this.page.$$('a[href*="/product/"]');
-        scraperLogger.debug(`Fallback: Found ${productLinks.length} product links`);
+        this.logger.debug(`Fallback: Found ${productLinks.length} product links`);
       }
 
       // Extract data from each product card
@@ -312,11 +311,11 @@ export class LotussScraper extends BaseScraper {
           }
         } catch (error) {
           this.productsFailed++;
-          scraperLogger.debug('Failed to extract product from card:', error);
+          this.logger.debug('Failed to extract product from card:', error);
         }
       }
     } catch (error) {
-      scraperLogger.error('Failed to extract products from page:', error);
+      this.logger.error('Failed to extract products from page:', error);
       await this.takeScreenshot('extract-products-error');
       throw error;
     }
@@ -364,7 +363,7 @@ export class LotussScraper extends BaseScraper {
       // Extract price - look for RM followed by digits
       const priceMatch = cardText.match(/RM\s*(\d+\.?\d*)/);
       if (!priceMatch) {
-        scraperLogger.debug(`Price not found in: ${cardText.substring(0, 100)}`);
+        this.logger.debug(`Price not found in: ${cardText.substring(0, 100)}`);
         return null;
       }
 
@@ -427,7 +426,7 @@ export class LotussScraper extends BaseScraper {
 
       return productData;
     } catch (error) {
-      scraperLogger.debug('Error extracting product from card:', error);
+      this.logger.debug('Error extracting product from card:', error);
       return null;
     }
   }
@@ -515,10 +514,10 @@ export class LotussScraper extends BaseScraper {
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Lotus's scraper...`);
+    this.logger.info(`Cleaning up Lotus's scraper...`);
     await this.closeBrowser();
 
     const stats = this.getStats();
-    scraperLogger.info("Lotus's scraping completed:", stats);
+    this.logger.info("Lotus's scraping completed:", stats);
   }
 }

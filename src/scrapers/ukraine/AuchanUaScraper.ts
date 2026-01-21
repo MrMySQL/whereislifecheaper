@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 import { extractQuantity } from '../../utils/normalizer';
 import { ElementHandle } from 'playwright';
 
@@ -111,11 +110,11 @@ export class AuchanUaScraper extends BaseScraper {
    * Initialize the scraper
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Auchan Ukraine scraper...`);
+    this.logger.info(`Initializing Auchan Ukraine scraper...`);
     this.startTime = Date.now();
     await this.launchBrowser();
     this.page = await this.createPage();
-    scraperLogger.info(`Auchan Ukraine scraper initialized`);
+    this.logger.info(`Auchan Ukraine scraper initialized`);
   }
 
   /**
@@ -145,7 +144,7 @@ export class AuchanUaScraper extends BaseScraper {
           ? baseUrl
           : `${baseUrl}l/page-${currentPage}/`;
 
-        scraperLogger.debug(`Scraping page ${currentPage}: ${pageUrl}`);
+        this.logger.debug(`Scraping page ${currentPage}: ${pageUrl}`);
 
         await this.navigateToUrl(pageUrl);
         await this.waitForDynamicContent();
@@ -159,7 +158,7 @@ export class AuchanUaScraper extends BaseScraper {
         // Extract products from current page
         const pageProducts = await this.extractProductsFromPage();
 
-        scraperLogger.debug(`Found ${pageProducts.length} products on page ${currentPage}`);
+        this.logger.debug(`Found ${pageProducts.length} products on page ${currentPage}`);
 
         if (pageProducts.length === 0) {
           // No products found, stop pagination
@@ -175,7 +174,7 @@ export class AuchanUaScraper extends BaseScraper {
             pageNumber: currentPage,
             totalProductsOnPage: pageProducts.length,
           });
-          scraperLogger.info(
+          this.logger.info(
             `${categoryName} page ${currentPage}: Saved ${savedCount}/${pageProducts.length} products`
           );
         }
@@ -200,7 +199,7 @@ export class AuchanUaScraper extends BaseScraper {
       }
     }
 
-    scraperLogger.info(`Category ${categoryName}: scraped ${allProducts.length} total products from ${currentPage} pages`);
+    this.logger.info(`Category ${categoryName}: scraped ${allProducts.length} total products from ${currentPage} pages`);
     return allProducts;
   }
 
@@ -215,12 +214,12 @@ export class AuchanUaScraper extends BaseScraper {
       const cookieButton = await this.page.$('button:has-text("Погоджуюся")');
       if (cookieButton) {
         await cookieButton.click();
-        scraperLogger.debug('Accepted cookie consent');
+        this.logger.debug('Accepted cookie consent');
         await this.page.waitForTimeout(500);
       }
     } catch (error) {
       // Cookie consent may not appear, that's fine
-      scraperLogger.debug('No cookie consent found or already accepted');
+      this.logger.debug('No cookie consent found or already accepted');
     }
   }
 
@@ -262,7 +261,7 @@ export class AuchanUaScraper extends BaseScraper {
       await this.page.waitForSelector('a[href*="/ua/"][href$="/"]', {
         timeout: 10000,
       }).catch(() => {
-        scraperLogger.warn('Product links not found on page');
+        this.logger.warn('Product links not found on page');
       });
 
       // Get all product containers by looking for elements with price info
@@ -282,7 +281,7 @@ export class AuchanUaScraper extends BaseScraper {
         }
       }
 
-      scraperLogger.debug(`Found ${productLinks.length} unique product links`);
+      this.logger.debug(`Found ${productLinks.length} unique product links`);
 
       // Extract product data from each product
       for (const { url, element } of productLinks) {
@@ -294,11 +293,11 @@ export class AuchanUaScraper extends BaseScraper {
           }
         } catch (error) {
           this.productsFailed++;
-          scraperLogger.debug(`Failed to extract product from ${url}:`, error);
+          this.logger.debug(`Failed to extract product from ${url}:`, error);
         }
       }
     } catch (error) {
-      scraperLogger.error('Failed to extract products from page:', error);
+      this.logger.error('Failed to extract products from page:', error);
       await this.takeScreenshot('auchan-extract-products-error');
       throw error;
     }
@@ -473,7 +472,7 @@ export class AuchanUaScraper extends BaseScraper {
 
       return productData;
     } catch (error) {
-      scraperLogger.debug('Error extracting product data:', error);
+      this.logger.debug('Error extracting product data:', error);
       return null;
     }
   }
@@ -587,10 +586,10 @@ export class AuchanUaScraper extends BaseScraper {
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Auchan Ukraine scraper...`);
+    this.logger.info(`Cleaning up Auchan Ukraine scraper...`);
     await this.closeBrowser();
 
     const stats = this.getStats();
-    scraperLogger.info('Auchan Ukraine scraping completed:', stats);
+    this.logger.info('Auchan Ukraine scraping completed:', stats);
   }
 }

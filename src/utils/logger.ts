@@ -36,8 +36,9 @@ const logFormat = winston.format.combine(
 const consoleFormat = winston.format.combine(
   winston.format.colorize(),
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  winston.format.printf(({ timestamp, level, message, ...meta }) => {
-    let msg = `${timestamp} [${level}]: ${message}`;
+  winston.format.printf(({ timestamp, level, message, prefix, ...meta }) => {
+    const prefixStr = prefix ? `[${prefix}] ` : '';
+    let msg = `${timestamp} [${level}]: ${prefixStr}${message}`;
     if (Object.keys(meta).length > 0) {
       msg += ` ${JSON.stringify(meta)}`;
     }
@@ -168,5 +169,18 @@ export const cronLogger = createLogger('cron', 'cron');
 if (config.api.env === 'development') {
   logger.info('Logger initialized in development mode');
 }
+
+/**
+ * Create a prefixed logger for a specific scraper/supermarket
+ * This helps identify which supermarket logs belong to when running in parallel
+ */
+export const createPrefixedLogger = (prefix: string) => {
+  return {
+    info: (message: string, meta?: any) => scraperLogger.info(message, { prefix, ...meta }),
+    warn: (message: string, meta?: any) => scraperLogger.warn(message, { prefix, ...meta }),
+    error: (message: string, meta?: any) => scraperLogger.error(message, { prefix, ...meta }),
+    debug: (message: string, meta?: any) => scraperLogger.debug(message, { prefix, ...meta }),
+  };
+};
 
 export default logger;

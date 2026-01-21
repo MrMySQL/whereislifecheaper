@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 import { extractQuantity } from '../../utils/normalizer';
 import { BrowserContext } from 'playwright';
 import { chromium } from 'playwright-extra';
@@ -121,7 +120,7 @@ export class LotussApiScraper extends BaseScraper {
    * Initialize the scraper - establish browser session for API calls
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Lotus's API scraper...`);
+    this.logger.info(`Initializing Lotus's API scraper...`);
     this.startTime = Date.now();
 
     // Set up API headers
@@ -135,7 +134,7 @@ export class LotussApiScraper extends BaseScraper {
 
     // Launch browser with stealth plugin to bypass bot detection
     const isHeadless = process.env.PLAYWRIGHT_HEADLESS !== 'false';
-    scraperLogger.info(`Launching browser in ${isHeadless ? 'headless' : 'headed'} mode with stealth plugin`);
+    this.logger.info(`Launching browser in ${isHeadless ? 'headless' : 'headed'} mode with stealth plugin`);
 
     // Add stealth plugin to avoid bot detection
     chromium.use(StealthPlugin());
@@ -173,7 +172,7 @@ export class LotussApiScraper extends BaseScraper {
           // Store captured products
           const existing = this.capturedProducts.get(categoryId) || [];
           this.capturedProducts.set(categoryId, [...existing, ...body.data.products]);
-          scraperLogger.debug(`Captured ${body.data.products.length} products for category ${categoryId}`);
+          this.logger.debug(`Captured ${body.data.products.length} products for category ${categoryId}`);
         }
       }
 
@@ -188,7 +187,7 @@ export class LotussApiScraper extends BaseScraper {
 
     await this.page.waitForTimeout(3000);
 
-    scraperLogger.info(`Lotus's API scraper initialized`);
+    this.logger.info(`Lotus's API scraper initialized`);
   }
 
   /**
@@ -201,14 +200,14 @@ export class LotussApiScraper extends BaseScraper {
 
     const products: ProductData[] = [];
 
-    scraperLogger.info(`Scraping category: ${category.name} (ID: ${category.id})`);
+    this.logger.info(`Scraping category: ${category.name} (ID: ${category.id})`);
 
     // Clear any previously captured products for this category
     this.capturedProducts.delete(category.id);
 
     // Navigate to the category page - this will trigger API calls that we intercept
     const categoryUrl = `https://www.lotuss.com.my/en/category/${category.url}`;
-    scraperLogger.info(`Navigating to ${categoryUrl}`);
+    this.logger.info(`Navigating to ${categoryUrl}`);
 
     try {
       await this.page.goto(categoryUrl, {
@@ -238,12 +237,12 @@ export class LotussApiScraper extends BaseScraper {
         await this.page.waitForTimeout(1500);
         scrollAttempts++;
 
-        scraperLogger.debug(`${category.name}: Scroll attempt ${scrollAttempts}, captured ${this.capturedProducts.get(category.id)?.length || 0} products`);
+        this.logger.debug(`${category.name}: Scroll attempt ${scrollAttempts}, captured ${this.capturedProducts.get(category.id)?.length || 0} products`);
       }
 
       // Get captured products
       const apiProducts = this.capturedProducts.get(category.id) || [];
-      scraperLogger.info(`${category.name}: Captured ${apiProducts.length} products from API intercepts`);
+      this.logger.info(`${category.name}: Captured ${apiProducts.length} products from API intercepts`);
 
       // Convert and deduplicate products
       const seenSkus = new Set<string>();
@@ -265,7 +264,7 @@ export class LotussApiScraper extends BaseScraper {
           pageNumber: 1,
           totalProductsOnPage: products.length,
         });
-        scraperLogger.info(`${category.name}: Saved ${savedCount}/${products.length} products`);
+        this.logger.info(`${category.name}: Saved ${savedCount}/${products.length} products`);
       }
 
       this.productsScraped += products.length;
@@ -278,7 +277,7 @@ export class LotussApiScraper extends BaseScraper {
       );
     }
 
-    scraperLogger.info(`${category.name}: Total ${products.length} products scraped`);
+    this.logger.info(`${category.name}: Total ${products.length} products scraped`);
     return products;
   }
 
@@ -327,7 +326,7 @@ export class LotussApiScraper extends BaseScraper {
         isAvailable: apiProduct.stockStatus === 'IN_STOCK',
       };
     } catch (error) {
-      scraperLogger.debug(`Failed to convert product: ${apiProduct.name}`, error);
+      this.logger.debug(`Failed to convert product: ${apiProduct.name}`, error);
       return null;
     }
   }
@@ -405,13 +404,13 @@ export class LotussApiScraper extends BaseScraper {
       const apiResponse = response as LotussCategoryResponse;
 
       if (apiResponse.status?.code !== 200) {
-        scraperLogger.error(`Categories API error: ${apiResponse.status?.message}`);
+        this.logger.error(`Categories API error: ${apiResponse.status?.message}`);
         return [];
       }
 
       return apiResponse.data?.children || [];
     } catch (error) {
-      scraperLogger.error(`Failed to fetch categories: ${error}`);
+      this.logger.error(`Failed to fetch categories: ${error}`);
       return [];
     }
   }
@@ -420,7 +419,7 @@ export class LotussApiScraper extends BaseScraper {
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Lotus's API scraper...`);
+    this.logger.info(`Cleaning up Lotus's API scraper...`);
 
     // Clear captured products
     this.capturedProducts.clear();
@@ -447,6 +446,6 @@ export class LotussApiScraper extends BaseScraper {
     }
 
     const stats = this.getStats();
-    scraperLogger.info("Lotus's API scraping completed:", stats);
+    this.logger.info("Lotus's API scraping completed:", stats);
   }
 }

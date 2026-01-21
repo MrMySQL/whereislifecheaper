@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 // import { sleep } from '../../utils/retry';
 
 /**
@@ -131,7 +130,7 @@ export class MakroScraper extends BaseScraper {
    * Initialize the scraper with browser (needed for SmartCaptcha bypass)
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Makro scraper...`);
+    this.logger.info(`Initializing Makro scraper...`);
     this.startTime = Date.now();
 
     // // Generate device and session IDs
@@ -143,7 +142,7 @@ export class MakroScraper extends BaseScraper {
     this.page = await this.createPage();
 
     // Navigate to main page first to get cookies/pass SmartCaptcha
-    // scraperLogger.info('Navigating to Makro page to establish session...');
+    // this.logger.info('Navigating to Makro page to establish session...');
     // await this.page.goto(
     //   `${this.config.baseUrl}/uz/retail/makro/catalog/1034?placeSlug=${this.STORE_SLUG}`,
     //   { waitUntil: 'domcontentloaded', timeout: 60000 }
@@ -152,7 +151,7 @@ export class MakroScraper extends BaseScraper {
     // Wait for SmartCaptcha and try to solve it
     // await this.handleSmartCaptcha();
 
-    scraperLogger.info(`Makro scraper initialized`);
+    this.logger.info(`Makro scraper initialized`);
   }
 
   // /**
@@ -168,35 +167,35 @@ export class MakroScraper extends BaseScraper {
   //     // Check if we're on captcha page
   //     const title = await this.page.title();
   //     if (title.includes('robot') || title.includes('Robot')) {
-  //       scraperLogger.info('SmartCaptcha detected, attempting to solve...');
+  //       this.logger.info('SmartCaptcha detected, attempting to solve...');
 
   //       // Try to find and click the checkbox
   //       const checkbox = await this.page.$('input[type="checkbox"], .CheckboxCaptcha-Button, [class*="Checkbox"]');
   //       if (checkbox) {
   //         await checkbox.click();
-  //         scraperLogger.info('Clicked captcha checkbox');
+  //         this.logger.info('Clicked captcha checkbox');
   //         await sleep(5000);
   //       }
 
   //       // Wait for redirect
   //       await this.page.waitForURL(url => !url.href.includes('showcaptcha'), { timeout: 30000 }).catch(() => {
-  //         scraperLogger.warn('Captcha redirect timeout - may need manual intervention');
+  //         this.logger.warn('Captcha redirect timeout - may need manual intervention');
   //       });
   //     }
 
   //     // Verify we're on the correct page
   //     const currentUrl = this.page.url();
   //     if (currentUrl.includes('showcaptcha')) {
-  //       scraperLogger.error('Still on captcha page after attempts');
+  //       this.logger.error('Still on captcha page after attempts');
   //       await this.takeScreenshot('makro-captcha-failed');
   //       throw new Error('Failed to bypass SmartCaptcha');
   //     }
 
-  //     scraperLogger.info('Successfully passed SmartCaptcha');
+  //     this.logger.info('Successfully passed SmartCaptcha');
   //     await this.waitForDynamicContent();
 
   //   } catch (error) {
-  //     scraperLogger.warn('SmartCaptcha handling:', error);
+  //     this.logger.warn('SmartCaptcha handling:', error);
   //   }
   // }
 
@@ -231,14 +230,14 @@ export class MakroScraper extends BaseScraper {
       const categoryData = await this.fetchCategory(categoryId);
 
       if (!categoryData) {
-        scraperLogger.warn(`Failed to fetch category ${categoryName}`);
+        this.logger.warn(`Failed to fetch category ${categoryName}`);
         return products;
       }
 
       // Recursively collect products from nested categories
       const allProducts = this.collectProductsRecursively(categoryData.payload.categories);
 
-      scraperLogger.info(`Category ${categoryName}: Found ${allProducts.length} products`);
+      this.logger.info(`Category ${categoryName}: Found ${allProducts.length} products`);
 
       // Parse products
       const parsedProducts = this.parseProducts(allProducts, categoryName);
@@ -251,7 +250,7 @@ export class MakroScraper extends BaseScraper {
           pageNumber: 1,
           totalProductsOnPage: parsedProducts.length,
         });
-        scraperLogger.info(
+        this.logger.info(
           `${categoryName}: Saved ${savedCount}/${parsedProducts.length} products`
         );
       }
@@ -300,14 +299,14 @@ export class MakroScraper extends BaseScraper {
       });
 
       if (!response.ok()) {
-        scraperLogger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
+        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
         return null;
       }
 
       const data: YandexMenuResponse = await response.json();
       return data;
     } catch (error) {
-      scraperLogger.error(`Failed to fetch category ${categoryId}:`, error);
+      this.logger.error(`Failed to fetch category ${categoryId}:`, error);
       return null;
     }
   }
@@ -340,7 +339,7 @@ export class MakroScraper extends BaseScraper {
     const products: ProductData[] = [];
 
     if (!apiProducts || !Array.isArray(apiProducts)) {
-      scraperLogger.warn(`No products array in API response`);
+      this.logger.warn(`No products array in API response`);
       return products;
     }
 
@@ -387,7 +386,7 @@ export class MakroScraper extends BaseScraper {
         this.productsScraped++;
       } catch (error) {
         this.productsFailed++;
-        scraperLogger.debug(`Failed to parse product: ${item.name}`, error);
+        this.logger.debug(`Failed to parse product: ${item.name}`, error);
       }
     }
 
@@ -466,10 +465,10 @@ export class MakroScraper extends BaseScraper {
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Makro scraper...`);
+    this.logger.info(`Cleaning up Makro scraper...`);
     await this.closeBrowser();
 
     const stats = this.getStats();
-    scraperLogger.info('Makro scraping completed:', stats);
+    this.logger.info('Makro scraping completed:', stats);
   }
 }

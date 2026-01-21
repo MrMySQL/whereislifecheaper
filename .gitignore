@@ -53,3 +53,5 @@ screenshots/
 tmp/
 temp/
 .vercel
+
+terraform/.terraform

@@ -1,6 +1,5 @@
 import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { scraperLogger } from '../../utils/logger';
 
 /**
  * Arbuz.kz categories configuration
@@ -104,7 +103,7 @@ export class ArbuzScraper extends BaseScraper {
    * Initialize the scraper with browser (needed to establish session)
    */
   async initialize(): Promise<void> {
-    scraperLogger.info(`Initializing Arbuz.kz API scraper...`);
+    this.logger.info(`Initializing Arbuz.kz API scraper...`);
     this.startTime = Date.now();
 
     // Launch browser to handle session establishment
@@ -112,14 +111,14 @@ export class ArbuzScraper extends BaseScraper {
     this.page = await this.createPage();
 
     // Navigate to main page to establish session and obtain auth token
-    scraperLogger.info('Navigating to Arbuz.kz homepage to establish session...');
+    this.logger.info('Navigating to Arbuz.kz homepage to establish session...');
     await this.page.goto(`${this.config.baseUrl}/ru/${this.CITY}`, { waitUntil: 'domcontentloaded' });
     await this.waitForDynamicContent();
 
     // Handle any anti-bot measures
     await this.handleAntiBot();
 
-    scraperLogger.info(`Arbuz.kz API scraper initialized`);
+    this.logger.info(`Arbuz.kz API scraper initialized`);
   }
 
   /**
@@ -170,7 +169,7 @@ export class ArbuzScraper extends BaseScraper {
             pageNumber: page,
             totalProductsOnPage: pageProducts.length,
           });
-          scraperLogger.info(
+          this.logger.info(
             `Page ${page} of ${categoryName}: Saved ${savedCount}/${pageProducts.length} products`
           );
         }
@@ -193,7 +192,7 @@ export class ArbuzScraper extends BaseScraper {
       }
     }
 
-    scraperLogger.info(`Category ${categoryName}: Scraped ${products.length} products across ${page} pages`);
+    this.logger.info(`Category ${categoryName}: Scraped ${products.length} products across ${page} pages`);
     return products;
   }
 
@@ -221,14 +220,14 @@ export class ArbuzScraper extends BaseScraper {
       });
 
       if (!response.ok()) {
-        scraperLogger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
+        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
         return null;
       }
 
       const data: ArbuzApiResponse = await response.json();
       return data;
     } catch (error) {
-      scraperLogger.error(`Failed to fetch ${url}:`, error);
+      this.logger.error(`Failed to fetch ${url}:`, error);
       return null;
     }
   }
@@ -240,7 +239,7 @@ export class ArbuzScraper extends BaseScraper {
     const products: ProductData[] = [];
 
     if (!apiProducts || !Array.isArray(apiProducts)) {
-      scraperLogger.warn(`No products array in API response`);
+      this.logger.warn(`No products array in API response`);
       return products;
     }
 
@@ -295,7 +294,7 @@ export class ArbuzScraper extends BaseScraper {
         this.productsScraped++;
       } catch (error) {
         this.productsFailed++;
-        scraperLogger.debug(`Failed to parse product: ${item.name}`, error);
+        this.logger.debug(`Failed to parse product: ${item.name}`, error);
       }
     }
 
@@ -367,10 +366,10 @@ export class ArbuzScraper extends BaseScraper {
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
-    scraperLogger.info(`Cleaning up Arbuz.kz API scraper...`);
+    this.logger.info(`Cleaning up Arbuz.kz API scraper...`);
     await this.closeBrowser();
 
     const stats = this.getStats();
-    scraperLogger.info('Arbuz.kz scraping completed:', stats);
+    this.logger.info('Arbuz.kz scraping completed:', stats);
   }
 }
