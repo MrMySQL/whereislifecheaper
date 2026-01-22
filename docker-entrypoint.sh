@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-# Task timeout (default: 4 hours)
-TASK_TIMEOUT=${TASK_TIMEOUT:-14400}
-
 # Start Xvfb (X Virtual Frame Buffer) for headed browser support
 echo "Starting Xvfb on display :99..."
 Xvfb :99 -screen 0 1920x1080x24 &
@@ -27,6 +24,6 @@ if [ "$SYNC_RATES" = "true" ]; then
     npm run rates:sync
 fi
 
-# Execute the main command with timeout
-echo "Executing: $@ (timeout: ${TASK_TIMEOUT}s)"
-exec timeout --signal=SIGTERM $TASK_TIMEOUT "$@"
+# Execute the main command
+echo "Executing: $@"
+exec "$@"
