@@ -115,13 +115,13 @@ export abstract class BaseScraper {
 
   /**
    * Check if this supermarket should use the proxy
-   * Returns true if no proxy supermarkets are specified (use for all) or if this supermarket is in the list
+   * Returns true only if this supermarket is in the proxy list
    */
   private shouldUseProxy(): boolean {
     const proxySupermarkets = config.scraper.proxySupermarkets;
-    // If no specific supermarkets configured, use proxy for all
+    // If no specific supermarkets configured, don't use proxy
     if (proxySupermarkets.length === 0) {
-      return true;
+      return false;
     }
     // Check if this supermarket's name matches any in the list
     const supermarketName = this.config.name.toLowerCase();
