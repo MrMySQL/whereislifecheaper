@@ -114,18 +114,22 @@ export abstract class BaseScraper {
   }
 
   /**
-   * Check if this supermarket should use the proxy
-   * Returns true only if this supermarket is in the proxy list
+   * Get the proxy URL for this supermarket (if configured)
+   * Matches supermarket name against proxy config keys (partial, case-insensitive)
    */
-  private shouldUseProxy(): boolean {
-    const proxySupermarkets = config.scraper.proxySupermarkets;
-    // If no specific supermarkets configured, don't use proxy
-    if (proxySupermarkets.length === 0) {
-      return false;
-    }
-    // Check if this supermarket's name matches any in the list
+  private getProxyUrl(): string | undefined {
+    const proxyConfig = config.scraper.proxyConfig;
+    if (proxyConfig.size === 0) return undefined;
+
     const supermarketName = this.config.name.toLowerCase();
-    return proxySupermarkets.some(name => supermarketName.includes(name));
+
+    // Find matching proxy config entry
+    for (const [key, url] of proxyConfig.entries()) {
+      if (supermarketName.includes(key)) {
+        return url;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -144,9 +148,10 @@ export abstract class BaseScraper {
       ],
     };
 
-    // Add proxy if configured and supermarket is in the proxy list
-    if (config.scraper.proxyUrl && this.shouldUseProxy()) {
-      launchOptions.proxy = this.parseProxyUrl(config.scraper.proxyUrl);
+    // Add proxy if configured for this supermarket
+    const proxyUrl = this.getProxyUrl();
+    if (proxyUrl) {
+      launchOptions.proxy = this.parseProxyUrl(proxyUrl);
       this.logger.info(`Using proxy: ${launchOptions.proxy.server}`);
     }
 

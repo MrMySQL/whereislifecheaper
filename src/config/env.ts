@@ -22,16 +22,36 @@ const envSchema = Joi.object({
   SESSION_SECRET: Joi.string().default('development-secret-change-in-production'),
   // Admin emails (comma-separated)
   ADMIN_EMAILS: Joi.string().default(''),
-  // Proxy configuration (format: http://user:pass@host:port)
-  SCRAPER_PROXY_URL: Joi.string().optional(),
-  // Comma-separated list of supermarket names that should use proxy (empty = all)
-  SCRAPER_PROXY_SUPERMARKETS: Joi.string().optional(),
+  // Proxy configuration - JSON mapping supermarket names to proxy URLs
+  // Format: {"migros":"http://proxy1:8080","rewe":"http://proxy2:8080"}
+  SCRAPER_PROXY_CONFIG: Joi.string().optional(),
 }).unknown();
 
 const { error, value: envVars } = envSchema.validate(process.env);
 
 if (error) {
   throw new Error(`Environment validation error: ${error.message}`);
+}
+
+/**
+ * Parse proxy config JSON into a Map for quick lookup
+ * Format: {"migros":"http://proxy1:8080","rewe":"http://proxy2:8080"}
+ */
+function parseProxyConfig(configJson: string | undefined): Map<string, string> {
+  const proxyMap = new Map<string, string>();
+  if (!configJson) return proxyMap;
+
+  try {
+    const config = JSON.parse(configJson);
+    for (const [key, value] of Object.entries(config)) {
+      if (typeof value === 'string') {
+        proxyMap.set(key.toLowerCase(), value);
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse SCRAPER_PROXY_CONFIG:', e);
+  }
+  return proxyMap;
 }
 
 export const config = {
@@ -47,11 +67,7 @@ export const config = {
     maxRetries: envVars.SCRAPER_MAX_RETRIES as number,
     timeout: envVars.SCRAPER_TIMEOUT as number,
     concurrentBrowsers: envVars.SCRAPER_CONCURRENT_BROWSERS as number,
-    proxyUrl: envVars.SCRAPER_PROXY_URL as string | undefined,
-    proxySupermarkets: (envVars.SCRAPER_PROXY_SUPERMARKETS as string || '')
-      .split(',')
-      .map(s => s.trim().toLowerCase())
-      .filter(Boolean),
+    proxyConfig: parseProxyConfig(envVars.SCRAPER_PROXY_CONFIG as string | undefined),
   },
   logging: {
     level: envVars.LOG_LEVEL as string,

@@ -141,10 +141,11 @@ export class ReweScraper extends BaseScraper {
     const isHeadless = process.env.PLAYWRIGHT_HEADLESS === 'true';
     this.logger.info(`Browser mode: ${isHeadless ? 'headless' : 'headed'}`);
 
-    // Parse proxy URL if configured
+    // Parse proxy URL if configured for this supermarket
     let proxyConfig: { server: string; username?: string; password?: string } | undefined;
-    if (config.scraper.proxyUrl) {
-      const url = new URL(config.scraper.proxyUrl);
+    const proxyUrl = this.getProxyUrlForSupermarket();
+    if (proxyUrl) {
+      const url = new URL(proxyUrl);
       proxyConfig = {
         server: `${url.protocol}//${url.host}`,
         username: url.username || undefined,
@@ -182,6 +183,22 @@ export class ReweScraper extends BaseScraper {
     ]);
 
     this.logger.info('Stealth browser launched successfully');
+  }
+
+  /**
+   * Get proxy URL for this supermarket from config
+   */
+  private getProxyUrlForSupermarket(): string | undefined {
+    const proxyConfigMap = config.scraper.proxyConfig;
+    if (proxyConfigMap.size === 0) return undefined;
+
+    const supermarketName = this.config.name.toLowerCase();
+    for (const [key, url] of proxyConfigMap.entries()) {
+      if (supermarketName.includes(key)) {
+        return url;
+      }
+    }
+    return undefined;
   }
 
   /**

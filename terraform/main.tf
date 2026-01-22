@@ -97,10 +97,10 @@ resource "aws_secretsmanager_secret" "google_credentials" {
   tags = var.tags
 }
 
-# Secrets Manager - Proxy URL (optional)
-resource "aws_secretsmanager_secret" "proxy_url" {
-  name                    = "${var.project_name}/proxy-url"
-  description             = "Proxy URL for scrapers (optional)"
+# Secrets Manager - Proxy Config (optional)
+resource "aws_secretsmanager_secret" "proxy_config" {
+  name                    = "${var.project_name}/proxy-config"
+  description             = "JSON proxy config: {\"migros\":\"http://proxy1:8080\",\"rewe\":\"http://proxy2:8080\"}"
   recovery_window_in_days = 0  # Immediate deletion on destroy
 
   tags = var.tags
@@ -147,7 +147,7 @@ resource "aws_iam_role_policy" "ecs_secrets" {
         Resource = [
           aws_secretsmanager_secret.database_url.arn,
           aws_secretsmanager_secret.google_credentials.arn,
-          aws_secretsmanager_secret.proxy_url.arn
+          aws_secretsmanager_secret.proxy_config.arn
         ]
       }
     ]
@@ -253,10 +253,6 @@ resource "aws_ecs_task_definition" "scraper" {
         {
           name  = "DISABLE_DEV_SHM"
           value = "true"
-        },
-        {
-          name  = "SCRAPER_PROXY_SUPERMARKETS"
-          value = "migros,rewe"
         }
       ]
 
@@ -270,8 +266,8 @@ resource "aws_ecs_task_definition" "scraper" {
           valueFrom = aws_secretsmanager_secret.google_credentials.arn
         },
         {
-          name      = "SCRAPER_PROXY_URL"
-          valueFrom = aws_secretsmanager_secret.proxy_url.arn
+          name      = "SCRAPER_PROXY_CONFIG"
+          valueFrom = aws_secretsmanager_secret.proxy_config.arn
         }
       ]
 
