@@ -72,6 +72,8 @@ export const lotussApiCategories: CategoryConfig[] = [
   { id: '5976', name: 'AV & Tech', url: 'av-tech' },
   { id: '5499', name: 'Sports & Leisure', url: 'sports-leisure' },
   { id: '5370', name: 'Office, Bags & Stationery', url: 'office-bags-stationery' },
+  { id: '49080', name: 'Pasta & Instant Food', url: 'pasta-instant-food' },
+  { id: '2808', name: 'Commodities', url: 'commodities' }
 ];
 
 /**
@@ -167,12 +169,21 @@ export class LotussApiScraper extends BaseScraper {
         const queryMatch = url.match(/q=([^&]+)/);
         if (queryMatch) {
           const query = JSON.parse(decodeURIComponent(queryMatch[1]));
-          const categoryId = query?.filter?.categoryId?.[0] || 'unknown';
+          // API uses either categoryId or categoryUrlKey depending on category
+          const categoryId = query?.filter?.categoryId?.[0];
+          const categoryUrlKey = query?.filter?.categoryUrlKey;
 
-          // Store captured products
-          const existing = this.capturedProducts.get(categoryId) || [];
-          this.capturedProducts.set(categoryId, [...existing, ...body.data.products]);
-          this.logger.debug(`Captured ${body.data.products.length} products for category ${categoryId}`);
+          // Store under both keys if available (for lookup flexibility)
+          const keys: string[] = [];
+          if (categoryId) keys.push(String(categoryId));
+          if (categoryUrlKey) keys.push(categoryUrlKey);
+          if (keys.length === 0) keys.push('unknown');
+
+          for (const key of keys) {
+            const existing = this.capturedProducts.get(key) || [];
+            this.capturedProducts.set(key, [...existing, ...body.data.products]);
+          }
+          this.logger.debug(`Captured ${body.data.products.length} products for category keys: ${keys.join(', ')}`);
         }
       }
 
@@ -202,8 +213,9 @@ export class LotussApiScraper extends BaseScraper {
 
     this.logger.info(`Scraping category: ${category.name} (ID: ${category.id})`);
 
-    // Clear any previously captured products for this category
+    // Clear any previously captured products for this category (both id and url keys)
     this.capturedProducts.delete(category.id);
+    this.capturedProducts.delete(category.url);
 
     // Navigate to the category page - this will trigger API calls that we intercept
     const categoryUrl = `https://www.lotuss.com.my/en/category/${category.url}`;
@@ -237,11 +249,13 @@ export class LotussApiScraper extends BaseScraper {
         await this.page.waitForTimeout(1500);
         scrollAttempts++;
 
-        this.logger.debug(`${category.name}: Scroll attempt ${scrollAttempts}, captured ${this.capturedProducts.get(category.id)?.length || 0} products`);
+        const capturedById = this.capturedProducts.get(category.id)?.length || 0;
+        const capturedByUrl = this.capturedProducts.get(category.url)?.length || 0;
+        this.logger.debug(`${category.name}: Scroll attempt ${scrollAttempts}, captured ${capturedById || capturedByUrl} products`);
       }
 
-      // Get captured products
-      const apiProducts = this.capturedProducts.get(category.id) || [];
+      // Get captured products (try both category.id and category.url as keys)
+      const apiProducts = this.capturedProducts.get(category.id) || this.capturedProducts.get(category.url) || [];
       this.logger.info(`${category.name}: Captured ${apiProducts.length} products from API intercepts`);
 
       // Convert and deduplicate products
