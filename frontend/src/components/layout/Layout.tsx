@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, Link } from 'react-router-dom';
 import Header from './Header';
 import { MapPin, Heart } from 'lucide-react';
 
@@ -26,6 +26,10 @@ export default function Layout() {
               <span className="flex items-center gap-1">
                 Made with <Heart className="w-3 h-3 text-terracotta-500 fill-terracotta-500" /> for people like us
               </span>
+              <span className="text-cream-400">|</span>
+              <Link to="/request-country" className="hover:text-terracotta-600 transition-colors">
+                Request a Country
+              </Link>
               <span className="text-cream-400">|</span>
               <span>&copy; {new Date().getFullYear()}</span>
             </div>

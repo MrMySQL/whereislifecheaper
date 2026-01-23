@@ -9,6 +9,7 @@ import CountryProducts from './pages/CountryProducts';
 import Login from './pages/Login';
 import Mapping from './pages/admin/Mapping';
 import Scrapers from './pages/admin/Scrapers';
+import RequestCountry from './pages/RequestCountry';
 import { loadExchangeRates } from './utils/currency';
 
 const queryClient = new QueryClient({
@@ -35,6 +36,7 @@ function App() {
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />
               <Route path="country/:code" element={<CountryProducts />} />
+              <Route path="request-country" element={<RequestCountry />} />
               <Route
                 path="admin/mapping"
                 element={
