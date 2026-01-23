@@ -7,6 +7,7 @@ export const FALLBACK_EXCHANGE_RATES: Record<string, number> = {
   UAH: 0.01983600,
   KZT: 0.00168442,
   USD: 0.86169064,
+  MYR: 0.19865000,
 };
 
 // Currencies tracked by the application (derived from fallback rates, excluding EUR)

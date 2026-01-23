@@ -12,6 +12,7 @@ const currencyMeta: Record<string, { symbol: string; name: string; flag: string 
   UZS: { symbol: "so'm", name: 'Uzbek Som', flag: '🇺🇿' },
   UAH: { symbol: '₴', name: 'Ukrainian Hryvnia', flag: '🇺🇦' },
   KZT: { symbol: '₸', name: 'Kazakhstani Tenge', flag: '🇰🇿' },
+  MYR: { symbol: 'RM', name: 'Malaysian ringgit', flag: '🇲🇾' },
 };
 
 // Format large numbers with abbreviations
