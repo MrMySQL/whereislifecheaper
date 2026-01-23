@@ -136,11 +136,20 @@ export default function Home() {
           <h2 className="text-sm font-display font-semibold text-charcoal-900">
             {t('home.selectCountries')}
           </h2>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cream-100 border border-cream-200 text-xs">
-            <span className="text-charcoal-600">{t('home.comparing')}</span>
-            <span className="w-5 h-5 rounded-full bg-terracotta-500 text-white flex items-center justify-center text-xs font-bold">
-              {selectedCountries.length}
-            </span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cream-100 border border-cream-200 text-xs">
+              <span className="text-charcoal-600">{t('home.comparing')}</span>
+              <span className="w-5 h-5 rounded-full bg-terracotta-500 text-white flex items-center justify-center text-xs font-bold">
+                {selectedCountries.length}
+              </span>
+            </div>
+            <button
+              onClick={() => setSelectedCountries(countries.map(c => c.code))}
+              disabled={selectedCountries.length === countries.length}
+              className="text-xs text-terracotta-600 hover:text-terracotta-700 font-medium disabled:text-charcoal-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {t('home.selectAll')}
+            </button>
           </div>
         </div>
         <CountrySelector
@@ -168,7 +177,7 @@ export default function Home() {
                   : 'border-cream-200 bg-white/80 text-charcoal-600 hover:border-cream-300 hover:bg-cream-50'
                 }
               `}
-              title={t('home.allCountries')}
+              title={t('home.allCountriesTooltip')}
             >
               <Layers className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">{t('home.allCountries')}</span>

@@ -56,8 +56,10 @@
     "subtitle": "Порівнюйте ціни на продукти в різних країнах та знаходьте найкращі пропозиції.",
     "selectCountries": "Оберіть країни",
     "comparing": "Порівняння",
+    "selectAll": "Обрати все",
     "priceComparison": "Порівняння цін",
     "allCountries": "Всі країни",
+    "allCountriesTooltip": "Показати лише товари, доступні у всіх обраних країнах",
     "searchProducts": "Пошук товарів...",
     "showingProducts": "Показано <strong>{{shown}}</strong> з <strong>{{total}}</strong> товарів"
   },

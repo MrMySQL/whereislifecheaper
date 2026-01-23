@@ -22,6 +22,7 @@ export default function CountrySelector({
             onClick={() => onToggle(country.code)}
             aria-pressed={isSelected}
             aria-label={`${country.name} (${country.code}), ${isSelected ? 'selected' : 'not selected'}`}
+            title={country.name}
             className={`
               group flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all duration-200 text-sm
               ${

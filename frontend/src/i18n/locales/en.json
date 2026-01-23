@@ -56,8 +56,10 @@
     "subtitle": "Compare grocery prices across borders and find the best deals.",
     "selectCountries": "Select Countries",
     "comparing": "Comparing",
+    "selectAll": "Select all",
     "priceComparison": "Price Comparison",
     "allCountries": "All countries",
+    "allCountriesTooltip": "Show only products available in all selected countries",
     "searchProducts": "Search products...",
     "showingProducts": "Showing <strong>{{shown}}</strong> of <strong>{{total}}</strong> products"
   },
