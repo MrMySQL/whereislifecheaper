@@ -134,7 +134,8 @@
     "noBrand": "Без бренда",
     "selectCanonicalProduct": "Выберите канонический товар...",
     "removeMapping": "Удалить сопоставление",
-    "noMatchingProducts": "Нет подходящих товаров"
+    "noMatchingProducts": "Нет подходящих товаров",
+    "mappedOnly": "Только связанные"
   },
   "currencyRates": {
     "exchangeRates": "Курсы валют",

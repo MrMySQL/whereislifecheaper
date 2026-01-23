@@ -134,7 +134,8 @@
     "noBrand": "No brand",
     "selectCanonicalProduct": "Select canonical product...",
     "removeMapping": "Remove mapping",
-    "noMatchingProducts": "No matching products"
+    "noMatchingProducts": "No matching products",
+    "mappedOnly": "Mapped only"
   },
   "currencyRates": {
     "exchangeRates": "Exchange Rates",

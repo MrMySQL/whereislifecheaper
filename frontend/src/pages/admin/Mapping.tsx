@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info, EyeOff } from 'lucide-react';
+import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info, EyeOff, Link } from 'lucide-react';
 import { countriesApi, canonicalApi, supermarketsApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
 import type { Product, Country, CanonicalProductBasic, Supermarket } from '../../types';
@@ -15,6 +15,7 @@ export default function Mapping() {
   const [selectedSupermarketId, setSelectedSupermarketId] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState('');
   const [productPage, setProductPage] = useState(0);
+  const [mappedOnly, setMappedOnly] = useState(false);
   const [showManageSection, setShowManageSection] = useState(false);
   const [canonicalSearch, setCanonicalSearch] = useState('');
   const [dropdownSearch, setDropdownSearch] = useState<{ [key: number]: string }>({});
@@ -35,12 +36,13 @@ export default function Mapping() {
 
   // Fetch products by country with pagination
   const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: ['products', selectedCountryId, selectedSupermarketId, productSearch, productPage],
+    queryKey: ['products', selectedCountryId, selectedSupermarketId, productSearch, productPage, mappedOnly],
     queryFn: () =>
       selectedCountryId
         ? canonicalApi.getProductsByCountry(selectedCountryId, {
             search: productSearch || undefined,
             supermarket_id: selectedSupermarketId || undefined,
+            mapped_only: mappedOnly || undefined,
             limit: PRODUCTS_PER_PAGE,
             offset: productPage * PRODUCTS_PER_PAGE,
           })
@@ -71,6 +73,11 @@ export default function Mapping() {
 
   const handleProductSearch = (search: string) => {
     setProductSearch(search);
+    setProductPage(0);
+  };
+
+  const handleMappedOnlyChange = (checked: boolean) => {
+    setMappedOnly(checked);
     setProductPage(0);
   };
 
@@ -356,6 +363,20 @@ export default function Mapping() {
                 className="input pl-10"
               />
             </div>
+          )}
+
+          {/* Mapped only filter */}
+          {selectedCountryId && (
+            <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={mappedOnly}
+                onChange={(e) => handleMappedOnlyChange(e.target.checked)}
+                className="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 focus:ring-2"
+              />
+              <Link className="h-4 w-4 text-slate-400" />
+              <span className="text-sm text-slate-600">{t('mapping.mappedOnly')}</span>
+            </label>
           )}
         </div>
 
