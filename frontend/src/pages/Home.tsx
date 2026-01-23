@@ -58,10 +58,6 @@ export default function Home() {
     });
   };
 
-  const selectedStats = priceStats.filter((s) =>
-    selectedCountries.includes(s.country_code)
-  );
-
   const filteredProducts = (comparisonData?.data || []).filter((product) => {
     const availableCountries = Object.keys(product.prices_by_country).filter(
       (code) => selectedCountries.includes(code)
@@ -154,29 +150,6 @@ export default function Home() {
         />
       </section>
 
-      {/* Country Stats - Compact Cards */}
-      {statsLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="card !p-4">
-              <div className="flex gap-3">
-                <div className="skeleton h-12 w-12 rounded-xl" />
-                <div className="flex-1 space-y-2">
-                  <div className="skeleton h-4 w-24" />
-                  <div className="skeleton h-3 w-16" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {selectedStats.map((stats) => (
-            <CountryCard key={stats.country_id} stats={stats} />
-          ))}
-        </div>
-      )}
-
       {/* Price Comparison Section - Compact */}
       <section className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
@@ -245,6 +218,29 @@ export default function Home() {
         {/* Currency Rates Table */}
         <CurrencyRatesTable />
       </section>
+
+      {/* Country Stats - Compact Cards */}
+      {statsLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="card !p-4">
+              <div className="flex gap-3">
+                <div className="skeleton h-12 w-12 rounded-xl" />
+                <div className="flex-1 space-y-2">
+                  <div className="skeleton h-4 w-24" />
+                  <div className="skeleton h-3 w-16" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {priceStats.map((stats) => (
+            <CountryCard key={stats.country_id} stats={stats} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

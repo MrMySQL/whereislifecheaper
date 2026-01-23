@@ -302,75 +302,101 @@ export default function CurrencyRatesTable() {
     : [];
 
   return (
-    <section className="mt-8">
-      {/* Section header with editorial styling */}
-      <div className="relative mb-5">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-saffron-100 to-saffron-200/80 border border-saffron-200/50">
-            <TrendingUp className="w-4 h-4 text-saffron-700" />
-          </div>
-          <h2 className="font-display font-bold text-lg text-charcoal-900">
-            {t('currencyRates.exchangeRates')}
-          </h2>
-        </div>
+    <section className="mt-6">
+      {/* Card wrapper with glass morphism */}
+      <div className="relative overflow-hidden bg-white/70 backdrop-blur-sm rounded-2xl border border-cream-200/60 p-5 shadow-[0_4px_24px_-4px_rgba(45,45,45,0.06),0_0_0_1px_rgba(255,255,255,0.5)_inset]">
+        {/* Decorative background elements */}
+        <div className="absolute -top-24 -right-24 w-48 h-48 bg-saffron-200/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-16 -left-16 w-40 h-40 bg-olive-200/15 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 ml-11">
-          <p className="text-xs text-charcoal-500">
-            {t('currencyRates.ratesDescription')}
-          </p>
+        {/* Section header */}
+        <div className="relative mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-saffron-100 to-saffron-200/80 border border-saffron-200/50 shadow-sm">
+                <TrendingUp className="w-4 h-4 text-saffron-700" />
+              </div>
+              <div>
+                <h2 className="font-display font-bold text-base text-charcoal-900">
+                  {t('currencyRates.exchangeRates')}
+                </h2>
+                <p className="text-[11px] text-charcoal-500 mt-0.5">
+                  {t('currencyRates.ratesDescription')}
+                </p>
+              </div>
+            </div>
+
+            {/* Metadata badges */}
+            {ratesData && (
+              <div className="hidden sm:flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cream-100/80 border border-cream-200/60 text-[10px] text-charcoal-500">
+                  {getSourceIcon(ratesData.source)}
+                  <span>{getSourceLabel(ratesData.source)}</span>
+                </div>
+                {ratesData.last_updated && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cream-100/80 border border-cream-200/60 text-[10px] text-charcoal-500">
+                    <Clock className="w-3 h-3" />
+                    <span>{formatLastUpdated(ratesData.last_updated)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Mobile metadata */}
           {ratesData && (
-            <>
+            <div className="flex sm:hidden items-center gap-2 mt-2 ml-12">
               <div className="flex items-center gap-1.5 text-[10px] text-charcoal-400">
                 {getSourceIcon(ratesData.source)}
                 <span>{getSourceLabel(ratesData.source)}</span>
               </div>
               {ratesData.last_updated && (
-                <div className="flex items-center gap-1.5 text-[10px] text-charcoal-400">
-                  <Clock className="w-3 h-3" />
-                  <span>{formatLastUpdated(ratesData.last_updated)}</span>
-                </div>
+                <>
+                  <span className="text-cream-300">•</span>
+                  <div className="flex items-center gap-1 text-[10px] text-charcoal-400">
+                    <Clock className="w-2.5 h-2.5" />
+                    <span>{formatLastUpdated(ratesData.last_updated)}</span>
+                  </div>
+                </>
               )}
-            </>
+            </div>
           )}
         </div>
 
-        {/* Decorative line */}
-        <div className="absolute left-0 right-0 bottom-0 h-px bg-gradient-to-r from-transparent via-cream-300 to-transparent" />
-      </div>
+        {/* Loading state */}
+        {isLoading && <LoadingSkeleton />}
 
-      {/* Loading state */}
-      {isLoading && <LoadingSkeleton />}
+        {/* Error state */}
+        {error && (
+          <div className="text-center py-8 text-charcoal-500">
+            <AlertCircle className="w-8 h-8 mx-auto mb-2 text-terracotta-400" />
+            <p className="text-sm">{t('currencyRates.failedToLoad')}</p>
+          </div>
+        )}
 
-      {/* Error state */}
-      {error && (
-        <div className="text-center py-6 text-charcoal-500">
-          <AlertCircle className="w-8 h-8 mx-auto mb-2 text-terracotta-400" />
-          <p className="text-sm">{t('currencyRates.failedToLoad')}</p>
+        {/* Currency grid */}
+        {ratesData && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {currencies.map(([code, rate], index) => (
+              <CurrencyCard key={code} code={code} rate={rate} index={index} />
+            ))}
+
+            {/* EUR card - base currency */}
+            <CurrencyCard
+              code="EUR"
+              rate={1}
+              index={currencies.length}
+            />
+          </div>
+        )}
+
+        {/* Footer note */}
+        <div className="mt-4 pt-3 border-t border-cream-200/50 flex items-center justify-center gap-2 text-[10px] text-charcoal-400">
+          <RefreshCw className="w-3 h-3" />
+          <span>{t('currencyRates.clickToToggle')}</span>
+          <span className="text-cream-300">|</span>
+          <span>{t('currencyRates.ratesSyncedDaily')}</span>
         </div>
-      )}
-
-      {/* Currency grid */}
-      {ratesData && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {currencies.map(([code, rate], index) => (
-            <CurrencyCard key={code} code={code} rate={rate} index={index} />
-          ))}
-
-          {/* EUR card - base currency */}
-          <CurrencyCard
-            code="EUR"
-            rate={1}
-            index={currencies.length}
-          />
-        </div>
-      )}
-
-      {/* Footer note */}
-      <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-charcoal-400">
-        <RefreshCw className="w-3 h-3" />
-        <span>{t('currencyRates.clickToToggle')}</span>
-        <span className="text-cream-400">|</span>
-        <span>{t('currencyRates.ratesSyncedDaily')}</span>
       </div>
     </section>
   );
