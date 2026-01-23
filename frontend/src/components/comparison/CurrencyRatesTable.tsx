@@ -196,7 +196,7 @@ function CurrencyCard({ code, rate, index }: CurrencyCardProps) {
               ${isFlipped ? 'opacity-50 text-xs' : 'opacity-100'}
             `}>
               <span className={`font-mono text-lg font-semibold ${styles.rateText}`}>
-                {rate < 0.01 ? rate.toExponential(2) : rate.toFixed(rate < 1 ? 4 : 2)}
+                {rate < 0.0001 ? rate.toFixed(6) : rate < 0.01 ? rate.toFixed(4) : rate.toFixed(rate < 1 ? 4 : 2)}
               </span>
               <span className="text-[10px] text-charcoal-500">EUR</span>
             </div>
