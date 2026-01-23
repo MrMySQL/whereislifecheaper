@@ -218,6 +218,7 @@ router.get('/comparison', async (req, res, next) => {
         p.unit,
         p.unit_quantity,
         p.image_url,
+        pm.url as product_url,
         s.name as supermarket_name,
         c.id as country_id,
         c.name as country_name,
@@ -294,6 +295,7 @@ router.get('/comparison', async (req, res, next) => {
         unit: row.unit,
         unit_quantity: row.unit_quantity,
         image_url: row.image_url,
+        product_url: row.product_url,
         price: parseFloat(row.price),
         price_per_unit: row.price_per_unit ? parseFloat(row.price_per_unit) : null,
         currency: row.currency || row.currency_code,
@@ -338,6 +340,7 @@ router.get('/comparison', async (req, res, next) => {
           unit: firstProduct.unit,
           unit_quantity: firstProduct.unit_quantity,
           image_url: firstProduct.image_url,
+          product_url: firstProduct.product_url,
           // Use price_per_unit average when show_per_unit_price is enabled
           price: (usePerUnitPrice && avgPricePerUnit != null) ? avgPricePerUnit : avgPrice,
           price_per_unit: avgPricePerUnit,
@@ -353,10 +356,13 @@ router.get('/comparison', async (req, res, next) => {
             product_id: p.product_id,
             product_name: p.product_name,
             brand: p.brand,
+            unit: p.unit,
+            unit_quantity: p.unit_quantity,
             price: p.price,
             price_per_unit: p.price_per_unit,
             supermarket: p.supermarket,
             image_url: p.image_url,
+            product_url: p.product_url,
           })),
         };
       });
@@ -400,7 +406,7 @@ router.get('/comparison', async (req, res, next) => {
 router.get('/products-by-country/:countryId', async (req, res, next) => {
   try {
     const { countryId } = req.params;
-    const { search, supermarket_id, limit = '100', offset = '0' } = req.query;
+    const { search, supermarket_id, mapped_only, limit = '100', offset = '0' } = req.query;
 
     let sql = `
       SELECT DISTINCT ON (p.id)
@@ -450,6 +456,10 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
       paramIndex++;
     }
 
+    if (mapped_only === 'true') {
+      sql += ` AND p.canonical_product_id IS NOT NULL`;
+    }
+
     // DISTINCT ON requires ORDER BY to start with the same expression
     sql += ` ORDER BY p.id, p.name`;
 
@@ -481,6 +491,10 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
       countSql += ` AND (p.name ILIKE $${countParamIndex} OR p.brand ILIKE $${countParamIndex})`;
       countParams.push(`%${search}%`);
       countParamIndex++;
+    }
+
+    if (mapped_only === 'true') {
+      countSql += ` AND p.canonical_product_id IS NOT NULL`;
     }
 
     const countResult = await query(countSql, countParams);

@@ -38,10 +38,13 @@ export interface ProductDetail {
   product_id: number;
   product_name: string;
   brand: string | null;
+  unit: string | null;
+  unit_quantity: number | null;
   price: number;
   price_per_unit: number | null;
   supermarket: string;
   image_url: string | null;
+  product_url: string | null;
 }
 
 export interface CountryPrice {
@@ -51,6 +54,7 @@ export interface CountryPrice {
   unit: string | null;
   unit_quantity: number | null;
   image_url: string | null;
+  product_url: string | null;
   price: number;
   price_per_unit: number | null;
   currency: string;

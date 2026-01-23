@@ -37,9 +37,21 @@ function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-charcoal-900 text-sm leading-tight line-clamp-2">
-            {priceData.product_name}
-          </p>
+          {priceData.product_url ? (
+            <a
+              href={priceData.product_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-charcoal-900 text-sm leading-tight line-clamp-2 hover:text-terracotta-600 hover:underline transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {priceData.product_name}
+            </a>
+          ) : (
+            <p className="font-semibold text-charcoal-900 text-sm leading-tight line-clamp-2">
+              {priceData.product_name}
+            </p>
+          )}
           {priceData.brand && (
             <p className="text-xs text-charcoal-500 mt-0.5">{priceData.brand}</p>
           )}
@@ -143,13 +155,30 @@ function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
             </div>
             {/* Product info */}
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-charcoal-900">
-                {product.product_name}
-              </p>
+              {product.product_url ? (
+                <a
+                  href={product.product_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-charcoal-900 hover:text-terracotta-600 hover:underline transition-colors block"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {product.product_name}
+                </a>
+              ) : (
+                <p className="text-xs font-medium text-charcoal-900">
+                  {product.product_name}
+                </p>
+              )}
               <div className="flex items-center justify-between mt-0.5">
                 <span className="text-[10px] text-charcoal-400 flex items-center gap-0.5">
                   <Store className="w-2.5 h-2.5" />
                   {product.supermarket}
+                  {product.unit && (
+                    <span className="ml-1 text-charcoal-500">
+                      · {product.unit_quantity && product.unit_quantity > 1 ? `${product.unit_quantity}×` : ''}{product.unit}
+                    </span>
+                  )}
                 </span>
                 <span className="text-xs font-semibold text-charcoal-800">
                   {formatPrice(product.price, priceData.currency)}
@@ -165,14 +194,14 @@ function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
 
 function ProductHoverCard({ priceData, showBelow = false }: { priceData: CountryPrice; showBelow?: boolean }) {
   const positionClasses = showBelow
-    ? 'top-full mt-2'
-    : 'bottom-full mb-2';
+    ? 'top-full mt-1'
+    : 'bottom-full mb-1';
 
   const isMultiProduct = priceData.product_count > 1;
   const cardWidth = isMultiProduct ? 'w-72' : 'w-64';
 
   return (
-    <div className={`absolute z-50 ${positionClasses} left-1/2 -translate-x-1/2 ${cardWidth} bg-white rounded-lg shadow-xl border border-cream-200 p-3 pointer-events-none`}>
+    <div className={`absolute z-50 ${positionClasses} left-1/2 -translate-x-1/2 ${cardWidth} bg-white rounded-lg shadow-xl border border-cream-200 p-3`}>
       {/* Arrow */}
       {showBelow ? (
         <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-l border-t border-cream-200 rotate-45" />
@@ -205,37 +234,40 @@ function PriceCell({ priceData, isCheapest, rowIndex, showPerUnitPrice }: { pric
   const packageSize = formatPackageSize(priceData.unit_quantity, priceData.unit);
 
   return (
-    <td
-      className={`text-center py-2.5 px-3 relative ${isCheapest ? 'bg-olive-50/60' : ''}`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Primary: EUR per-unit price (or total if no normalization) */}
-      <p className={`font-bold ${isCheapest ? 'text-olive-700' : 'text-charcoal-800'}`}>
-        €{eurPrice.toFixed(2)}{hasNormalizedPrice && unitLabel ? `/${unitLabel}` : ''}
-      </p>
-      {/* Secondary: Package price in local currency */}
-      <p className="text-[10px] text-charcoal-400">
-        {formatPrice(priceData.price, priceData.currency)}
-        {hasNormalizedPrice && packageSize ? (
-          <span className="ml-0.5">for {packageSize}</span>
-        ) : null}
-      </p>
-      {/* Product count indicator for averages */}
-      {priceData.product_count > 1 && (
-        <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600">
-          ({t('comparison.avgOf', { count: priceData.product_count })})
-        </span>
-      )}
-      {priceData.is_on_sale && (
-        <span className="inline-flex items-center gap-0.5 text-[10px] text-terracotta-600">
-          <Tag className="h-2.5 w-2.5" />
-          {t('comparison.sale')}
-        </span>
-      )}
+    <td className={`text-center py-2.5 px-3 ${isCheapest ? 'bg-olive-50/60' : ''}`}>
+      {/* Wrapper div for hover detection that includes both content and popup */}
+      <div
+        className="relative"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {/* Primary: EUR per-unit price (or total if no normalization) */}
+        <p className={`font-bold ${isCheapest ? 'text-olive-700' : 'text-charcoal-800'}`}>
+          €{eurPrice.toFixed(2)}{hasNormalizedPrice && unitLabel ? `/${unitLabel}` : ''}
+        </p>
+        {/* Secondary: Package price in local currency */}
+        <p className="text-[10px] text-charcoal-400">
+          {formatPrice(priceData.price, priceData.currency)}
+          {hasNormalizedPrice && packageSize ? (
+            <span className="ml-0.5">for {packageSize}</span>
+          ) : null}
+        </p>
+        {/* Product count indicator for averages */}
+        {priceData.product_count > 1 && (
+          <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600">
+            ({t('comparison.avgOf', { count: priceData.product_count })})
+          </span>
+        )}
+        {priceData.is_on_sale && (
+          <span className="inline-flex items-center gap-0.5 text-[10px] text-terracotta-600">
+            <Tag className="h-2.5 w-2.5" />
+            {t('comparison.sale')}
+          </span>
+        )}
 
-      {/* Hover Card */}
-      {isHovered && <ProductHoverCard priceData={priceData} showBelow={showBelow} />}
+        {/* Hover Card */}
+        {isHovered && <ProductHoverCard priceData={priceData} showBelow={showBelow} />}
+      </div>
     </td>
   );
 }
