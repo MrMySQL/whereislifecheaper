@@ -236,25 +236,27 @@ export default function CountryProducts() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-2 mt-8">
+            <nav className="flex justify-center items-center gap-2 mt-8" aria-label={t('common.pagination')}>
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
                 className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={t('common.goToPreviousPage')}
               >
                 {t('common.previous')}
               </button>
-              <span className="px-4 text-charcoal-600">
+              <span className="px-4 text-charcoal-600" aria-live="polite" aria-atomic="true">
                 {t('common.page')} {page + 1} {t('common.of')} {totalPages}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
                 className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={t('common.goToNextPage')}
               >
                 {t('common.next')}
               </button>
-            </div>
+            </nav>
           )}
         </>
       )}

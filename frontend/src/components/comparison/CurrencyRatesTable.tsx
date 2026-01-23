@@ -138,6 +138,16 @@ function CurrencyCard({ code, rate, index }: CurrencyCardProps) {
           animate-fadeSlideUp
         `}
         onClick={() => !isEuro && setIsFlipped(!isFlipped)}
+        onKeyDown={(e) => {
+          if (!isEuro && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            setIsFlipped(!isFlipped);
+          }
+        }}
+        tabIndex={isEuro ? -1 : 0}
+        role={isEuro ? undefined : 'button'}
+        aria-pressed={isEuro ? undefined : isFlipped}
+        aria-label={isEuro ? undefined : `${meta.name} (${code}), ${isFlipped ? t('currencyRates.showingInverse') : t('currencyRates.showingRate')}, ${t('currencyRates.pressToToggle')}`}
         style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'backwards' }}
       >
         {/* Decorative corner accent */}
@@ -165,8 +175,10 @@ function CurrencyCard({ code, rate, index }: CurrencyCardProps) {
                 hover:bg-white/90 ${styles.flipBtnHover}
               `}
               title={t('currencyRates.flipTooltip')}
+              aria-label={t('currencyRates.flipTooltip')}
+              tabIndex={-1}
             >
-              <ArrowRightLeft className={`w-3.5 h-3.5 ${styles.flipIcon}`} />
+              <ArrowRightLeft className={`w-3.5 h-3.5 ${styles.flipIcon}`} aria-hidden="true" />
             </button>
           )}
         </div>

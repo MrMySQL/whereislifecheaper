@@ -31,14 +31,23 @@
     "items": "позицій",
     "run": "Запуск",
     "active": "Активний",
-    "inactive": "Неактивний"
+    "inactive": "Неактивний",
+    "changeLanguage": "Змінити мову",
+    "selectLanguage": "Оберіть мову",
+    "pagination": "Пагінація",
+    "goToPreviousPage": "Перейти на попередню сторінку",
+    "goToNextPage": "Перейти на наступну сторінку"
   },
   "nav": {
     "compare": "Порівняти",
     "comparePrices": "Порівняти ціни",
     "mapping": "Зіставлення",
     "productMapping": "Зіставлення товарів",
-    "scrapers": "Парсери"
+    "scrapers": "Парсери",
+    "openMenu": "Відкрити меню",
+    "closeMenu": "Закрити меню",
+    "mainNavigation": "Основна навігація",
+    "mobileNavigation": "Мобільна навігація"
   },
   "home": {
     "liveFrom": "Актуальні ціни з {{count}} країн",
@@ -64,7 +73,9 @@
     "sale": "Знижка",
     "avgOf": "сер. з {{count}}",
     "averageProducts": "Середнє з {{count}} товарів",
-    "avg": "Сер."
+    "avg": "Сер.",
+    "expandDetails": "натисніть, щоб показати історію цін",
+    "collapseDetails": "натисніть, щоб сховати історію цін"
   },
   "countryCard": {
     "products": "Товари",
@@ -146,7 +157,10 @@
     "flipTooltip": "Натисніть, щоб побачити зворотний курс",
     "clickToToggle": "Натисніть на картку для перемикання напрямку курсу",
     "ratesSyncedDaily": "Курси оновлюються щодня через ExchangeRate API",
-    "failedToLoad": "Не вдалося завантажити курси валют"
+    "failedToLoad": "Не вдалося завантажити курси валют",
+    "showingInverse": "показано зворотний курс",
+    "showingRate": "показано стандартний курс",
+    "pressToToggle": "натисніть для перемикання напрямку курсу"
   },
   "priceHistory": {
     "priceHistory": "Історія цін",

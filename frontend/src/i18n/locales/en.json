@@ -31,14 +31,23 @@
     "items": "items",
     "run": "Run",
     "active": "Active",
-    "inactive": "Inactive"
+    "inactive": "Inactive",
+    "changeLanguage": "Change language",
+    "selectLanguage": "Select language",
+    "pagination": "Pagination",
+    "goToPreviousPage": "Go to previous page",
+    "goToNextPage": "Go to next page"
   },
   "nav": {
     "compare": "Compare",
     "comparePrices": "Compare Prices",
     "mapping": "Mapping",
     "productMapping": "Product Mapping",
-    "scrapers": "Scrapers"
+    "scrapers": "Scrapers",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "mainNavigation": "Main navigation",
+    "mobileNavigation": "Mobile navigation"
   },
   "home": {
     "liveFrom": "Live prices from {{count}} countries",
@@ -64,7 +73,9 @@
     "sale": "Sale",
     "avgOf": "avg of {{count}}",
     "averageProducts": "Average of {{count}} products",
-    "avg": "Avg"
+    "avg": "Avg",
+    "expandDetails": "press to expand price history",
+    "collapseDetails": "press to collapse price history"
   },
   "countryCard": {
     "products": "Products",
@@ -146,7 +157,10 @@
     "flipTooltip": "Flip to see reverse rate",
     "clickToToggle": "Click cards to toggle rate direction",
     "ratesSyncedDaily": "Rates synced daily from ExchangeRate API",
-    "failedToLoad": "Failed to load exchange rates"
+    "failedToLoad": "Failed to load exchange rates",
+    "showingInverse": "showing inverse rate",
+    "showingRate": "showing standard rate",
+    "pressToToggle": "press to toggle rate direction"
   },
   "priceHistory": {
     "priceHistory": "Price History",

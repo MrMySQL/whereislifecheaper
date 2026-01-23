@@ -36,7 +36,7 @@ export default function Header() {
 
           {/* Desktop Navigation - only for authenticated users */}
           {isAuthenticated && (
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden md:flex items-center gap-1" aria-label={t('nav.mainNavigation')}>
               <Link to="/" className={navLinkClass('/')}>
                 {t('nav.compare')}
               </Link>
@@ -84,8 +84,11 @@ export default function Header() {
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="md:hidden p-1.5 text-charcoal-600 hover:bg-cream-100 rounded-lg"
+                aria-expanded={mobileMenuOpen}
+                aria-controls="mobile-navigation"
+                aria-label={mobileMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
               >
-                {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                {mobileMenuOpen ? <X className="h-4 w-4" aria-hidden="true" /> : <Menu className="h-4 w-4" aria-hidden="true" />}
               </button>
             )}
           </div>
@@ -93,7 +96,7 @@ export default function Header() {
 
         {/* Mobile Navigation - only for authenticated users */}
         {isAuthenticated && mobileMenuOpen && (
-          <div className="md:hidden py-3 border-t border-cream-200">
+          <div id="mobile-navigation" className="md:hidden py-3 border-t border-cream-200" role="navigation" aria-label={t('nav.mobileNavigation')}>
             <nav className="flex flex-col gap-1">
               <Link to="/" className={navLinkClass('/')} onClick={() => setMobileMenuOpen(false)}>
                 {t('nav.comparePrices')}

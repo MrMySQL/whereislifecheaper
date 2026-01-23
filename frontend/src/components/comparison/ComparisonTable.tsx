@@ -416,6 +416,16 @@ export default function ComparisonTable({
                       isExpanded ? 'bg-cream-50/30' : ''
                     }`}
                     onClick={() => toggleRowExpanded(product.canonical_id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleRowExpanded(product.canonical_id);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-expanded={isExpanded}
+                    aria-label={`${product.canonical_name}, ${isExpanded ? t('comparison.collapseDetails') : t('comparison.expandDetails')}`}
                   >
                     <td className="py-2.5 px-4">
                       <div className="flex items-center gap-3">
@@ -424,6 +434,7 @@ export default function ComparisonTable({
                           className={`w-4 h-4 text-charcoal-400 transition-transform duration-200 flex-shrink-0 ${
                             isExpanded ? 'rotate-180' : ''
                           }`}
+                          aria-hidden="true"
                         />
                         {/* Product image - find first real image URL from selected countries only */}
                         {(() => {

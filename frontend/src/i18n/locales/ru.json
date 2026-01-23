@@ -31,14 +31,23 @@
     "items": "позиций",
     "run": "Запуск",
     "active": "Активен",
-    "inactive": "Неактивен"
+    "inactive": "Неактивен",
+    "changeLanguage": "Сменить язык",
+    "selectLanguage": "Выберите язык",
+    "pagination": "Пагинация",
+    "goToPreviousPage": "Перейти на предыдущую страницу",
+    "goToNextPage": "Перейти на следующую страницу"
   },
   "nav": {
     "compare": "Сравнить",
     "comparePrices": "Сравнить цены",
     "mapping": "Сопоставление",
     "productMapping": "Сопоставление товаров",
-    "scrapers": "Парсеры"
+    "scrapers": "Парсеры",
+    "openMenu": "Открыть меню",
+    "closeMenu": "Закрыть меню",
+    "mainNavigation": "Основная навигация",
+    "mobileNavigation": "Мобильная навигация"
   },
   "home": {
     "liveFrom": "Актуальные цены из {{count}} стран",
@@ -64,7 +73,9 @@
     "sale": "Скидка",
     "avgOf": "сред. из {{count}}",
     "averageProducts": "Среднее из {{count}} товаров",
-    "avg": "Сред."
+    "avg": "Сред.",
+    "expandDetails": "нажмите, чтобы показать историю цен",
+    "collapseDetails": "нажмите, чтобы скрыть историю цен"
   },
   "countryCard": {
     "products": "Товары",
@@ -146,7 +157,10 @@
     "flipTooltip": "Нажмите, чтобы увидеть обратный курс",
     "clickToToggle": "Нажмите на карточку для переключения направления курса",
     "ratesSyncedDaily": "Курсы обновляются ежедневно через ExchangeRate API",
-    "failedToLoad": "Не удалось загрузить курсы валют"
+    "failedToLoad": "Не удалось загрузить курсы валют",
+    "showingInverse": "показан обратный курс",
+    "showingRate": "показан стандартный курс",
+    "pressToToggle": "нажмите для переключения направления курса"
   },
   "priceHistory": {
     "priceHistory": "История цен",

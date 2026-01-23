@@ -20,6 +20,8 @@ export default function CountrySelector({
           <button
             key={country.id}
             onClick={() => onToggle(country.code)}
+            aria-pressed={isSelected}
+            aria-label={`${country.name} (${country.code}), ${isSelected ? 'selected' : 'not selected'}`}
             className={`
               group flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all duration-200 text-sm
               ${
@@ -29,8 +31,8 @@ export default function CountrySelector({
               }
             `}
           >
-            <span className="text-base">{country.flag_emoji}</span>
-            <span className="font-medium">{country.code}</span>
+            <span className="text-base" aria-hidden="true">{country.flag_emoji}</span>
+            <span className="font-medium" aria-hidden="true">{country.code}</span>
             <div
               className={`
                 w-4 h-4 rounded-full flex items-center justify-center transition-all duration-200
@@ -42,9 +44,9 @@ export default function CountrySelector({
               `}
             >
               {isSelected ? (
-                <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden="true" />
               ) : (
-                <Plus className="h-2.5 w-2.5" strokeWidth={2} />
+                <Plus className="h-2.5 w-2.5" strokeWidth={2} aria-hidden="true" />
               )}
             </div>
           </button>
