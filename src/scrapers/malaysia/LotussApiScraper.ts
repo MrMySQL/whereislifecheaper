@@ -57,6 +57,7 @@ interface LotussCategory {
  * IDs fetched from: https://api-o2o.lotuss.com.my/lotuss-mobile-bff/product/v1/categories/4?websiteCode=malaysia_hy
  */
 export const lotussApiCategories: CategoryConfig[] = [
+  // Main categories
   { id: '3189', name: 'Fresh Produce', url: 'fresh-produce' },
   { id: '5304', name: 'Meat & Poultry', url: 'meat-poultry' },
   { id: '23946', name: 'Chilled & Frozen', url: 'chilled-frozen' },
@@ -72,8 +73,59 @@ export const lotussApiCategories: CategoryConfig[] = [
   { id: '5976', name: 'AV & Tech', url: 'av-tech' },
   { id: '5499', name: 'Sports & Leisure', url: 'sports-leisure' },
   { id: '5370', name: 'Office, Bags & Stationery', url: 'office-bags-stationery' },
+
+  // Grocery subcategories
+  { id: '2733', name: 'Baking Ingredients', url: 'baking-ingredients' },
+  { id: '2751', name: 'Biscuits & Cakes', url: 'biscuits-cakes' },
+  { id: '2766', name: 'Canned Food', url: 'canned-food' },
+  { id: '2784', name: 'Cereals', url: 'cereals' },
+  { id: '2793', name: 'Chocolates, Sweets & Jelly', url: 'chocolates-sweets-jelly' },
+  { id: '2808', name: 'Commodities', url: 'commodities' },
+  { id: '14538', name: 'Coffee & Tea', url: 'coffee-tea' },
+  { id: '3777', name: 'Desserts', url: 'desserts' },
+  { id: '2823', name: 'Jams, Spreads & Honey', url: 'jams-spreads-honey' },
+  { id: '3771', name: 'Noodles, Tofu & Condiments', url: 'noodles-tofu-condiments' },
+  { id: '49056', name: 'Organic Food', url: 'organic-food' },
   { id: '49080', name: 'Pasta & Instant Food', url: 'pasta-instant-food' },
-  { id: '2808', name: 'Commodities', url: 'commodities' }
+  { id: '49095', name: 'Sauce, Spice & Seasoning', url: 'sauce-spice-seasoning' },
+  { id: '49107', name: 'Snacks', url: 'snacks' },
+
+  // Fresh produce subcategories
+  { id: '3783', name: 'Fruits', url: 'fruits' },
+  { id: '3858', name: 'Vegetables', url: 'vegetables' },
+  { id: '3798', name: 'Eggs', url: 'eggs' },
+  { id: '3792', name: 'Organic', url: 'organic' },
+
+  // Meat & Poultry subcategories
+  { id: '5307', name: 'Meat', url: 'meat' },
+  { id: '5328', name: 'Poultry', url: 'poultry' },
+  { id: '3402', name: 'Fish & Seafood', url: 'fish-seafood' },
+
+  // Chilled & Frozen subcategories
+  { id: '24105', name: 'Dairy', url: 'dairy' },
+  { id: '25857', name: 'Frozen Food', url: 'frozen-food' },
+  { id: '29481', name: 'Ice Cream', url: 'ice-cream' },
+  { id: '3840', name: 'Ready To Cook', url: 'ready-to-cook' },
+
+  // Bakery subcategories
+  { id: '6591', name: 'Bread', url: 'bread' },
+  { id: '7401', name: 'Bun', url: 'bun' },
+  { id: '7707', name: 'Cakes & Donuts', url: 'cakes-donuts' },
+
+  // Beverages subcategories
+  { id: '9576', name: 'Asian Drinks', url: 'asian-drinks' },
+  { id: '13881', name: 'Carbonated Drinks', url: 'carbonated-drinks' },
+  { id: '15561', name: 'Cordials & Concentrates', url: 'cordials-concentrates' },
+  { id: '17190', name: 'Energy & Sports Drinks', url: 'energy-sports-drinks' },
+  { id: '18948', name: 'Fruit & Vegetable Juice', url: 'fruit-vegetable-juice' },
+  { id: '19608', name: 'Milk Powder', url: 'milk-powder' },
+  { id: '19965', name: 'Ready to Drink Milk', url: 'ready-to-drink-milk' },
+  { id: '20586', name: 'Water', url: 'water' },
+
+  // Baby subcategories
+  { id: '6006', name: 'Baby Feeding', url: 'baby-feeding' },
+  { id: '6018', name: 'Baby Food', url: 'baby-food' },
+  { id: '6048', name: 'Diapers', url: 'diapers' },
 ];
 
 /**
