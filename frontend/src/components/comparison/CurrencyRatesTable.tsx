@@ -381,13 +381,6 @@ export default function CurrencyRatesTable() {
             {currencies.map(([code, rate], index) => (
               <CurrencyCard key={code} code={code} rate={rate} index={index} />
             ))}
-
-            {/* EUR card - base currency */}
-            <CurrencyCard
-              code="EUR"
-              rate={1}
-              index={currencies.length}
-            />
           </div>
         )}
 
