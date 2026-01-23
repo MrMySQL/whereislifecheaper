@@ -120,7 +120,7 @@ export default function CountryProducts() {
           </div>
 
           {/* Supermarket filter */}
-          {supermarkets && supermarkets.length > 1 && (
+          {supermarkets && supermarkets.filter((s: Supermarket) => s.is_active).length > 1 && (
             <div className="sm:w-64">
               <div className="relative">
                 <Store className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-charcoal-400" />
@@ -133,7 +133,7 @@ export default function CountryProducts() {
                   className="input pl-10 w-full appearance-none cursor-pointer"
                 >
                   <option value="">{t('countryProducts.allSupermarkets')}</option>
-                  {supermarkets.map((s: Supermarket) => (
+                  {supermarkets.filter((s: Supermarket) => s.is_active).map((s: Supermarket) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
