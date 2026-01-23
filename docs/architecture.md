@@ -85,14 +85,15 @@ WhereIsLifeCheaper is a multi-country grocery price comparison system that:
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| Frontend | React 19, Vite 7, TailwindCSS | User interface |
-| API | Express.js, TypeScript | REST endpoints |
-| Authentication | Passport.js, Google OAuth 2.0 | User authentication |
-| Scraping | Playwright (Chromium) | Browser automation |
+| Frontend | React 19.2, Vite 7.2, TailwindCSS 3.4 | User interface |
+| API | Express.js 4.18, TypeScript 5.9 | REST endpoints |
+| Authentication | Passport.js 0.7, Google OAuth 2.0 | User authentication |
+| Scraping | Playwright 1.40, Playwright Extra | Browser automation |
 | Database | PostgreSQL 15 | Data persistence |
-| Caching | TanStack Query | Client-side caching |
-| Logging | Winston, Google Cloud Logging | Monitoring |
-| Deployment | Vercel (Serverless) | Production hosting |
+| Caching | TanStack Query 5.90 | Client-side caching |
+| Logging | Winston 3.11, Google Cloud Logging | Monitoring |
+| i18n | i18next 25.7, react-i18next | Internationalization |
+| Deployment | Vercel (Serverless), AWS ECS | Production hosting |
 
 ## Component Details
 
@@ -100,17 +101,20 @@ WhereIsLifeCheaper is a multi-country grocery price comparison system that:
 
 The frontend is a React Single-Page Application built with Vite:
 
-- **State Management**: React Context for auth, TanStack Query for server state
+- **State Management**: React Context for auth, TanStack Query 5.90 for server state
 - **Routing**: React Router v7 with protected routes
-- **Styling**: TailwindCSS with responsive design
-- **Charts**: Recharts for price history visualization
+- **Styling**: TailwindCSS 3.4 with responsive design
+- **Charts**: Recharts 3.6 for price history visualization
 - **Icons**: Lucide React
+- **i18n**: i18next with browser language detection
+- **HTTP Client**: Axios 1.13
 
 Key pages:
-- `/` - Price comparison across countries
+- `/` - Price comparison across countries with currency rates
 - `/country/:code` - Products for a specific country
 - `/admin/mapping` - Canonical product management
 - `/admin/scrapers` - Manual scraper triggering
+- `/login` - Google OAuth login
 
 ### Backend Layer
 
@@ -135,13 +139,26 @@ Request → Helmet → CORS → JSON Parser → Session → Passport → Routes 
 Browser automation using Playwright with an abstract base class pattern:
 
 ```
-                    BaseScraper (Abstract)
-                           │
-         ┌─────────┬───────┼───────┬─────────┐
-         ▼         ▼       ▼       ▼         ▼
-    MigrosScraper  Voli  Mercadona  Auchan  Arbuz
-       (Turkey)   (MN)    (Spain)   (Ukraine) (KZ)
+                           BaseScraper (Abstract)
+                                    │
+    ┌───────────┬───────────┬───────┼───────┬───────────┬───────────┐
+    ▼           ▼           ▼       ▼       ▼           ▼           ▼
+ Migros      Voli      Mercadona  Makro  Auchan(2)   Arbuz     REWE/Knuspr
+ (Turkey)   (MN)       (Spain)    (UZ)  (Ukraine)    (KZ)      (Germany)
+                                                                    │
+                                                              Lotus's(2)
+                                                              (Malaysia)
 ```
+
+**12 Scraper Implementations across 8 Countries:**
+- Turkey: MigrosScraper
+- Montenegro: VoliScraper
+- Spain: MercadonaScraper
+- Uzbekistan: MakroScraper
+- Ukraine: AuchanUaScraper, AuchanUaGraphQLScraper
+- Kazakhstan: ArbuzScraper
+- Germany: ReweScraper, KnusprScraper
+- Malaysia: LotussScraper, LotussApiScraper
 
 **BaseScraper provides:**
 - Browser lifecycle management
@@ -251,7 +268,7 @@ Emails in `ADMIN_EMAILS` environment variable are flagged as admins.
 
 ## Deployment Architecture
 
-### Vercel (Production)
+### Vercel (Production - Web App)
 
 ```
 ┌─────────────────────────────────────────┐
@@ -268,6 +285,29 @@ Emails in `ADMIN_EMAILS` environment variable are flagged as admins.
 │  │    1024MB, 30s timeout          │   │
 │  └─────────────────────────────────┘   │
 │                                         │
+└─────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│     PostgreSQL (External Service)        │
+└─────────────────────────────────────────┘
+```
+
+### AWS ECS (Scraper Execution)
+
+```
+┌─────────────────────────────────────────┐
+│            AWS ECS Fargate              │
+│  ┌─────────────────────────────────┐   │
+│  │    Docker Container             │   │
+│  │    - Node.js 20 + Playwright    │   │
+│  │    - Chromium browser           │   │
+│  │    - Scraper scripts            │   │
+│  └─────────────────────────────────┘   │
+│                                         │
+│  Triggered by:                         │
+│  - GitHub Actions (scheduled/manual)   │
+│  - Manual via aws:run script           │
 └─────────────────────────────────────────┘
               │
               ▼
@@ -332,30 +372,49 @@ whereislifecheaper/
 ├── docs/                   # Documentation
 ├── frontend/               # React application
 │   ├── src/
-│   │   ├── components/
-│   │   ├── context/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   └── utils/
+│   │   ├── components/    # UI components (layout, comparison, common)
+│   │   ├── context/       # React context (AuthContext)
+│   │   ├── pages/         # Page components (Home, Login, admin/)
+│   │   ├── services/      # API client (axios)
+│   │   ├── i18n/          # Internationalization (locales, config)
+│   │   ├── types/         # TypeScript interfaces
+│   │   └── utils/         # Helper functions (currency, dateFormat)
 │   └── package.json
 ├── scripts/                # CLI scripts
-│   ├── migrate.ts
-│   ├── seed.ts
-│   ├── run-scraper.ts
-│   └── test-scraper.ts
+│   ├── migrate.ts         # Database migrations
+│   ├── seed.ts            # Data seeding
+│   ├── run-scraper.ts     # Scraper execution
+│   ├── test-scraper.ts    # Scraper testing
+│   ├── sync-exchange-rates.ts  # Exchange rate sync
+│   ├── test-proxy.ts      # Proxy testing
+│   ├── deploy-ecr.sh      # AWS ECR deployment
+│   ├── run-ecs-task.sh    # AWS ECS task trigger
+│   └── stop-ecs-task.sh   # AWS ECS task stop
 ├── src/                    # Backend source
-│   ├── api/               # Express routes
-│   ├── auth/              # Authentication
-│   ├── config/            # Configuration
-│   ├── constants/         # Constants
-│   ├── database/          # Migrations & seeds
-│   ├── scrapers/          # Scraper implementations
-│   ├── services/          # Business logic
+│   ├── api/               # Express routes (7 route modules)
+│   ├── auth/              # Authentication (Passport, middleware)
+│   ├── config/            # Configuration (env, database)
+│   ├── constants/         # Constants (exchangeRates)
+│   ├── database/          # Migrations (12) & seeds
+│   ├── scrapers/          # 12 scraper implementations
+│   │   ├── base/          # BaseScraper, ScraperFactory
+│   │   ├── turkey/        # MigrosScraper
+│   │   ├── montenegro/    # VoliScraper
+│   │   ├── spain/         # MercadonaScraper
+│   │   ├── uzbekistan/    # MakroScraper
+│   │   ├── ukraine/       # AuchanUaScraper, AuchanUaGraphQLScraper
+│   │   ├── kazakhstan/    # ArbuzScraper
+│   │   ├── germany/       # ReweScraper, KnusprScraper
+│   │   ├── malaysia/      # LotussScraper, LotussApiScraper
+│   │   └── scraperRegistry.ts
+│   ├── services/          # Business logic (Scraper, Product)
 │   ├── types/             # TypeScript types
-│   └── utils/             # Utilities
+│   └── utils/             # Utilities (logger, normalizer, retry)
+├── terraform/              # AWS infrastructure-as-code
 ├── tests/                  # Test files
 ├── logs/                   # Log files (gitignored)
-├── docker-compose.yml      # Local PostgreSQL
+├── docker-compose.yml      # Local PostgreSQL & pgAdmin
+├── Dockerfile             # Docker image for scrapers
 ├── vercel.json            # Vercel config
 └── package.json           # Root dependencies
 ```

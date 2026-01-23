@@ -8,6 +8,7 @@ This document covers deployment options for WhereIsLifeCheaper.
 |-------------|----------|-----|----------|----------|
 | Local Dev | Vite (5173) | Express (3000) | Docker PostgreSQL | Manual |
 | Vercel | Static | Serverless | External PostgreSQL | GitHub Actions |
+| AWS ECS | - | - | External PostgreSQL | Docker on Fargate |
 
 ## Local Development
 
@@ -248,10 +249,15 @@ on:
   schedule:
     - cron: '0 3 * * *'  # 3 AM UTC daily
   workflow_dispatch:      # Manual trigger
+    inputs:
+      scraper:
+        description: 'Specific scraper to run (optional)'
+        required: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours
 
     steps:
       - uses: actions/checkout@v4
@@ -259,21 +265,34 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright
-        run: npx playwright install chromium
+      - name: Install Playwright with system deps
+        run: npx playwright install chromium --with-deps
 
-      - name: Run scrapers
+      - name: Install xvfb
+        run: sudo apt-get install -y xvfb
+
+      - name: Seed database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run seed
+
+      - name: Sync exchange rates
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run rates:sync
+
+      - name: Run scrapers (with xvfb for headed mode)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NODE_ENV: production
-          PLAYWRIGHT_HEADLESS: true
-        run: npm run scraper:run -- --concurrency=2
+          PLAYWRIGHT_HEADLESS: false
+        run: xvfb-run --auto-servernum -- npm run scraper:run
 
       - name: Upload logs
         if: always()
@@ -297,6 +316,81 @@ In GitHub Repository → Settings → Secrets:
 1. Go to Actions tab in GitHub
 2. Select "Daily Scraping" workflow
 3. Click "Run workflow"
+4. Optionally specify a specific scraper name
+
+---
+
+## AWS ECS Deployment (Scrapers)
+
+For long-running scraper jobs, AWS ECS Fargate provides more resources and flexibility.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────┐
+│            AWS ECS Fargate              │
+│  ┌─────────────────────────────────┐   │
+│  │    Docker Container             │   │
+│  │    - Node.js 20 slim           │   │
+│  │    - Playwright + Chromium     │   │
+│  │    - Scraper scripts           │   │
+│  └─────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│   AWS ECR (Container Registry)          │
+│   whereislifecheaper-scraper:latest    │
+└─────────────────────────────────────────┘
+```
+
+### Deployment Scripts
+
+```bash
+# Build and push Docker image to ECR
+npm run aws:deploy
+# or: scripts/deploy-ecr.sh
+
+# Run ECS task
+npm run aws:run
+# or: scripts/run-ecs-task.sh
+
+# Stop running ECS tasks
+npm run aws:stop
+# or: scripts/stop-ecs-task.sh
+```
+
+### Docker Configuration
+
+```dockerfile
+# Dockerfile
+FROM node:20-slim
+
+# Install Playwright dependencies
+RUN apt-get update && apt-get install -y \
+    libnss3 libxss1 libasound2 libatk-bridge2.0-0 \
+    libdrm2 libxcomposite1 libxdamage1 libxrandr2 \
+    libgbm1 libpango-1.0-0 libcairo2 fonts-liberation
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN npm run build:backend
+RUN npx playwright install chromium
+
+CMD ["npm", "run", "scraper:run"]
+```
+
+### Infrastructure (Terraform)
+
+AWS infrastructure is defined in `terraform/`:
+- ECS Cluster
+- ECS Task Definition
+- ECR Repository
+- IAM Roles
+- VPC Configuration
+- CloudWatch Logs
 
 ---
 
@@ -359,12 +453,23 @@ Serverless PostgreSQL with branching:
 | `SCRAPER_MAX_RETRIES` | `3` | Scraper retry attempts |
 | `SCRAPER_TIMEOUT` | `30000` | Page load timeout (ms) |
 | `SCRAPER_CONCURRENT_BROWSERS` | `3` | Parallel browser instances |
+| `SCRAPER_PROXY_CONFIG` | - | JSON map of scraper names to proxy URLs |
 | `LOG_LEVEL` | `info` | Logging level |
 | `LOG_DIR` | `./logs` | Log files directory |
 | `GOOGLE_CLIENT_ID` | - | OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | - | OAuth client secret |
 | `GOOGLE_CALLBACK_URL` | - | OAuth callback URL |
 | `ADMIN_EMAILS` | - | Comma-separated admin emails |
+| `GOOGLE_CLOUD_PROJECT` | - | GCP project for logging |
+| `GOOGLE_CREDENTIALS_JSON` | - | GCP credentials as JSON string |
+
+### Proxy Configuration
+
+Configure per-supermarket proxies via `SCRAPER_PROXY_CONFIG`:
+
+```bash
+SCRAPER_PROXY_CONFIG='{"ReweScraper":"http://proxy1:8080","KnusprScraper":"http://proxy2:8080"}'
+```
 
 ---
 

@@ -5,14 +5,16 @@ This document covers the React frontend application for WhereIsLifeCheaper.
 ## Overview
 
 The frontend is a Single-Page Application (SPA) built with:
-- **React 19** - UI framework
-- **Vite 7** - Build tool and dev server
-- **TailwindCSS** - Utility-first CSS
-- **React Router v7** - Client-side routing
-- **TanStack Query** - Server state management
-- **Recharts** - Data visualization
-- **Lucide React** - Icon library
-- **Axios** - HTTP client
+- **React 19.2** - UI framework
+- **Vite 7.2** - Build tool and dev server
+- **TailwindCSS 3.4** - Utility-first CSS
+- **React Router v7.12** - Client-side routing
+- **TanStack Query 5.90** - Server state management
+- **Recharts 3.6** - Data visualization
+- **Lucide React 0.562** - Icon library
+- **Axios 1.13** - HTTP client
+- **i18next 25.7** - Internationalization
+- **react-i18next 16.5** - React bindings for i18next
 
 ## Project Structure
 
@@ -22,6 +24,7 @@ frontend/
 │   ├── components/          # Reusable components
 │   │   ├── common/          # Generic components
 │   │   │   ├── Loading.tsx
+│   │   │   ├── LanguageSwitcher.tsx
 │   │   │   └── ProtectedRoute.tsx
 │   │   ├── comparison/      # Price comparison
 │   │   │   ├── ComparisonTable.tsx
@@ -34,6 +37,10 @@ frontend/
 │   │       └── Layout.tsx
 │   ├── context/             # React context providers
 │   │   └── AuthContext.tsx
+│   ├── i18n/                # Internationalization
+│   │   ├── index.ts         # i18next configuration
+│   │   ├── i18next.d.ts     # Type definitions
+│   │   └── locales/         # Translation files (EN, TR, etc.)
 │   ├── pages/               # Page components
 │   │   ├── Home.tsx
 │   │   ├── CountryProducts.tsx
@@ -43,15 +50,19 @@ frontend/
 │   │       └── Scrapers.tsx
 │   ├── services/            # API client
 │   │   └── api.ts
+│   ├── types/               # TypeScript interfaces
+│   │   └── index.ts
 │   ├── utils/               # Helper functions
-│   │   └── currency.ts
+│   │   ├── currency.ts
+│   │   └── dateFormat.ts
 │   ├── App.tsx              # Root component
 │   ├── main.tsx             # Entry point
 │   └── index.css            # Global styles
 ├── index.html               # HTML template
 ├── package.json
 ├── tailwind.config.js
-├── tsconfig.json
+├── tsconfig.app.json        # App TypeScript config
+├── tsconfig.node.json       # Build tool TypeScript config
 └── vite.config.ts
 ```
 
@@ -406,6 +417,81 @@ const rates = await fetchExchangeRates();
 // Convert price
 const eurPrice = convertPrice(100, 'TRY', 'EUR', rates);
 ```
+
+## Internationalization (i18n)
+
+The app uses i18next for multi-language support:
+
+### Configuration
+
+```typescript
+// i18n/index.ts
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import LanguageDetector from 'i18next-browser-languagedetector';
+
+i18n
+  .use(LanguageDetector)
+  .use(initReactI18next)
+  .init({
+    resources: {
+      en: { translation: enTranslations },
+      tr: { translation: trTranslations },
+    },
+    fallbackLng: 'en',
+    interpolation: { escapeValue: false },
+  });
+```
+
+### Using Translations
+
+```tsx
+import { useTranslation } from 'react-i18next';
+
+function Component() {
+  const { t } = useTranslation();
+
+  return (
+    <div>
+      <h1>{t('home.title')}</h1>
+      <p>{t('home.description')}</p>
+    </div>
+  );
+}
+```
+
+### Language Switcher
+
+```tsx
+import { LanguageSwitcher } from '../components/common/LanguageSwitcher';
+
+// In Header or Layout
+<LanguageSwitcher />
+```
+
+### Adding New Translations
+
+1. Create translation file in `i18n/locales/`:
+   ```typescript
+   // i18n/locales/de.ts
+   export default {
+     home: {
+       title: 'Preisvergleich',
+       description: 'Vergleichen Sie Lebensmittelpreise...'
+     }
+   };
+   ```
+
+2. Add to i18n config:
+   ```typescript
+   import deTranslations from './locales/de';
+
+   resources: {
+     en: { translation: enTranslations },
+     tr: { translation: trTranslations },
+     de: { translation: deTranslations },
+   }
+   ```
 
 ## Styling
 

@@ -193,6 +193,8 @@ const ScraperClass = scraperRegistry.get('MigrosScraper').scraperClass;
 
 ## Country-Specific Scrapers
 
+The system currently supports **12 scraper implementations** across **8 countries**.
+
 ### Turkey - MigrosScraper
 
 **Location**: `src/scrapers/turkey/MigrosScraper.ts`
@@ -209,6 +211,8 @@ const response = await page.evaluate(async (url) => {
   return res.json();
 }, apiUrl);
 ```
+
+---
 
 ### Montenegro - VoliScraper
 
@@ -229,17 +233,31 @@ const products = await page.$$eval('.product-card', (cards) => {
 });
 ```
 
+---
+
 ### Spain - MercadonaScraper
 
 **Location**: `src/scrapers/spain/MercadonaScraper.ts`
 
 **Strategy**: API-based scraping similar to Migros
 
+---
+
+### Uzbekistan - MakroScraper
+
+**Location**: `src/scrapers/uzbekistan/MakroScraper.ts`
+
+**Strategy**: HTML-based scraping
+
+---
+
 ### Ukraine - AuchanUaScraper / AuchanUaGraphQLScraper
 
 **Location**: `src/scrapers/ukraine/`
 
-**Strategy**: Two implementations - HTML and GraphQL API
+**Strategy**: Two implementations available:
+- **AuchanUaScraper** - Traditional HTML/DOM scraping
+- **AuchanUaGraphQLScraper** - GraphQL API approach (preferred)
 
 ```typescript
 // GraphQL approach
@@ -253,17 +271,51 @@ const query = `
 `;
 ```
 
-### Uzbekistan - MakroScraper
-
-**Location**: `src/scrapers/uzbekistan/MakroScraper.ts`
-
-**Strategy**: HTML-based scraping
+---
 
 ### Kazakhstan - ArbuzScraper
 
 **Location**: `src/scrapers/kazakhstan/ArbuzScraper.ts`
 
 **Strategy**: API-based scraping
+
+---
+
+### Germany - ReweScraper / KnusprScraper
+
+**Location**: `src/scrapers/germany/`
+
+**Strategy**: Two supermarket implementations:
+- **ReweScraper** - REWE supermarket chain (DOM-based)
+- **KnusprScraper** - Knuspr online grocery (DOM-based)
+
+---
+
+### Malaysia - LotussScraper / LotussApiScraper
+
+**Location**: `src/scrapers/malaysia/`
+
+**Strategy**: Two implementations:
+- **LotussScraper** - Traditional HTML/DOM scraping
+- **LotussApiScraper** - API-based scraping (preferred)
+
+---
+
+## Scraper Summary Table
+
+| Country | Supermarket | Class Name | Type | Status |
+|---------|-------------|-----------|------|--------|
+| Turkey | Migros | MigrosScraper | API | Active |
+| Montenegro | Voli | VoliScraper | DOM | Active |
+| Spain | Mercadona | MercadonaScraper | API | Active |
+| Uzbekistan | Makro | MakroScraper | DOM | Active |
+| Ukraine | Auchan | AuchanUaScraper | DOM | Active |
+| Ukraine | Auchan | AuchanUaGraphQLScraper | GraphQL | Active |
+| Kazakhstan | Arbuz | ArbuzScraper | API | Active |
+| Germany | REWE | ReweScraper | DOM | Active |
+| Germany | Knuspr | KnusprScraper | DOM | Active |
+| Malaysia | Lotus's | LotussScraper | DOM | Active |
+| Malaysia | Lotus's | LotussApiScraper | API | Active |
 
 ## Product Data Structure
 

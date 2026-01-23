@@ -7,6 +7,20 @@ This document provides complete documentation for the WhereIsLifeCheaper REST AP
 - **Local Development**: `http://localhost:3000/api`
 - **Production**: `https://your-domain.vercel.app/api`
 
+## API Endpoints Overview
+
+| Category | Endpoints |
+|----------|-----------|
+| Authentication | `/api/auth/google`, `/api/auth/google/callback`, `/api/auth/me`, `/api/auth/logout` |
+| Countries | `/api/countries`, `/api/countries/:id` |
+| Supermarkets | `/api/supermarkets` |
+| Products | `/api/products`, `/api/products/:id` |
+| Prices | `/api/prices/latest`, `/api/prices/stats` |
+| Canonical | `/api/canonical`, `/api/canonical/:id`, `/api/canonical/comparison` |
+| Scraper | `/api/scraper/categories/:id`, `/api/scraper/trigger`, `/api/scraper/logs` |
+| Exchange Rates | `/api/rates`, `/api/rates/sync` |
+| Health | `/health` |
+
 ## Authentication
 
 The API uses Google OAuth 2.0 for authentication. Some endpoints require authentication or admin privileges.
@@ -475,9 +489,9 @@ Delete a canonical product.
 
 ---
 
-### POST /api/canonical/map
+### PUT /api/canonical/link
 
-Link a product to a canonical product.
+Link or unlink a product to/from a canonical product.
 
 **Authentication**: Admin required
 
@@ -489,11 +503,177 @@ Link a product to a canonical product.
 }
 ```
 
+To unlink, pass `null` for `canonical_product_id`:
+```json
+{
+  "product_id": 1,
+  "canonical_product_id": null
+}
+```
+
 **Response**:
 ```json
 {
-  "success": true,
-  "message": "Product mapped to canonical product"
+  "message": "Product linked",
+  "data": {
+    "id": 1,
+    "name": "Organic Milk 1L",
+    "canonical_product_id": 2
+  }
+}
+```
+
+---
+
+### PATCH /api/canonical/:id
+
+Update a canonical product's settings.
+
+**Authentication**: Admin required
+
+**Parameters**:
+- `id` (path) - Canonical product ID
+
+**Request Body**:
+```json
+{
+  "show_per_unit_price": true,
+  "disabled": false
+}
+```
+
+**Response**:
+```json
+{
+  "message": "Updated successfully",
+  "data": {
+    "id": 2,
+    "name": "Milk 1L",
+    "show_per_unit_price": true,
+    "disabled": false
+  }
+}
+```
+
+---
+
+### GET /api/canonical/comparison
+
+Get cross-country price comparison for all canonical products.
+
+**Query Parameters**:
+- `search` (optional) - Filter by canonical product name
+- `limit` (optional, default: 100) - Results per page
+- `offset` (optional, default: 0) - Pagination offset
+
+**Response**:
+```json
+{
+  "data": [
+    {
+      "canonical_id": 1,
+      "canonical_name": "Milk 1L",
+      "canonical_description": "1 liter of whole milk",
+      "show_per_unit_price": false,
+      "category": "Dairy",
+      "country_count": 4,
+      "prices_by_country": {
+        "TR": {
+          "product_id": 1,
+          "product_name": "Süt 1L",
+          "price": 45.90,
+          "currency": "TRY",
+          "supermarket": "Migros",
+          "country_name": "Turkey",
+          "product_count": 2,
+          "products": [...]
+        },
+        "DE": {
+          "product_id": 2,
+          "product_name": "Vollmilch 1L",
+          "price": 1.29,
+          "currency": "EUR",
+          "supermarket": "REWE",
+          "country_name": "Germany",
+          "product_count": 1,
+          "products": [...]
+        }
+      }
+    }
+  ],
+  "total": 50,
+  "pagination": {
+    "limit": 100,
+    "offset": 0
+  }
+}
+```
+
+---
+
+### GET /api/canonical/products-by-country/:countryId
+
+Get all products for a country with their canonical product assignments.
+
+**Parameters**:
+- `countryId` (path) - Country ID
+
+**Query Parameters**:
+- `search` (optional) - Search by product name or brand
+- `supermarket_id` (optional) - Filter by supermarket
+- `mapped_only` (optional) - Set to "true" to show only products with canonical mappings
+- `limit` (optional, default: 100) - Results per page
+- `offset` (optional, default: 0) - Pagination offset
+
+**Response**:
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Organic Milk 1L",
+      "brand": "Brand",
+      "canonical_product_id": 2,
+      "canonical_product_name": "Milk 1L",
+      "supermarket_name": "Migros",
+      "price": 45.90,
+      "currency": "TRY"
+    }
+  ],
+  "count": 150,
+  "pagination": {
+    "limit": 100,
+    "offset": 0
+  }
+}
+```
+
+---
+
+### GET /api/canonical/:id/products
+
+Get all products linked to a specific canonical product.
+
+**Parameters**:
+- `id` (path) - Canonical product ID
+
+**Response**:
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Organic Milk 1L",
+      "brand": "Brand",
+      "supermarket_name": "Migros",
+      "country_name": "Turkey",
+      "country_code": "TR",
+      "price": 45.90,
+      "currency": "TRY",
+      "scraped_at": "2024-01-15T10:00:00Z"
+    }
+  ],
+  "count": 12
 }
 ```
 

@@ -84,27 +84,31 @@ whereislifecheaper/
 │   └── sync-exchange-rates.ts
 ├── src/                    # Backend source code
 │   ├── api/               # Express routes
-│   │   ├── routes/        # Route handlers
+│   │   ├── routes/        # Route handlers (7 modules)
 │   │   └── server.ts      # Express setup
 │   ├── auth/              # Authentication
 │   │   ├── middleware.ts  # Auth middleware
 │   │   ├── passport.ts    # OAuth setup
-│   │   └── routes.ts      # Auth routes
+│   │   ├── routes.ts      # Auth routes
+│   │   └── types.ts       # User types
 │   ├── config/            # Configuration
 │   │   ├── database.ts    # DB connection
 │   │   └── env.ts         # Environment validation
 │   ├── constants/         # Constants
+│   │   └── exchangeRates.ts
 │   ├── database/          # Database layer
-│   │   ├── migrations/    # SQL migrations
+│   │   ├── migrations/    # SQL migrations (12 files)
 │   │   └── seeds/         # Seed data
-│   ├── scrapers/          # Web scrapers
-│   │   ├── base/          # BaseScraper, Factory
-│   │   ├── turkey/        # Country scrapers
-│   │   ├── montenegro/
-│   │   ├── spain/
-│   │   ├── ukraine/
-│   │   ├── uzbekistan/
-│   │   ├── kazakhstan/
+│   ├── scrapers/          # Web scrapers (12 implementations)
+│   │   ├── base/          # BaseScraper, ScraperFactory
+│   │   ├── turkey/        # MigrosScraper
+│   │   ├── montenegro/    # VoliScraper
+│   │   ├── spain/         # MercadonaScraper
+│   │   ├── uzbekistan/    # MakroScraper
+│   │   ├── ukraine/       # AuchanUaScraper, AuchanUaGraphQLScraper
+│   │   ├── kazakhstan/    # ArbuzScraper
+│   │   ├── germany/       # ReweScraper, KnusprScraper
+│   │   ├── malaysia/      # LotussScraper, LotussApiScraper
 │   │   └── scraperRegistry.ts
 │   ├── services/          # Business logic
 │   │   ├── ProductService.ts
@@ -131,9 +135,12 @@ whereislifecheaper/
 | Script | Description |
 |--------|-------------|
 | `npm run build` | Compile TypeScript and build frontend |
+| `npm run build:backend` | Compile TypeScript only |
+| `npm run build:frontend` | Build frontend with Vite |
 | `npm run dev` | Run main application with ts-node |
 | `npm run api` | Start Express API server |
 | `npm run dev:frontend` | Start Vite dev server |
+| `npm start` | Run production server |
 
 ### Database
 
@@ -148,8 +155,21 @@ whereislifecheaper/
 |--------|-------------|
 | `npm run scraper:run` | Run all active scrapers |
 | `npm run scraper:run -- <name>` | Run specific scraper |
+| `npm run scraper:run -- --categories=x,y` | Run with category filter |
+| `npm run scraper:run -- --concurrency=5` | Custom concurrency |
+| `npm run scraper:run -- -l` | List available categories |
 | `npm run scraper:test` | Test scraper manually |
 | `npm run rates:sync` | Sync exchange rates |
+
+### Docker & AWS
+
+| Script | Description |
+|--------|-------------|
+| `npm run docker:build` | Build Docker image |
+| `npm run docker:run` | Run Docker container locally |
+| `npm run aws:deploy` | Deploy to AWS ECR |
+| `npm run aws:run` | Trigger AWS ECS task |
+| `npm run aws:stop` | Stop AWS ECS task |
 
 ### Testing
 

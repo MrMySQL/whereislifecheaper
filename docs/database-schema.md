@@ -83,15 +83,17 @@ Stores supported countries for price comparison.
 **Indexes:**
 - `idx_countries_code` on `code`
 
-**Current data:**
-| Code | Name | Currency |
-|------|------|----------|
-| TR | Turkey | TRY |
-| ME | Montenegro | EUR |
-| ES | Spain | EUR |
-| UZ | Uzbekistan | UZS |
-| UA | Ukraine | UAH |
-| KZ | Kazakhstan | KZT |
+**Current data (8 countries):**
+| Code | Name | Currency | Flag |
+|------|------|----------|------|
+| TR | Turkey | TRY | 🇹🇷 |
+| ME | Montenegro | EUR | 🇲🇪 |
+| ES | Spain | EUR | 🇪🇸 |
+| UZ | Uzbekistan | UZS | 🇺🇿 |
+| UA | Ukraine | UAH | 🇺🇦 |
+| KZ | Kazakhstan | KZT | 🇰🇿 |
+| DE | Germany | EUR | 🇩🇪 |
+| MY | Malaysia | MYR | 🇲🇾 |
 
 ---
 
@@ -434,8 +436,8 @@ npm run migrate
 
 Initial data is loaded via `npm run seed`:
 
-1. **countries.ts** - 6 countries with currency codes
-2. **supermarkets.ts** - Supermarkets with scraper configurations
+1. **countries.ts** - 8 countries with currency codes and flag emojis
+2. **supermarkets.ts** - 11+ supermarkets with scraper configurations
 3. **categories.ts** - Common product categories
 
-Seeds use `ON CONFLICT DO NOTHING` for idempotent execution.
+Seeds use `ON CONFLICT DO UPDATE` for idempotent execution (updates existing records).
