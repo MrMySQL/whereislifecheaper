@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import posthog from './lib/posthog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
 import Layout from './components/layout/Layout';
@@ -11,6 +12,17 @@ import Mapping from './pages/admin/Mapping';
 import Scrapers from './pages/admin/Scrapers';
 import RequestCountry from './pages/RequestCountry';
 import { loadExchangeRates } from './utils/currency';
+
+// Track page views for SPA navigation
+function PageViewTracker() {
+  const location = useLocation();
+
+  useEffect(() => {
+    posthog.capture('$pageview');
+  }, [location.pathname]);
+
+  return null;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,6 +43,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
+          <PageViewTracker />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Layout />}>
