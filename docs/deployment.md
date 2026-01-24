@@ -391,6 +391,68 @@ AWS infrastructure is defined in `terraform/`:
 - IAM Roles
 - VPC Configuration
 - CloudWatch Logs
+- Secrets Manager (DATABASE_URL, GITHUB_TOKEN, etc.)
+
+### Dynamic Code Fetching (Runner Image)
+
+The ECS deployment uses a "runner" image that clones the repository at runtime, similar to GitHub Actions. This eliminates the need to rebuild Docker images for code changes.
+
+**How it works:**
+1. `Dockerfile.runner` contains only system dependencies (Node.js, Chromium, git, xvfb)
+2. At runtime, `docker-entrypoint-runner.sh` clones the repo using GITHUB_TOKEN
+3. Dependencies are installed and the scraper runs
+
+**Benefits:**
+- Code changes don't require Docker image rebuilds
+- Only Dockerfile.runner changes trigger ECR deployments
+- Faster iteration cycle
+
+**Setup GitHub Token:**
+
+1. Create a GitHub Personal Access Token (PAT):
+   - Go to GitHub → Settings → Developer settings → Personal access tokens
+   - Create a "Fine-grained token" with read access to the repository
+   - Or use a classic token with `repo` scope
+
+2. Add to AWS Secrets Manager:
+   ```bash
+   aws secretsmanager put-secret-value \
+     --secret-id whereislifecheaper/github-token \
+     --secret-string "ghp_your_token_here"
+   ```
+
+3. Apply Terraform changes:
+   ```bash
+   cd terraform
+   terraform apply
+   ```
+
+**Specifying a branch/tag:**
+
+Set the `GITHUB_REF` environment variable in terraform/main.tf to use a specific branch or tag:
+```hcl
+{
+  name  = "GITHUB_REF"
+  value = "main"  # or "v1.0.0", "feature-branch", etc.
+}
+```
+
+**Rebuild runner image only when needed:**
+
+The ECR workflow only triggers on changes to:
+- `Dockerfile.runner`
+- `docker-entrypoint-runner.sh`
+
+To manually rebuild and push:
+```bash
+# Build runner image
+docker build -f Dockerfile.runner -t whereislifecheaper-scraper .
+
+# Tag and push to ECR
+aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin <account>.dkr.ecr.eu-central-1.amazonaws.com
+docker tag whereislifecheaper-scraper:latest <account>.dkr.ecr.eu-central-1.amazonaws.com/whereislifecheaper-scraper:latest
+docker push <account>.dkr.ecr.eu-central-1.amazonaws.com/whereislifecheaper-scraper:latest
+```
 
 ---
 

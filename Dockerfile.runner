@@ -1,0 +1,39 @@
+FROM node:20-bookworm-slim
+
+# Install Chromium dependencies, xvfb for headed browser support, and git for cloning
+RUN apt-get update && apt-get install -y \
+    git \
+    xvfb \
+    libglib2.0-0 \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV DISPLAY=:99
+
+# Copy and set up entrypoint script
+COPY docker-entrypoint-runner.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint-runner.sh
+
+ENTRYPOINT ["docker-entrypoint-runner.sh"]
+CMD ["npm", "run", "scraper:run"]

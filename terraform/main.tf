@@ -106,6 +106,15 @@ resource "aws_secretsmanager_secret" "proxy_config" {
   tags = var.tags
 }
 
+# Secrets Manager - GitHub Token (for cloning repo at runtime)
+resource "aws_secretsmanager_secret" "github_token" {
+  name                    = "${var.project_name}/github-token"
+  description             = "GitHub Personal Access Token for cloning the repository at runtime"
+  recovery_window_in_days = 0  # Immediate deletion on destroy
+
+  tags = var.tags
+}
+
 # IAM Role for ECS Task Execution
 resource "aws_iam_role" "ecs_task_execution" {
   name = "${var.project_name}-ecs-task-execution"
@@ -147,7 +156,8 @@ resource "aws_iam_role_policy" "ecs_secrets" {
         Resource = [
           aws_secretsmanager_secret.database_url.arn,
           aws_secretsmanager_secret.google_credentials.arn,
-          aws_secretsmanager_secret.proxy_config.arn
+          aws_secretsmanager_secret.proxy_config.arn,
+          aws_secretsmanager_secret.github_token.arn
         ]
       }
     ]
@@ -253,6 +263,10 @@ resource "aws_ecs_task_definition" "scraper" {
         {
           name  = "DISABLE_DEV_SHM"
           value = "true"
+        },
+        {
+          name  = "GITHUB_REF"
+          value = "main"
         }
       ]
 
@@ -268,6 +282,10 @@ resource "aws_ecs_task_definition" "scraper" {
         {
           name      = "SCRAPER_PROXY_CONFIG"
           valueFrom = aws_secretsmanager_secret.proxy_config.arn
+        },
+        {
+          name      = "GITHUB_TOKEN"
+          valueFrom = aws_secretsmanager_secret.github_token.arn
         }
       ]
 

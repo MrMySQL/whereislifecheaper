@@ -5,16 +5,10 @@ on:
     branches:
       - main
     paths:
-      - 'src/scrapers/**'
-      - 'src/database/**'
-      - 'src/utils/**'
-      - 'src/config/**'
-      - 'src/types/**'
-      - 'scripts/**'
-      - 'Dockerfile'
-      - 'docker-entrypoint.sh'
-      - 'package*.json'
-      - 'tsconfig.json'
+      # Only rebuild when the runner image or entrypoint changes
+      # Code changes are fetched at runtime via git clone
+      - 'Dockerfile.runner'
+      - 'docker-entrypoint-runner.sh'
   workflow_dispatch:
     inputs:
       force_deploy:
@@ -58,8 +52,8 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Build the Docker image
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          # Build the runner Docker image (fetches code at runtime)
+          docker build -f Dockerfile.runner -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
           # Push both tags
