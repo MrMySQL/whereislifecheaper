@@ -151,6 +151,14 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'LotussApiScraper',
     is_active: true,
   },
+  // Albania
+  {
+    country_code: 'AL',
+    name: 'SPAR Albania',
+    website_url: 'https://shop.spar.al',
+    scraper_class: 'SparAlbaniaScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {

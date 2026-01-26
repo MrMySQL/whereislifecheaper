@@ -56,6 +56,12 @@ export const countriesData: CountrySeedData[] = [
     currency_code: 'MYR',
     flag_emoji: '🇲🇾',
   },
+  {
+    name: 'Albania',
+    code: 'AL',
+    currency_code: 'ALL',
+    flag_emoji: '🇦🇱',
+  },
 ];
 
 export async function seedCountries(): Promise<void> {

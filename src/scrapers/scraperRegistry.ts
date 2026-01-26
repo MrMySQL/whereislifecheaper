@@ -11,6 +11,7 @@ import { ReweScraper, reweConfig, reweCategories } from './germany/ReweScraper';
 import { KnusprScraper, knusprConfig, knusprCategories } from './germany/KnusprScraper';
 import { LotussScraper, lotussConfig, lotussCategories } from './malaysia/LotussScraper';
 import { LotussApiScraper, lotussApiConfig, lotussApiCategories } from './malaysia/LotussApiScraper';
+import { SparAlbaniaScraper, sparAlbaniaConfig, sparAlbaniaCategories } from './albania/SparAlbaniaScraper';
 
 /**
  * Scraper registration entry containing all metadata for a scraper
@@ -133,6 +134,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: LotussApiScraper,
       defaultConfig: lotussApiConfig,
       categories: lotussApiCategories,
+    },
+  ],
+  [
+    'SparAlbaniaScraper',
+    {
+      className: 'SparAlbaniaScraper',
+      scraperClass: SparAlbaniaScraper,
+      defaultConfig: sparAlbaniaConfig,
+      categories: sparAlbaniaCategories,
     },
   ],
 ]);
