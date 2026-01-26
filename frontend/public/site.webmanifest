@@ -1,0 +1,36 @@
+{
+  "name": "WhereIsLifeCheaper",
+  "short_name": "LifeCheaper",
+  "description": "Compare grocery prices across countries. Track daily prices from supermarkets worldwide.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf7f0",
+  "theme_color": "#c25a3c",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["finance", "shopping", "lifestyle"],
+  "lang": "en",
+  "dir": "ltr"
+}

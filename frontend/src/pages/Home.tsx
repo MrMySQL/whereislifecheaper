@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation, Trans } from 'react-i18next';
 import { Search, RefreshCw, Globe2, TrendingDown, Sparkles, Layers, Check } from 'lucide-react';
@@ -8,6 +8,7 @@ import CountryCard from '../components/comparison/CountryCard';
 import ComparisonTable from '../components/comparison/ComparisonTable';
 import CurrencyRatesTable from '../components/comparison/CurrencyRatesTable';
 import Loading from '../components/common/Loading';
+import { useSEO, generateWebsiteSchema, generateFAQSchema } from '../hooks/useSEO';
 
 const DEFAULT_COUNTRIES = ['TR', 'ES', 'ME', 'UA', 'KZ', 'UZ'];
 
@@ -17,6 +18,34 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showOnlyInAllCountries, setShowOnlyInAllCountries] = useState(false);
+
+  // SEO structured data with FAQ for better search results
+  const structuredData = useMemo(() => ({
+    ...generateWebsiteSchema(),
+    ...generateFAQSchema([
+      {
+        question: 'How do you compare grocery prices across countries?',
+        answer: 'We scrape prices daily from major supermarkets in each country and convert them to a common currency (USD) for comparison. This allows you to see real-time price differences.',
+      },
+      {
+        question: 'Which countries do you track grocery prices for?',
+        answer: 'We currently track prices in Turkey, Spain, Montenegro, Ukraine, Kazakhstan, and Uzbekistan, with more countries being added regularly.',
+      },
+      {
+        question: 'How often are prices updated?',
+        answer: 'Prices are updated daily through automated scraping of supermarket websites, ensuring you always have access to current pricing information.',
+      },
+    ]),
+  }), []);
+
+  // Set SEO meta tags for home page
+  useSEO({
+    title: undefined, // Use default title for homepage
+    description: t('seo.homeDescription', 'Compare grocery prices across Turkey, Spain, Montenegro, Ukraine, Kazakhstan, and Uzbekistan. Track daily supermarket prices and find where life is cheaper.'),
+    keywords: 'grocery prices, cost of living comparison, supermarket prices, Turkey prices, Spain prices, Montenegro prices, expat life, digital nomad, food costs',
+    canonicalUrl: 'https://whereislifecheaper.com/',
+    structuredData,
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => {

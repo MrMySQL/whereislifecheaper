@@ -181,5 +181,11 @@
     "yesterday": "yesterday",
     "daysAgo": "{{count}}d ago",
     "never": "Never"
+  },
+  "seo": {
+    "homeDescription": "Compare grocery prices across Turkey, Spain, Montenegro, Ukraine, Kazakhstan, and Uzbekistan. Track daily supermarket prices and find where life is cheaper.",
+    "homeTitle": "Compare Grocery Prices Across Countries",
+    "countryTitle": "Grocery Prices in {{country}}",
+    "countryDescription": "Browse {{count}} grocery products and supermarket prices in {{country}}. Compare prices, find deals, and track price changes."
   }
 }

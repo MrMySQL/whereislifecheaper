@@ -2,20 +2,119 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WhereIsLifeCheaper - Compare Grocery Prices Across Countries</title>
-    <meta name="description" content="Compare grocery prices across countries. Track daily prices from supermarkets in Turkey, Spain, Montenegro, and more." />
 
-    <!-- Google Fonts: Playfair Display + DM Sans -->
+    <!-- Primary Meta Tags -->
+    <title>WhereIsLifeCheaper - Compare Grocery Prices Across Countries</title>
+    <meta name="title" content="WhereIsLifeCheaper - Compare Grocery Prices Across Countries" />
+    <meta name="description" content="Compare grocery prices across countries. Track daily prices from supermarkets in Turkey, Spain, Montenegro, Ukraine, Kazakhstan, Uzbekistan, and more. Find where life is cheaper." />
+    <meta name="keywords" content="grocery prices, cost of living, price comparison, supermarket prices, Turkey, Spain, Montenegro, Ukraine, Kazakhstan, Uzbekistan, food prices, international prices, expat, digital nomad" />
+    <meta name="author" content="WhereIsLifeCheaper" />
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="English" />
+    <meta name="revisit-after" content="1 days" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Theme color for mobile browsers -->
+    <meta name="theme-color" content="#faf7f0" />
+    <meta name="msapplication-TileColor" content="#faf7f0" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://whereislifecheaper.com/" />
+    <meta property="og:title" content="WhereIsLifeCheaper - Compare Grocery Prices Across Countries" />
+    <meta property="og:description" content="Compare grocery prices across countries. Track daily prices from supermarkets in Turkey, Spain, Montenegro, Ukraine, Kazakhstan, Uzbekistan, and more." />
+    <!-- Note: Create og-image.png (1200x630px) from og-image.svg for social sharing -->
+    <meta property="og:image" content="https://whereislifecheaper.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:site_name" content="WhereIsLifeCheaper" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="ru_RU" />
+    <meta property="og:locale:alternate" content="uk_UA" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://whereislifecheaper.com/" />
+    <meta name="twitter:title" content="WhereIsLifeCheaper - Compare Grocery Prices Across Countries" />
+    <meta name="twitter:description" content="Compare grocery prices across countries. Track daily prices from supermarkets in Turkey, Spain, Montenegro, and more." />
+    <meta name="twitter:image" content="https://whereislifecheaper.com/og-image.png" />
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://whereislifecheaper.com/" />
+
+    <!-- Alternate languages (hreflang) -->
+    <link rel="alternate" hreflang="en" href="https://whereislifecheaper.com/" />
+    <link rel="alternate" hreflang="ru" href="https://whereislifecheaper.com/?lang=ru" />
+    <link rel="alternate" hreflang="uk" href="https://whereislifecheaper.com/?lang=uk" />
+    <link rel="alternate" hreflang="x-default" href="https://whereislifecheaper.com/" />
+
+    <!-- Google Fonts: Playfair Display + DM Sans (preconnect for performance) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-    <!-- Theme color for mobile browsers -->
-    <meta name="theme-color" content="#faf7f0" />
+    <!-- Preconnect to API for faster data loading -->
+    <link rel="preconnect" href="https://whereislifecheaper.com" />
+
+    <!-- Structured Data - Organization -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "WhereIsLifeCheaper",
+      "description": "Compare grocery prices across countries. Track daily prices from supermarkets worldwide.",
+      "url": "https://whereislifecheaper.com",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://whereislifecheaper.com/?search={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
+    <!-- Structured Data - SoftwareApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "WhereIsLifeCheaper",
+      "description": "A multi-country grocery price comparison tool that tracks supermarket prices daily",
+      "url": "https://whereislifecheaper.com",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Any",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "featureList": [
+        "Compare grocery prices across 6+ countries",
+        "Daily price updates from major supermarkets",
+        "Currency conversion",
+        "Price history tracking",
+        "Search by product name"
+      ]
+    }
+    </script>
   </head>
   <body>
+    <noscript>
+      <div style="padding: 2rem; text-align: center; font-family: system-ui, sans-serif;">
+        <h1>WhereIsLifeCheaper</h1>
+        <p>JavaScript is required to use this application.</p>
+        <p>Please enable JavaScript in your browser settings to compare grocery prices across countries.</p>
+      </div>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

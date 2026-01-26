@@ -7,6 +7,7 @@ import { countriesApi, supermarketsApi, canonicalApi } from '../services/api';
 import { formatPrice } from '../utils/currency';
 import { formatRelativeTime } from '../utils/dateFormat';
 import type { Country, Supermarket, Product } from '../types';
+import { useSEO, generateCountrySchema, generateBreadcrumbSchema } from '../hooks/useSEO';
 
 const PRODUCTS_PER_PAGE = 100;
 
@@ -61,6 +62,38 @@ export default function CountryProducts() {
 
   const totalProducts = productsData?.count || 0;
   const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
+
+  // Generate SEO structured data for the country page
+  const structuredData = useMemo(() => {
+    if (!country) return undefined;
+    return {
+      ...generateCountrySchema({
+        name: country.name,
+        code: country.code,
+        productCount: totalProducts,
+      }),
+      ...generateBreadcrumbSchema([
+        { name: 'Home', url: 'https://whereislifecheaper.com/' },
+        { name: country.name, url: `https://whereislifecheaper.com/country/${country.code.toLowerCase()}` },
+      ]),
+    };
+  }, [country, totalProducts]);
+
+  // Set SEO meta tags for country page
+  useSEO({
+    title: country ? `Grocery Prices in ${country.name}` : 'Country Not Found',
+    description: country
+      ? `Browse ${totalProducts.toLocaleString()} grocery products and supermarket prices in ${country.name}. Compare prices, find deals, and track price changes.`
+      : 'The requested country was not found.',
+    keywords: country
+      ? `${country.name} grocery prices, ${country.name} supermarket, ${country.name} food prices, ${country.name} cost of living, shopping in ${country.name}`
+      : undefined,
+    canonicalUrl: country
+      ? `https://whereislifecheaper.com/country/${country.code.toLowerCase()}`
+      : undefined,
+    structuredData,
+    noIndex: !country, // Don't index 404 pages
+  });
 
   if (!countries) {
     return (

@@ -1,7 +1,16 @@
 import { useEffect } from 'react';
 import { Globe2 } from 'lucide-react';
+import { useSEO } from '../hooks/useSEO';
 
 export default function RequestCountry() {
+  // Set SEO meta tags for request country page
+  useSEO({
+    title: 'Request a Country',
+    description: 'Request a new country to be added to WhereIsLifeCheaper. Help us prioritize which countries to add next for grocery price comparison.',
+    keywords: 'request country, add country, grocery prices, price comparison, new country',
+    canonicalUrl: 'https://whereislifecheaper.com/request-country',
+  });
+
   useEffect(() => {
     // Load Tally embed script
     const script = document.createElement('script');

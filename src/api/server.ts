@@ -20,6 +20,7 @@ import pricesRouter from './routes/prices';
 import scraperRouter from './routes/scraper';
 import canonicalRouter from './routes/canonical';
 import ratesRouter from './routes/rates';
+import sitemapRouter from './routes/sitemap';
 
 const app = express();
 
@@ -102,6 +103,9 @@ app.use('/api/*', (req, res) => {
     message: `API route ${req.method} ${req.path} not found`,
   });
 });
+
+// SEO routes (sitemap.xml, robots.txt) - must be before static file serving
+app.use('/', sitemapRouter);
 
 // Serve React frontend in production, or fallback to old public directory
 const frontendPath = config.api.env === 'production'

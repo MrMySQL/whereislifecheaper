@@ -1,0 +1,26 @@
+# Robots.txt for WhereIsLifeCheaper
+# https://whereislifecheaper.com
+
+User-agent: *
+Allow: /
+
+# Allow all major search engine crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Yandex
+Allow: /
+
+# Disallow admin and auth pages
+Disallow: /admin/
+Disallow: /login
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://whereislifecheaper.com/sitemap.xml

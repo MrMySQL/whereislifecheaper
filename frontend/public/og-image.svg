@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#faf7f0"/>
+      <stop offset="100%" style="stop-color:#f5f0e6"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c25a3c"/>
+      <stop offset="100%" style="stop-color:#a84832"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Decorative shapes -->
+  <circle cx="1100" cy="100" r="200" fill="#c25a3c" opacity="0.1"/>
+  <circle cx="100" cy="530" r="150" fill="#6b8e4e" opacity="0.1"/>
+
+  <!-- Logo icon -->
+  <g transform="translate(100, 200)">
+    <rect width="80" height="80" rx="16" fill="url(#accent)"/>
+    <path d="M40 20 L40 50 M40 50 C40 60 30 70 20 70 M40 50 C40 60 50 70 60 70" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <circle cx="40" cy="20" r="6" fill="white"/>
+  </g>
+
+  <!-- Title -->
+  <text x="200" y="235" font-family="Georgia, serif" font-size="56" font-weight="bold" fill="#2d2d2d">WhereIsLife</text>
+  <text x="200" y="295" font-family="Georgia, serif" font-size="56" font-weight="bold" fill="#c25a3c">Cheaper</text>
+
+  <!-- Subtitle -->
+  <text x="100" y="380" font-family="Arial, sans-serif" font-size="28" fill="#666">Compare grocery prices across countries</text>
+
+  <!-- Countries list -->
+  <g transform="translate(100, 430)">
+    <rect x="0" y="0" width="140" height="40" rx="8" fill="#c25a3c" opacity="0.1"/>
+    <text x="70" y="27" font-family="Arial, sans-serif" font-size="18" fill="#c25a3c" text-anchor="middle">Turkey</text>
+
+    <rect x="160" y="0" width="140" height="40" rx="8" fill="#6b8e4e" opacity="0.1"/>
+    <text x="230" y="27" font-family="Arial, sans-serif" font-size="18" fill="#6b8e4e" text-anchor="middle">Spain</text>
+
+    <rect x="320" y="0" width="160" height="40" rx="8" fill="#d4a853" opacity="0.1"/>
+    <text x="400" y="27" font-family="Arial, sans-serif" font-size="18" fill="#b8923a" text-anchor="middle">Montenegro</text>
+
+    <rect x="500" y="0" width="140" height="40" rx="8" fill="#5a8fba" opacity="0.1"/>
+    <text x="570" y="27" font-family="Arial, sans-serif" font-size="18" fill="#5a8fba" text-anchor="middle">Ukraine</text>
+
+    <rect x="660" y="0" width="100" height="40" rx="8" fill="#9b7bb8" opacity="0.1"/>
+    <text x="710" y="27" font-family="Arial, sans-serif" font-size="18" fill="#9b7bb8" text-anchor="middle">+ more</text>
+  </g>
+
+  <!-- URL -->
+  <text x="100" y="560" font-family="Arial, sans-serif" font-size="20" fill="#999">whereislifecheaper.com</text>
+</svg>
