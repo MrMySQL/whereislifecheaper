@@ -6,6 +6,7 @@ import { scraperLogger } from '../utils/logger';
 import { ProductData, ScrapeResult, CategoryConfig, PageInfo } from '../types/scraper.types';
 import { calculatePricePerUnit } from '../utils/normalizer';
 import { getScraperCategories } from '../scrapers/scraperRegistry';
+import { generateRunId } from '../utils/runId';
 
 export interface RunScraperOptions {
   categoryIds?: string[];  // Filter to specific category IDs
@@ -26,10 +27,11 @@ export class ScraperService {
    * Run scraper for a specific supermarket
    */
   async runScraper(supermarketId: string, options?: RunScraperOptions): Promise<ScrapeResult> {
+    const runId = generateRunId();
     const categoryInfo = options?.categoryIds?.length
       ? ` (categories: ${options.categoryIds.join(', ')})`
       : '';
-    scraperLogger.info(`Starting scraper for supermarket: ${supermarketId}${categoryInfo}`);
+    scraperLogger.info(`Starting scraper for supermarket: ${supermarketId}${categoryInfo} [${runId}]`);
 
     let scraper: BaseScraper | null = null;
     let scrapeLogId: string | null = null;
@@ -57,6 +59,7 @@ export class ScraperService {
         categoryIds: options?.categoryIds,
       };
       scraper = ScraperFactory.createFromSupermarket(supermarket, scraperOptions);
+      scraper.setRunId(runId);
 
       // Set up callback to save products after each page
       scraper.setOnPageScrapedCallback(async (products: ProductData[], pageInfo: PageInfo): Promise<number> => {

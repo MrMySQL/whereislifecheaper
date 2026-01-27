@@ -28,9 +28,20 @@ export abstract class BaseScraper {
   protected onPageScraped?: OnPageScrapedCallback;
   protected logger: ReturnType<typeof createPrefixedLogger>;
 
+  protected runId?: string;
+
   constructor(config: ScraperConfig) {
     this.config = config;
     this.logger = createPrefixedLogger(config.name);
+  }
+
+  /**
+   * Set a unique run ID for this scraping session.
+   * Updates the logger prefix to include the run ID for log filtering.
+   */
+  setRunId(runId: string): void {
+    this.runId = runId;
+    this.logger = createPrefixedLogger(`${this.config.name}|${runId}`);
   }
 
   /**
