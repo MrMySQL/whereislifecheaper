@@ -310,8 +310,25 @@ export class SparAlbaniaScraper extends BaseScraper {
                    undefined;
       }
 
-      // Extract quantity and unit from product name
-      const quantityInfo = extractQuantity(name.trim());
+      // Extract unit from the short description element (e.g., "1L", "500g", "Paraboiled 1Kg")
+      // This is often more accurate than parsing from the product name
+      let quantityInfo = null;
+      const shortDescElement = await article.$('.loop-short-desc');
+      if (shortDescElement) {
+        const shortDescText = await shortDescElement.textContent();
+        if (shortDescText) {
+          const cleanedText = shortDescText.trim().replace(/\u00A0/g, ' '); // Remove &nbsp;
+          quantityInfo = extractQuantity(cleanedText);
+          if (quantityInfo) {
+            this.logger.debug(`Extracted unit from short-desc for "${name}": ${quantityInfo.value}${quantityInfo.unit}`);
+          }
+        }
+      }
+
+      // Fall back to extracting quantity from product name if not found in short description
+      if (!quantityInfo) {
+        quantityInfo = extractQuantity(name.trim());
+      }
 
       // Build full product URL if relative
       const fullUrl = productUrl.startsWith('http')
