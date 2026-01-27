@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info, EyeOff, Link } from 'lucide-react';
 import { countriesApi, canonicalApi, supermarketsApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
+import { convertToEUR } from '../../utils/currency';
 import type { Product, Country, CanonicalProductBasic, Supermarket } from '../../types';
 
 const PRODUCTS_PER_PAGE = 50;
@@ -13,8 +14,18 @@ export default function Mapping() {
   const queryClient = useQueryClient();
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
   const [selectedSupermarketId, setSelectedSupermarketId] = useState<number | null>(null);
+  const [productSearchInput, setProductSearchInput] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [productPage, setProductPage] = useState(0);
+
+  // Debounce product search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setProductSearch(productSearchInput);
+      setProductPage(0);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [productSearchInput]);
   const [mappedOnly, setMappedOnly] = useState(false);
   const [showManageSection, setShowManageSection] = useState(false);
   const [canonicalSearch, setCanonicalSearch] = useState('');
@@ -62,6 +73,8 @@ export default function Mapping() {
     queryClient.cancelQueries({ queryKey: ['products'] });
     setSelectedCountryId(countryId);
     setSelectedSupermarketId(null);
+    setProductSearchInput('');
+    setProductSearch('');
     setProductPage(0);
     setOpenDropdown(null);
   };
@@ -72,8 +85,7 @@ export default function Mapping() {
   };
 
   const handleProductSearch = (search: string) => {
-    setProductSearch(search);
-    setProductPage(0);
+    setProductSearchInput(search);
   };
 
   const handleMappedOnlyChange = (checked: boolean) => {
@@ -358,7 +370,7 @@ export default function Mapping() {
               <input
                 type="text"
                 placeholder={t('countryProducts.searchProducts')}
-                value={productSearch}
+                value={productSearchInput}
                 onChange={(e) => handleProductSearch(e.target.value)}
                 className="input pl-10"
               />
@@ -531,9 +543,16 @@ function ProductRow({
       {/* Price */}
       <td className="py-2 px-2">
         {product.price != null ? (
-          <span className="text-sm font-medium text-green-600">
-            {product.currency} {Number(product.price).toFixed(2)}
-          </span>
+          <div>
+            <span className="text-sm font-medium text-green-600">
+              {product.currency} {Number(product.price).toFixed(2)}
+            </span>
+            {product.currency && (
+              <span className="block text-xs text-slate-400">
+                €{convertToEUR(Number(product.price), product.currency).toFixed(2)}
+              </span>
+            )}
+          </div>
         ) : (
           <span className="text-sm text-slate-400">-</span>
         )}
