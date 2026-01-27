@@ -8,6 +8,7 @@ const FALLBACK_RATES: Record<string, number> = {
   KZT: 0.00168442,
   USD: 0.86169064,
   MYR: 0.19865000,
+  ALL: 0.01034616,
 };
 
 // Current exchange rates (mutable, updated via loadExchangeRates)
@@ -64,6 +65,7 @@ const currencySymbols: Record<string, string> = {
   UAH: '₴',
   KZT: '₸',
   MYR: 'RM',
+  ALL: 'L',
 };
 
 export function formatPrice(price: number | string, currency: string): string {

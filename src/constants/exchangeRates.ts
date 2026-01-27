@@ -8,6 +8,7 @@ export const FALLBACK_EXCHANGE_RATES: Record<string, number> = {
   KZT: 0.00168442,
   USD: 0.86169064,
   MYR: 0.19865000,
+  ALL: 0.00962000,
 };
 
 // Currencies tracked by the application (derived from fallback rates, excluding EUR)

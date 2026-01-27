@@ -13,6 +13,7 @@ const currencyMeta: Record<string, { symbol: string; name: string; flag: string 
   UAH: { symbol: '₴', name: 'Ukrainian Hryvnia', flag: '🇺🇦' },
   KZT: { symbol: '₸', name: 'Kazakhstani Tenge', flag: '🇰🇿' },
   MYR: { symbol: 'RM', name: 'Malaysian ringgit', flag: '🇲🇾' },
+  ALL: { symbol: 'L', name: 'Albanian Lek', flag: '🇦🇱' },
 };
 
 // Format large numbers with abbreviations
@@ -104,6 +105,17 @@ const currencyStyles: Record<string, {
     flipBtnHover: 'hover:border-indigo-200',
     flipIcon: 'text-indigo-600',
     cornerAccent: 'bg-indigo-200/30',
+  },
+  ALL: {
+    cardBg: 'from-rose-50 to-rose-100/80',
+    headerText: 'text-rose-800',
+    symbolText: 'text-rose-800',
+    rateText: 'text-rose-700',
+    badge: 'bg-rose-100 text-rose-700',
+    hoverBorder: 'hover:border-rose-300/50',
+    flipBtnHover: 'hover:border-rose-200',
+    flipIcon: 'text-rose-600',
+    cornerAccent: 'bg-rose-200/30',
   },
 };
 
