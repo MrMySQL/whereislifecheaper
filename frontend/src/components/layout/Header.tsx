@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
-import { LogOut, User, MapPin, Menu, X } from 'lucide-react';
+import { LogOut, User, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import LanguageSwitcher from '../common/LanguageSwitcher';
+import { AppLogo } from '../common/AppLogo';
 
 export default function Header() {
   const { t } = useTranslation();
@@ -26,9 +27,7 @@ export default function Header() {
         <div className="flex justify-between items-center h-12">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-terracotta-500 to-terracotta-600 flex items-center justify-center shadow-sm transition-transform group-hover:scale-105">
-              <MapPin className="h-3.5 w-3.5 text-white" />
-            </div>
+            <AppLogo size={28} className="transition-transform group-hover:scale-105" />
             <span className="hidden sm:block text-sm font-display font-bold text-charcoal-900">
               WhereIsLife<span className="text-gradient-warm">Cheaper</span>
             </span>
