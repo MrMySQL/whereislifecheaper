@@ -159,6 +159,14 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'SparAlbaniaScraper',
     is_active: true,
   },
+  // Austria
+  {
+    country_code: 'AT',
+    name: 'Gurkerl',
+    website_url: 'https://www.gurkerl.at',
+    scraper_class: 'GurkeralScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {
