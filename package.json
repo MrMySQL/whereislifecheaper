@@ -12,7 +12,7 @@
     "start": "NODE_ENV=production node dist/api/server.js",
     "migrate": "ts-node scripts/migrate.ts",
     "seed": "ts-node scripts/seed.ts",
-    "scraper:test": "ts-node scripts/test-scraper.ts",
+    "scraper:test": "ts-node scripts/test-scrapers.ts",
     "scraper:run": "ts-node scripts/run-scraper.ts",
     "api": "ts-node src/api/server.ts",
     "rates:sync": "ts-node scripts/sync-exchange-rates.ts",
