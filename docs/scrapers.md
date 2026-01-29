@@ -193,7 +193,7 @@ const ScraperClass = scraperRegistry.get('MigrosScraper').scraperClass;
 
 ## Country-Specific Scrapers
 
-The system currently supports **12 scraper implementations** across **8 countries**.
+The system currently supports **14 scraper implementations** across **10 countries**.
 
 ### Turkey - MigrosScraper
 
@@ -301,6 +301,26 @@ const query = `
 
 ---
 
+### Albania - SparAlbaniaScraper
+
+**Location**: `src/scrapers/albania/SparAlbaniaScraper.ts`
+
+**Strategy**: DOM-based scraping of SPAR Albania website
+
+**Categories**: fruits, meat, dairy, staples, beverages, snacks, frozen
+
+---
+
+### Austria - GurkeralScraper
+
+**Location**: `src/scrapers/austria/GurkeralScraper.ts`
+
+**Strategy**: DOM-based scraping of Gurkerl online grocery
+
+**Categories**: fruits, meat, dairy, staples, beverages, snacks, frozen
+
+---
+
 ## Scraper Summary Table
 
 | Country | Supermarket | Class Name | Type | Status |
@@ -316,6 +336,8 @@ const query = `
 | Germany | Knuspr | KnusprScraper | DOM | Active |
 | Malaysia | Lotus's | LotussScraper | DOM | Active |
 | Malaysia | Lotus's | LotussApiScraper | API | Active |
+| Albania | SPAR | SparAlbaniaScraper | DOM | Active |
+| Austria | Gurkerl | GurkeralScraper | DOM | Active |
 
 ## Product Data Structure
 

@@ -150,7 +150,7 @@ Browser automation using Playwright with an abstract base class pattern:
                                                               (Malaysia)
 ```
 
-**12 Scraper Implementations across 8 Countries:**
+**14 Scraper Implementations across 10 Countries:**
 - Turkey: MigrosScraper
 - Montenegro: VoliScraper
 - Spain: MercadonaScraper
@@ -159,6 +159,8 @@ Browser automation using Playwright with an abstract base class pattern:
 - Kazakhstan: ArbuzScraper
 - Germany: ReweScraper, KnusprScraper
 - Malaysia: LotussScraper, LotussApiScraper
+- Albania: SparAlbaniaScraper
+- Austria: GurkeralScraper
 
 **BaseScraper provides:**
 - Browser lifecycle management

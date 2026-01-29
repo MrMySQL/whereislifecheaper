@@ -322,7 +322,7 @@ In GitHub Repository → Settings → Secrets:
 
 ## AWS ECS Deployment (Scrapers)
 
-For long-running scraper jobs, AWS ECS Fargate provides more resources and flexibility.
+For long-running scraper jobs, AWS ECS Fargate provides more resources and flexibility than GitHub Actions.
 
 ### Architecture
 
@@ -342,6 +342,75 @@ For long-running scraper jobs, AWS ECS Fargate provides more resources and flexi
 │   AWS ECR (Container Registry)          │
 │   whereislifecheaper-scraper:latest    │
 └─────────────────────────────────────────┘
+```
+
+### Prerequisites
+
+1. **AWS CLI** installed and configured with appropriate credentials
+2. **Terraform** installed (for infrastructure provisioning)
+3. **Docker** installed locally for building images
+
+### Initial Setup (One-time)
+
+1. **Provision AWS Infrastructure**
+   ```bash
+   cd terraform
+   terraform init
+   terraform apply
+   ```
+
+   This creates:
+   - ECS Cluster
+   - ECR Repository
+   - ECS Task Definition
+   - IAM Roles
+   - Security Groups
+   - CloudWatch Log Group
+
+2. **Build and Push Docker Image**
+   ```bash
+   npm run aws:deploy
+   # or: ./scripts/deploy-ecr.sh
+   ```
+
+### Running Scrapers on AWS
+
+**Run all scrapers:**
+```bash
+npm run aws:run
+# or: ./scripts/run-ecs-task.sh
+```
+
+**Run a specific scraper:**
+```bash
+./scripts/run-ecs-task.sh migros     # Run Migros scraper
+./scripts/run-ecs-task.sh voli       # Run Voli scraper
+./scripts/run-ecs-task.sh spar       # Run SPAR Albania scraper
+./scripts/run-ecs-task.sh gurkerl    # Run Gurkerl Austria scraper
+```
+
+**Stop all running tasks:**
+```bash
+npm run aws:stop
+# or: ./scripts/stop-ecs-task.sh
+```
+
+### Monitoring
+
+**View logs in real-time:**
+```bash
+# Get log group name from Terraform
+LOG_GROUP=$(terraform -chdir=terraform output -raw cloudwatch_log_group)
+
+# Tail logs
+aws logs tail $LOG_GROUP --follow
+```
+
+**Check task status:**
+```bash
+CLUSTER=$(terraform -chdir=terraform output -raw ecs_cluster_name)
+aws ecs list-tasks --cluster "$CLUSTER"
+aws ecs describe-tasks --cluster "$CLUSTER" --tasks <task-arn>
 ```
 
 ### Deployment Scripts
@@ -391,6 +460,16 @@ AWS infrastructure is defined in `terraform/`:
 - IAM Roles
 - VPC Configuration
 - CloudWatch Logs
+
+### AWS vs GitHub Actions
+
+| Aspect | GitHub Actions | AWS ECS |
+|--------|---------------|---------|
+| Cost | Free (limited minutes) | Pay per use |
+| Timeout | 6 hours max | No limit |
+| Resources | 2 vCPU, 7GB RAM | Configurable |
+| Concurrency | Limited | Scalable |
+| Best for | Daily scheduled runs | Long/resource-intensive jobs |
 
 ---
 

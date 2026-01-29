@@ -83,7 +83,7 @@ Stores supported countries for price comparison.
 **Indexes:**
 - `idx_countries_code` on `code`
 
-**Current data (8 countries):**
+**Current data (10 countries):**
 | Code | Name | Currency | Flag |
 |------|------|----------|------|
 | TR | Turkey | TRY | 🇹🇷 |
@@ -94,6 +94,8 @@ Stores supported countries for price comparison.
 | KZ | Kazakhstan | KZT | 🇰🇿 |
 | DE | Germany | EUR | 🇩🇪 |
 | MY | Malaysia | MYR | 🇲🇾 |
+| AL | Albania | ALL | 🇦🇱 |
+| AT | Austria | EUR | 🇦🇹 |
 
 ---
 

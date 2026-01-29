@@ -2,7 +2,7 @@
 
 ## WHY: Project Purpose
 
-This is a multi-country grocery price comparison system that scrapes supermarket websites daily to help users compare the cost of living across countries, started from Turkey, Montenegro, Spain, and Uzbekistan and more to come. The system tracks prices over time, matches products across countries, and provides a web API for price comparisons.
+This is a multi-country grocery price comparison system that scrapes supermarket websites daily to help users compare the cost of living across countries, including Turkey, Montenegro, Spain, Uzbekistan, Ukraine, Kazakhstan, Germany, Malaysia, Albania, and Austria. The system tracks prices over time, matches products across countries, and provides a web API for price comparisons.
 
 ## WHAT: Architecture & Stack
 
@@ -20,7 +20,10 @@ This is a multi-country grocery price comparison system that scrapes supermarket
 src/
 ├── scrapers/           # Scraper implementations per country (extend BaseScraper)
 │   ├── base/          # BaseScraper abstract class & ScraperFactory
-│   └── turkey/        # MigrosScraper (first implementation)
+│   ├── turkey/        # MigrosScraper
+│   ├── albania/       # SparAlbaniaScraper
+│   ├── austria/       # GurkeralScraper
+│   └── ...            # Other country scrapers
 ├── database/          # Database layer
 │   ├── seeds/         # Initial data (countries, categories, supermarkets)
 │   └── index.ts       # Connection pool & query interface
@@ -38,7 +41,7 @@ tests/                # Unit and integration tests
 
 Core tables: `countries` → `supermarkets` → `products` ↔ `product_mappings` ← `prices`
 
-- **countries**: 4 countries (TR, ME, ES, UZ)
+- **countries**: 10 countries (TR, ME, ES, UZ, UA, KZ, DE, MY, AL, AT)
 - **supermarkets**: Each has a scraper configuration (base_url, selectors)
 - **products**: Master catalog with normalized names
 - **product_mappings**: Links products to specific supermarkets

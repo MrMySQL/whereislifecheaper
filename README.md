@@ -4,7 +4,7 @@ A multi-country grocery price comparison system that scrapes supermarket website
 
 ## Features
 
-- **Multi-Country Comparison**: Compare grocery prices across Turkey, Montenegro, Spain, Uzbekistan, Ukraine, and Kazakhstan
+- **Multi-Country Comparison**: Compare grocery prices across Turkey, Montenegro, Spain, Uzbekistan, Ukraine, Kazakhstan, Germany, Malaysia, Albania, and Austria
 - **Automated Scraping**: Daily automated scraping of supermarket websites using Playwright
 - **Historical Tracking**: Track price changes over time with historical data
 - **Product Matching**: Match similar products across different countries using canonical products
@@ -35,6 +35,10 @@ A multi-country grocery price comparison system that scrapes supermarket website
 | Ukraine | Auchan | Active |
 | Uzbekistan | Makro | Active |
 | Kazakhstan | Arbuz | Active |
+| Germany | Rewe, Knuspr | Active |
+| Malaysia | Lotus's | Active |
+| Albania | SPAR | Active |
+| Austria | Gurkerl | Active |
 
 ## Quick Start
 
@@ -159,7 +163,7 @@ See [API Reference](docs/api-reference.md) for complete documentation.
 
 Core tables:
 
-- **countries** - Supported countries (TR, ME, ES, UZ, UA, KZ)
+- **countries** - Supported countries (TR, ME, ES, UZ, UA, KZ, DE, MY, AL, AT)
 - **supermarkets** - Supermarket chains with scraper configs
 - **products** - Master product catalog
 - **product_mappings** - Links products to supermarkets
