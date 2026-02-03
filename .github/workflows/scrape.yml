@@ -14,7 +14,7 @@ on:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-4-cores  # 4 vCPUs, 16GB RAM for faster scraping
     timeout-minutes: 360
 
     steps:
@@ -53,7 +53,7 @@ jobs:
           PLAYWRIGHT_HEADLESS: 'false'
           SCRAPER_MAX_RETRIES: '3'
           SCRAPER_TIMEOUT: '30000'
-          SCRAPER_CONCURRENT_BROWSERS: '2'
+          SCRAPER_CONCURRENT_BROWSERS: '3'
           NODE_ENV: production
           DISPLAY: ':99'
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
