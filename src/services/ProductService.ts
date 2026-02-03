@@ -1,6 +1,6 @@
 import { query } from '../config/database';
 import { ProductData } from '../types/scraper.types';
-import { normalizeProductName } from '../utils/normalizer';
+import { normalizeProductName, calculatePricePerUnit } from '../utils/normalizer';
 import { scraperLogger } from '../utils/logger';
 
 /**
@@ -314,6 +314,256 @@ export class ProductService {
         priceData.isOnSale,
         priceData.pricePerUnit || null,
       ]
+    );
+  }
+
+  /**
+   * Bulk process products and record prices in batched operations
+   * Significantly faster than individual operations for large datasets
+   *
+   * @param products Array of products to process
+   * @param supermarketId Supermarket ID
+   * @param currency Currency code for prices
+   * @returns Number of successfully processed products
+   */
+  async bulkSaveProducts(
+    products: ProductData[],
+    supermarketId: string,
+    currency: string
+  ): Promise<number> {
+    if (products.length === 0) return 0;
+
+    const startTime = Date.now();
+    scraperLogger.debug(`Bulk saving ${products.length} products...`);
+
+    try {
+      // Step 1: Prepare product data with external IDs and normalized names
+      const preparedProducts = products.map(p => ({
+        ...p,
+        externalId: p.externalId || this.extractExternalId(p.productUrl),
+        normalizedName: normalizeProductName(p.name),
+      }));
+
+      // Step 2: Batch fetch existing mappings by external_id
+      const externalIds = preparedProducts
+        .map(p => p.externalId)
+        .filter((id): id is string => !!id);
+
+      const existingMappings = await this.batchFindMappingsByExternalIds(
+        supermarketId,
+        externalIds
+      );
+
+      // Create lookup map for quick access
+      const mappingsByExternalId = new Map(
+        existingMappings.map(m => [m.external_id, m])
+      );
+
+      // Step 3: Separate products into existing vs new
+      const existingProducts: Array<{ product: typeof preparedProducts[0]; mapping: typeof existingMappings[0] }> = [];
+      const newProducts: typeof preparedProducts = [];
+
+      for (const product of preparedProducts) {
+        if (product.externalId && mappingsByExternalId.has(product.externalId)) {
+          existingProducts.push({
+            product,
+            mapping: mappingsByExternalId.get(product.externalId)!,
+          });
+        } else {
+          newProducts.push(product);
+        }
+      }
+
+      scraperLogger.debug(
+        `Found ${existingProducts.length} existing, ${newProducts.length} new products`
+      );
+
+      // Step 4: Batch update existing products
+      const existingMappingIds: string[] = [];
+      if (existingProducts.length > 0) {
+        await this.batchUpdateProducts(existingProducts);
+        existingMappingIds.push(...existingProducts.map(ep => ep.mapping.id));
+      }
+
+      // Step 5: Batch create new products and mappings
+      const newMappingIds: string[] = [];
+      if (newProducts.length > 0) {
+        const createdMappingIds = await this.batchCreateProductsAndMappings(
+          newProducts,
+          supermarketId
+        );
+        newMappingIds.push(...createdMappingIds);
+      }
+
+      // Step 6: Batch insert prices for all products
+      const allMappingIds = [...existingMappingIds, ...newMappingIds];
+      const allProducts = [...existingProducts.map(ep => ep.product), ...newProducts];
+
+      if (allMappingIds.length > 0) {
+        await this.batchInsertPrices(allMappingIds, allProducts, currency);
+      }
+
+      const duration = Date.now() - startTime;
+      scraperLogger.debug(
+        `Bulk saved ${allMappingIds.length} products in ${duration}ms ` +
+        `(${existingMappingIds.length} updated, ${newMappingIds.length} created)`
+      );
+
+      return allMappingIds.length;
+    } catch (error) {
+      scraperLogger.error('Error in bulkSaveProducts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Batch find mappings by external IDs
+   */
+  private async batchFindMappingsByExternalIds(
+    supermarketId: string,
+    externalIds: string[]
+  ): Promise<Array<{ id: string; product_id: string; external_id: string }>> {
+    if (externalIds.length === 0) return [];
+
+    const result = await query<{ id: string; product_id: string; external_id: string }>(
+      `SELECT id, product_id, external_id FROM product_mappings
+       WHERE supermarket_id = $1 AND external_id = ANY($2)`,
+      [supermarketId, externalIds]
+    );
+
+    return result.rows;
+  }
+
+  /**
+   * Batch update existing products
+   */
+  private async batchUpdateProducts(
+    products: Array<{
+      product: ProductData & { normalizedName: string };
+      mapping: { id: string; product_id: string }
+    }>
+  ): Promise<void> {
+    if (products.length === 0) return;
+
+    // Build batch update query using UNNEST
+    const productIds = products.map(p => parseInt(p.mapping.product_id, 10));
+    const names = products.map(p => p.product.name);
+    const normalizedNames = products.map(p => p.product.normalizedName);
+    const imageUrls = products.map(p => p.product.imageUrl || null);
+    const units = products.map(p => p.product.unit || null);
+    const unitQuantities = products.map(p => p.product.unitQuantity || null);
+
+    await query(
+      `UPDATE products AS p SET
+        name = u.name,
+        normalized_name = u.normalized_name,
+        image_url = COALESCE(u.image_url, p.image_url),
+        unit = COALESCE(u.unit, p.unit),
+        unit_quantity = COALESCE(u.unit_quantity, p.unit_quantity),
+        updated_at = CURRENT_TIMESTAMP
+      FROM (SELECT
+        unnest($1::int[]) AS id,
+        unnest($2::text[]) AS name,
+        unnest($3::text[]) AS normalized_name,
+        unnest($4::text[]) AS image_url,
+        unnest($5::text[]) AS unit,
+        unnest($6::numeric[]) AS unit_quantity
+      ) AS u
+      WHERE p.id = u.id`,
+      [productIds, names, normalizedNames, imageUrls, units, unitQuantities]
+    );
+
+    // Update mapping last_scraped_at
+    const mappingIds = products.map(p => parseInt(p.mapping.id, 10));
+    await query(
+      `UPDATE product_mappings SET
+        last_scraped_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ANY($1::int[])`,
+      [mappingIds]
+    );
+  }
+
+  /**
+   * Batch create new products and mappings
+   * Returns array of mapping IDs
+   */
+  private async batchCreateProductsAndMappings(
+    products: Array<ProductData & { externalId?: string; normalizedName: string }>,
+    supermarketId: string
+  ): Promise<string[]> {
+    if (products.length === 0) return [];
+
+    // Insert products in batch
+    const names = products.map(p => p.name);
+    const normalizedNames = products.map(p => p.normalizedName);
+    const brands = products.map(p => p.brand || null);
+    const units = products.map(p => p.unit || null);
+    const unitQuantities = products.map(p => p.unitQuantity || null);
+    const imageUrls = products.map(p => p.imageUrl || null);
+
+    const productResult = await query<{ id: string }>(
+      `INSERT INTO products (name, normalized_name, brand, unit, unit_quantity, image_url)
+       SELECT * FROM UNNEST(
+         $1::text[], $2::text[], $3::text[], $4::text[], $5::numeric[], $6::text[]
+       )
+       RETURNING id`,
+      [names, normalizedNames, brands, units, unitQuantities, imageUrls]
+    );
+
+    const productIds = productResult.rows.map(r => parseInt(r.id, 10));
+
+    // Create mappings for new products
+    const externalIds = products.map(p => p.externalId || null);
+    const urls = products.map(p => p.productUrl);
+    const supermarketIdInt = parseInt(supermarketId, 10);
+    const supermarketIds = products.map(() => supermarketIdInt);
+
+    const mappingResult = await query<{ id: string }>(
+      `INSERT INTO product_mappings (product_id, supermarket_id, external_id, url, last_scraped_at)
+       SELECT unnest($1::int[]), unnest($2::int[]), unnest($3::text[]), unnest($4::text[]), CURRENT_TIMESTAMP
+       ON CONFLICT (supermarket_id, external_id)
+       DO UPDATE SET
+         url = EXCLUDED.url,
+         last_scraped_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING id`,
+      [productIds, supermarketIds, externalIds, urls]
+    );
+
+    return mappingResult.rows.map(r => r.id);
+  }
+
+  /**
+   * Batch insert prices
+   */
+  private async batchInsertPrices(
+    mappingIds: string[],
+    products: ProductData[],
+    currency: string
+  ): Promise<void> {
+    if (mappingIds.length === 0) return;
+
+    const mappingIdsInt = mappingIds.map(id => parseInt(id, 10));
+    const prices = products.map(p => p.price);
+    const currencies = products.map(() => currency);
+    const originalPrices = products.map(p => p.originalPrice || null);
+    const isOnSales = products.map(p => p.isOnSale);
+    const pricePerUnits = products.map(p =>
+      calculatePricePerUnit(p.price, p.unitQuantity, p.unit) || null
+    );
+
+    await query(
+      `INSERT INTO prices (product_mapping_id, price, currency, original_price, is_on_sale, price_per_unit, scraped_at)
+       SELECT
+         unnest($1::int[]),
+         unnest($2::numeric[]),
+         unnest($3::text[]),
+         unnest($4::numeric[]),
+         unnest($5::boolean[]),
+         unnest($6::numeric[]),
+         CURRENT_TIMESTAMP`,
+      [mappingIdsInt, prices, currencies, originalPrices, isOnSales, pricePerUnits]
     );
   }
 

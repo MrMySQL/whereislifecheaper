@@ -192,45 +192,56 @@ export class ScraperService {
   }
 
   /**
-   * Store scraped products and prices in database
+   * Store scraped products and prices in database using bulk operations
    */
   private async storeProducts(
     products: ProductData[],
     supermarketId: string
   ): Promise<number> {
-    let storedCount = 0;
+    if (products.length === 0) return 0;
 
-    for (const product of products) {
-      try {
-        // Find or create product, returns mapping ID
-        const mappingId = await this.productService.findOrCreateProduct(
-          product,
-          supermarketId
-        );
+    // Get currency from first product (all products in a batch should have same currency)
+    const currency = products[0].currency;
 
-        // Record price using the mapping ID
-        await this.productService.recordPrice(mappingId, {
-          price: product.price,
-          currency: product.currency,
-          originalPrice: product.originalPrice,
-          isOnSale: product.isOnSale,
-          pricePerUnit: calculatePricePerUnit(
-            product.price,
-            product.unitQuantity,
-            product.unit
-          ),
-        });
+    try {
+      // Use bulk save for better performance
+      const storedCount = await this.productService.bulkSaveProducts(
+        products,
+        supermarketId,
+        currency
+      );
+      return storedCount;
+    } catch (error) {
+      scraperLogger.error('Bulk save failed, falling back to individual saves', error);
 
-        storedCount++;
-      } catch (error) {
-        scraperLogger.error(
-          `Failed to store product: ${product.name}`,
-          error
-        );
+      // Fallback to individual saves if bulk fails
+      let storedCount = 0;
+      for (const product of products) {
+        try {
+          const mappingId = await this.productService.findOrCreateProduct(
+            product,
+            supermarketId
+          );
+
+          await this.productService.recordPrice(mappingId, {
+            price: product.price,
+            currency: product.currency,
+            originalPrice: product.originalPrice,
+            isOnSale: product.isOnSale,
+            pricePerUnit: calculatePricePerUnit(
+              product.price,
+              product.unitQuantity,
+              product.unit
+            ),
+          });
+
+          storedCount++;
+        } catch (err) {
+          scraperLogger.error(`Failed to store product: ${product.name}`, err);
+        }
       }
+      return storedCount;
     }
-
-    return storedCount;
   }
 
   /**
