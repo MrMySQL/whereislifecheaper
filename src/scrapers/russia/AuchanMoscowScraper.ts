@@ -25,10 +25,9 @@ export const auchanMoscowCategories: CategoryConfig[] = [
   { id: '15714', name: 'Вода и напитки', url: '/retail/asan_giper/catalog/15714' },
   { id: '11265', name: 'Бакалея', url: '/retail/asan_giper/catalog/11265' },
   { id: '20606', name: 'Для детей', url: '/retail/asan_giper/catalog/20606' },
-  { id: '21849', name: 'Красота и гигиена', url: '/retail/asan_giper/catalog/21849' },
+  // { id: '21849', name: 'Красота и гигиена', url: '/retail/asan_giper/catalog/21849' },
   { id: '21857', name: 'Стирка и уборка', url: '/retail/asan_giper/catalog/21857' },
-  { id: '123029', name: 'Для животных', url: '/retail/asan_giper/catalog/123029' },
-  { id: '111504', name: 'Дом и сад', url: '/retail/asan_giper/catalog/111504' },
+  // { id: '123029', name: 'Для животных', url: '/retail/asan_giper/catalog/123029' },
 ];
 
 /**
