@@ -317,8 +317,13 @@ export class AuchanMoscowScraper extends BaseScraper {
         const promoPrice = item.promoPrice ? item.promoPrice : undefined;
         const isOnSale = promoPrice !== undefined && promoPrice < price;
 
-        // Parse unit information from weight string or weight_data
-        const { unit, unitQuantity } = this.parseWeight(item.weight, item.weight_data);
+        // Parse unit information from weight string, weight_data, or product name
+        let { unit, unitQuantity } = this.parseWeight(item.weight, item.weight_data);
+
+        // If no unit found in API fields, try to extract from product name
+        if (!unit && !unitQuantity) {
+          ({ unit, unitQuantity } = this.parseWeightFromName(item.name));
+        }
 
         // Build image URL
         const imageUrl = item.picture?.url
@@ -406,6 +411,52 @@ export class AuchanMoscowScraper extends BaseScraper {
         case 'piece':
         case 'items':
         case 'item':
+          return { unit: 'pieces', unitQuantity: quantity };
+        default:
+          return { unit: unitStr, unitQuantity: quantity };
+      }
+    }
+
+    return { unit: undefined, unitQuantity: undefined };
+  }
+
+  /**
+   * Parse weight from product name (fallback when API doesn't provide weight fields)
+   * Handles Cyrillic units: г (grams), кг (kilograms), л (liters), мл (milliliters)
+   */
+  private parseWeightFromName(name: string): { unit?: string; unitQuantity?: number } {
+    if (!name) {
+      return { unit: undefined, unitQuantity: undefined };
+    }
+
+    // Match patterns like "300г", "1.5кг", "500мл", "2л", "6шт" anywhere in the string
+    // Supports both Cyrillic (г, кг, л, мл, шт) and Latin (g, kg, l, ml) units
+    // Note: \b doesn't work with Cyrillic, so we use (?![а-яa-z]) negative lookahead instead
+    const match = name.match(/([\d.,]+)\s*(кг|мл|г|л|шт|kg|ml|g|l)(?![а-яa-z])/i);
+    if (match) {
+      const quantity = parseFloat(match[1].replace(',', '.'));
+      const unitStr = match[2].toLowerCase();
+
+      switch (unitStr) {
+        case 'кг':
+        case 'kg':
+          return { unit: 'kg', unitQuantity: quantity };
+        case 'г':
+        case 'g':
+          if (quantity >= 1000) {
+            return { unit: 'kg', unitQuantity: quantity / 1000 };
+          }
+          return { unit: 'g', unitQuantity: quantity };
+        case 'л':
+        case 'l':
+          return { unit: 'l', unitQuantity: quantity };
+        case 'мл':
+        case 'ml':
+          if (quantity >= 1000) {
+            return { unit: 'l', unitQuantity: quantity / 1000 };
+          }
+          return { unit: 'ml', unitQuantity: quantity };
+        case 'шт':
           return { unit: 'pieces', unitQuantity: quantity };
         default:
           return { unit: unitStr, unitQuantity: quantity };
