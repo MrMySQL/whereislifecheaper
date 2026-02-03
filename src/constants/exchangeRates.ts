@@ -9,6 +9,7 @@ export const FALLBACK_EXCHANGE_RATES: Record<string, number> = {
   USD: 0.86169064,
   MYR: 0.19865000,
   ALL: 0.00962000,
+  RUB: 0.00952381, // ~105 RUB per EUR
 };
 
 // Currencies tracked by the application (derived from fallback rates, excluding EUR)

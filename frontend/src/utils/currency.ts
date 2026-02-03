@@ -9,6 +9,7 @@ const FALLBACK_RATES: Record<string, number> = {
   USD: 0.86169064,
   MYR: 0.19865000,
   ALL: 0.01034616,
+  RUB: 0.00952381, // ~105 RUB per EUR
 };
 
 // Current exchange rates (mutable, updated via loadExchangeRates)
@@ -66,6 +67,7 @@ const currencySymbols: Record<string, string> = {
   KZT: '₸',
   MYR: 'RM',
   ALL: 'L',
+  RUB: '₽',
 };
 
 export function formatPrice(price: number | string, currency: string): string {
