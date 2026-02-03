@@ -14,7 +14,7 @@ on:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest-4-cores  # 4 vCPUs, 16GB RAM for faster scraping
+    runs-on: ubuntu-latest  # 4 vCPUs, 16GB RAM for faster scraping
     timeout-minutes: 360
 
     steps:
