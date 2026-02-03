@@ -167,6 +167,14 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'GurkeralScraper',
     is_active: true,
   },
+  // Russia
+  {
+    country_code: 'RU',
+    name: 'Auchan Moscow',
+    website_url: 'https://eda.yandex.ru/retail/asan_giper?placeSlug=ashan_g4zvs',
+    scraper_class: 'AuchanMoscowScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {

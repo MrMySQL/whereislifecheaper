@@ -13,6 +13,7 @@ import { LotussScraper, lotussConfig, lotussCategories } from './malaysia/Lotuss
 import { LotussApiScraper, lotussApiConfig, lotussApiCategories } from './malaysia/LotussApiScraper';
 import { SparAlbaniaScraper, sparAlbaniaConfig, sparAlbaniaCategories } from './albania/SparAlbaniaScraper';
 import { GurkeralScraper, gurkeralConfig, gurkeralCategories } from './austria/GurkeralScraper';
+import { AuchanMoscowScraper, auchanMoscowConfig, auchanMoscowCategories } from './russia/AuchanMoscowScraper';
 
 /**
  * Scraper registration entry containing all metadata for a scraper
@@ -153,6 +154,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: GurkeralScraper,
       defaultConfig: gurkeralConfig,
       categories: gurkeralCategories,
+    },
+  ],
+  [
+    'AuchanMoscowScraper',
+    {
+      className: 'AuchanMoscowScraper',
+      scraperClass: AuchanMoscowScraper,
+      defaultConfig: auchanMoscowConfig,
+      categories: auchanMoscowCategories,
     },
   ],
 ]);
