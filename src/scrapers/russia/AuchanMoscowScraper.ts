@@ -389,22 +389,28 @@ export class AuchanMoscowScraper extends BaseScraper {
     const normalized = weight.toLowerCase().trim();
 
     // Match patterns like "1 kg", "500 g", "1.5 l", "250 ml", "6 pcs"
-    const match = normalized.match(/^([\d.,]+)\s*(kg|g|l|ml|шт|pcs?|pieces?|items?)/i);
+    // Also supports Cyrillic units: кг, г, л, мл, шт
+    // Note: кг must come before г, мл before л to avoid partial matches
+    const match = normalized.match(/^([\d.,]+)\s*(кг|мл|kg|ml|г|g|л|l|шт|pcs?|pieces?|items?)/i);
     if (match) {
       const quantity = parseFloat(match[1].replace(',', '.'));
       const unitStr = match[2].toLowerCase();
 
       switch (unitStr) {
         case 'kg':
+        case 'кг':
           return { unit: 'kg', unitQuantity: quantity };
         case 'g':
+        case 'г':
           if (quantity >= 1000) {
             return { unit: 'kg', unitQuantity: quantity / 1000 };
           }
           return { unit: 'g', unitQuantity: quantity };
         case 'l':
+        case 'л':
           return { unit: 'l', unitQuantity: quantity };
         case 'ml':
+        case 'мл':
           if (quantity >= 1000) {
             return { unit: 'l', unitQuantity: quantity / 1000 };
           }
