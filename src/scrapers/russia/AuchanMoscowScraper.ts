@@ -5,29 +5,63 @@ import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.
  * Auchan Moscow (Hypermarket) categories configuration
  * Categories from Yandex Eda / Auchan store (asan_giper)
  * Store slug: ashan_g4zvs
+ * Updated: 2026-02-03 from website navigation
  */
 export const auchanMoscowCategories: CategoryConfig[] = [
+  // Молочные продукты (Dairy)
+  { id: '2910', name: 'Молоко, яйца', url: '/retail/asan_giper/catalog/2910' },
+  { id: '167', name: 'Сыры', url: '/retail/asan_giper/catalog/167' },
+  { id: '15714', name: 'Йогурты и десерты', url: '/retail/asan_giper/catalog/15714' },
+  { id: '222879', name: 'Кефир, творог', url: '/retail/asan_giper/catalog/222879' },
+
+  // Овощной прилавок (Vegetables)
   { id: '1034', name: 'Овощи и зелень', url: '/retail/asan_giper/catalog/1034' },
   { id: '1033', name: 'Фрукты и ягоды', url: '/retail/asan_giper/catalog/1033' },
+  { id: '7135', name: 'Сухофрукты и орехи', url: '/retail/asan_giper/catalog/7135' },
+
+  // Сладкое и снеки (Sweets and snacks)
+  { id: '8992', name: 'Чипсы, снеки', url: '/retail/asan_giper/catalog/8992' },
+  { id: '35396', name: 'Конфеты и шоколад', url: '/retail/asan_giper/catalog/35396' },
+  { id: '363608', name: 'Печенье и вафли', url: '/retail/asan_giper/catalog/363608' },
+  { id: '33906', name: 'Торты, пирожные', url: '/retail/asan_giper/catalog/33906' },
+  { id: '425302', name: 'Мармелад и зефир', url: '/retail/asan_giper/catalog/425302' },
+  { id: '222632', name: 'Леденцы и жвачка', url: '/retail/asan_giper/catalog/222632' },
+  { id: '222880', name: 'Варенье, сиропы', url: '/retail/asan_giper/catalog/222880' },
+
+  // Мясо и птица (Meat and poultry)
   { id: '1029', name: 'Мясо и птица', url: '/retail/asan_giper/catalog/1029' },
-  { id: '1028', name: 'Молоко и яйца', url: '/retail/asan_giper/catalog/1028' },
-  { id: '167', name: 'Сыры', url: '/retail/asan_giper/catalog/167' },
+  { id: '54540', name: 'Колбаса и сосиски', url: '/retail/asan_giper/catalog/54540' },
+  { id: '220387', name: 'Закуски и паштеты', url: '/retail/asan_giper/catalog/220387' },
   { id: '178', name: 'Рыба и морепродукты', url: '/retail/asan_giper/catalog/178' },
-  { id: '158', name: 'Готовая еда', url: '/retail/asan_giper/catalog/158' },
-  { id: '19279', name: 'Хлеб и выпечка', url: '/retail/asan_giper/catalog/19279' },
+
+  // Заморозка (Frozen)
+  { id: '905', name: 'Мороженое', url: '/retail/asan_giper/catalog/905' },
+  { id: '5209', name: 'Полуфабрикаты', url: '/retail/asan_giper/catalog/5209' },
+  { id: '20606', name: 'Пельмени и вареники', url: '/retail/asan_giper/catalog/20606' },
+  { id: '2907', name: 'Овощи и фрукты замороженные', url: '/retail/asan_giper/catalog/2907' },
+  { id: '220378', name: 'Мясо, рыба замороженные', url: '/retail/asan_giper/catalog/220378' },
+
+  // Вода и напитки (Drinks)
+  { id: '14582', name: 'Вода', url: '/retail/asan_giper/catalog/14582' },
+  { id: '220375', name: 'Газировка', url: '/retail/asan_giper/catalog/220375' },
+  { id: '90813', name: 'Соки и морсы', url: '/retail/asan_giper/catalog/90813' },
+  { id: '220388', name: 'Холодный чай и кофе', url: '/retail/asan_giper/catalog/220388' },
+
+  // Хлеб и выпечка (Bread and bakery)
+  { id: '1028', name: 'Хлеб', url: '/retail/asan_giper/catalog/1028' },
+  { id: '78279', name: 'Выпечка и тесто', url: '/retail/asan_giper/catalog/78279' },
+  { id: '222882', name: 'Хлебцы, сушки', url: '/retail/asan_giper/catalog/222882' },
+
+  // Бакалея (Grocery)
+  { id: '25367', name: 'Макароны, крупы', url: '/retail/asan_giper/catalog/25367' },
+  { id: '220389', name: 'Сухие завтраки и каши', url: '/retail/asan_giper/catalog/220389' },
+  { id: '70215', name: 'Кофе и какао', url: '/retail/asan_giper/catalog/70215' },
+  { id: '158', name: 'Чай', url: '/retail/asan_giper/catalog/158' },
   { id: '19283', name: 'Масло, соусы и специи', url: '/retail/asan_giper/catalog/19283' },
   { id: '19291', name: 'Консервы и соления', url: '/retail/asan_giper/catalog/19291' },
-  { id: '14547', name: 'Заморозка', url: '/retail/asan_giper/catalog/14547' },
-  { id: '14564', name: 'Колбаса и сосиски', url: '/retail/asan_giper/catalog/14564' },
-  { id: '14581', name: 'Макароны, крупы', url: '/retail/asan_giper/catalog/14581' },
-  { id: '14582', name: 'Кофе и чай', url: '/retail/asan_giper/catalog/14582' },
-  { id: '15667', name: 'Сладкое и снеки', url: '/retail/asan_giper/catalog/15667' },
-  { id: '15714', name: 'Вода и напитки', url: '/retail/asan_giper/catalog/15714' },
-  { id: '11265', name: 'Бакалея', url: '/retail/asan_giper/catalog/11265' },
-  { id: '20606', name: 'Для детей', url: '/retail/asan_giper/catalog/20606' },
-  // { id: '21849', name: 'Красота и гигиена', url: '/retail/asan_giper/catalog/21849' },
-  { id: '21857', name: 'Стирка и уборка', url: '/retail/asan_giper/catalog/21857' },
-  // { id: '123029', name: 'Для животных', url: '/retail/asan_giper/catalog/123029' },
+
+  // Готовая еда (Ready-made food)
+  { id: '290456', name: 'Готовая еда', url: '/retail/asan_giper/catalog/290456' },
 ];
 
 /**
