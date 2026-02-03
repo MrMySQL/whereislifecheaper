@@ -317,12 +317,17 @@ export class AuchanMoscowScraper extends BaseScraper {
         const promoPrice = item.promoPrice ? item.promoPrice : undefined;
         const isOnSale = promoPrice !== undefined && promoPrice < price;
 
-        // Parse unit information from weight string, weight_data, or product name
+        // Parse unit information from weight string, weight_data, product name, or description
         let { unit, unitQuantity } = this.parseWeight(item.weight, item.weight_data);
 
         // If no unit found in API fields, try to extract from product name
         if (!unit && !unitQuantity) {
           ({ unit, unitQuantity } = this.parseWeightFromName(item.name));
+        }
+
+        // If still no unit found, try to extract from description
+        if (!unit && !unitQuantity && item.description) {
+          ({ unit, unitQuantity } = this.parseWeightFromName(item.description));
         }
 
         // Build image URL
