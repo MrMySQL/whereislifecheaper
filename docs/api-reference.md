@@ -303,7 +303,7 @@ Returns latest prices across all products and supermarkets.
 
 ### GET /api/prices/stats
 
-Returns price statistics by country.
+Returns country-level catalog coverage statistics.
 
 **Response**:
 ```json
@@ -314,12 +314,11 @@ Returns price statistics by country.
       "country_id": 1,
       "country_name": "Turkey",
       "country_code": "TR",
-      "currency": "TRY",
+      "currency_code": "TRY",
+      "flag_emoji": "🇹🇷",
       "product_count": 1500,
-      "avg_price": 125.50,
-      "min_price": 5.00,
-      "max_price": 2500.00,
-      "last_scraped": "2024-01-15T10:00:00Z"
+      "supermarket_count": 3,
+      "last_scrape": "2024-01-15T10:00:00Z"
     }
   ]
 }

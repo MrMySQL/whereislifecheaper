@@ -77,31 +77,39 @@ router.get('/latest', async (req, res, next) => {
 router.get('/stats', async (_req, res, next) => {
   try {
     const result = await query(`
+      WITH active_mappings AS (
+        SELECT
+          c.id as country_id,
+          c.name as country_name,
+          c.code as country_code,
+          c.currency_code,
+          c.flag_emoji,
+          s.id as supermarket_id,
+          pm.id as product_mapping_id,
+          pm.product_id,
+          pm.last_scraped_at
+        FROM countries c
+        INNER JOIN supermarkets s ON c.id = s.country_id
+        INNER JOIN product_mappings pm ON s.id = pm.supermarket_id
+        WHERE s.is_active = true
+      )
       SELECT
-        c.id as country_id,
-        c.name as country_name,
-        c.code as country_code,
-        c.currency_code,
-        c.flag_emoji,
-        COUNT(DISTINCT p.id) as product_count,
-        COUNT(DISTINCT s.id) as supermarket_count,
-        AVG(pr.price)::numeric(10,2) as avg_price,
-        MIN(pr.price)::numeric(10,2) as min_price,
-        MAX(pr.price)::numeric(10,2) as max_price,
-        MAX(pr.scraped_at) as last_scrape
-      FROM countries c
-      INNER JOIN supermarkets s ON c.id = s.country_id
-      INNER JOIN product_mappings pm ON s.id = pm.supermarket_id
-      INNER JOIN products p ON pm.product_id = p.id
-      LEFT JOIN LATERAL (
-        SELECT price, scraped_at FROM prices
-        WHERE product_mapping_id = pm.id
-        ORDER BY scraped_at DESC
-        LIMIT 1
-      ) pr ON true
-      WHERE s.is_active = true
-      GROUP BY c.id, c.flag_emoji
-      ORDER BY c.name
+        am.country_id,
+        am.country_name,
+        am.country_code,
+        am.currency_code,
+        am.flag_emoji,
+        COUNT(DISTINCT am.product_id) as product_count,
+        COUNT(DISTINCT am.supermarket_id) as supermarket_count,
+        MAX(am.last_scraped_at) as last_scrape
+      FROM active_mappings am
+      GROUP BY
+        am.country_id,
+        am.country_name,
+        am.country_code,
+        am.currency_code,
+        am.flag_emoji
+      ORDER BY am.country_name
     `);
 
     res.json({

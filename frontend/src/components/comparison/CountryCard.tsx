@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Store, Package, Coins, Clock } from 'lucide-react';
+import { Store, Package, Clock } from 'lucide-react';
 import type { PriceStats } from '../../types';
-import { formatPrice } from '../../utils/currency';
 import { formatRelativeTime } from '../../utils/dateFormat';
 
 interface CountryCardProps {
@@ -37,7 +36,7 @@ export default function CountryCard({ stats }: CountryCardProps) {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <div className="text-center p-2 rounded-lg bg-olive-50 border border-olive-100">
           <Package className="h-3.5 w-3.5 text-olive-600 mx-auto mb-1" />
           <p className="text-sm font-bold text-charcoal-900">{stats.product_count?.toLocaleString() || 0}</p>
@@ -48,14 +47,6 @@ export default function CountryCard({ stats }: CountryCardProps) {
           <Store className="h-3.5 w-3.5 text-saffron-600 mx-auto mb-1" />
           <p className="text-sm font-bold text-charcoal-900">{stats.supermarket_count}</p>
           <p className="text-[10px] text-charcoal-500">{t('countryCard.stores')}</p>
-        </div>
-
-        <div className="text-center p-2 rounded-lg bg-terracotta-50 border border-terracotta-100">
-          <Coins className="h-3.5 w-3.5 text-terracotta-600 mx-auto mb-1" />
-          <p className="text-sm font-bold text-charcoal-900 truncate">
-            {stats.avg_price ? formatPrice(Number(stats.avg_price), stats.currency_code) : 'N/A'}
-          </p>
-          <p className="text-[10px] text-charcoal-500">{t('countryCard.avg')}</p>
         </div>
 
         <div className="text-center p-2 rounded-lg bg-cream-100 border border-cream-200">

@@ -75,7 +75,6 @@ export interface PriceStats {
   flag_emoji: string;
   supermarket_count: number;
   product_count: number;
-  avg_price: number;
   last_scrape: string | null;
 }
 
