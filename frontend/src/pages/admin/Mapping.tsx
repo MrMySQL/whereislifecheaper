@@ -484,7 +484,7 @@ export default function Mapping() {
         </div>
 
         {/* Products Table */}
-        <div className="overflow-x-auto">
+        <div>
           {productsLoading ? (
             <Loading text={t('loading.loadingProducts')} />
           ) : !selectedCountryId ? (
