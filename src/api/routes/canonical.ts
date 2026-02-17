@@ -332,8 +332,50 @@ router.patch('/:id', isAdmin, async (req, res, next) => {
 router.get('/comparison', async (req, res, next) => {
   try {
     const { search, limit = '100', offset = '0' } = req.query;
+    const searchTerm = typeof search === 'string' ? search.trim() : '';
+    const limitRaw = parseInt(limit as string, 10);
+    const offsetRaw = parseInt(offset as string, 10);
+    const limitNum = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 100;
+    const offsetNum = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
 
-    let sql = `
+    const whereClauses = ['cp.disabled IS NOT TRUE'];
+    const baseParams: any[] = [];
+
+    if (searchTerm) {
+      baseParams.push(`%${searchTerm}%`);
+      whereClauses.push(`cp.name ILIKE $${baseParams.length}`);
+    }
+
+    const baseWhereSql = whereClauses.join(' AND ');
+    const eligibleCanonicalCte = `
+      WITH eligible_canonical AS (
+        SELECT
+          cp.id,
+          cp.name
+        FROM canonical_products cp
+        INNER JOIN products p ON p.canonical_product_id = cp.id
+        INNER JOIN product_mappings pm ON pm.product_id = p.id
+        INNER JOIN supermarkets s ON pm.supermarket_id = s.id
+        WHERE ${baseWhereSql}
+          AND EXISTS (
+            SELECT 1
+            FROM prices pr_exists
+            WHERE pr_exists.product_mapping_id = pm.id
+          )
+        GROUP BY cp.id, cp.name
+        HAVING COUNT(DISTINCT s.country_id) >= 2
+      )
+    `;
+
+    const dataSql = `
+      ${eligibleCanonicalCte},
+      paged_canonical AS (
+        SELECT id
+        FROM eligible_canonical
+        ORDER BY name, id
+        LIMIT $${baseParams.length + 1}
+        OFFSET $${baseParams.length + 2}
+      )
       SELECT
         cp.id as canonical_id,
         cp.name as canonical_name,
@@ -358,33 +400,35 @@ router.get('/comparison', async (req, res, next) => {
         pr.is_on_sale,
         pr.scraped_at,
         pr.price_per_unit
-      FROM canonical_products cp
+      FROM paged_canonical pc
+      INNER JOIN canonical_products cp ON cp.id = pc.id
       LEFT JOIN categories cat ON cp.category_id = cat.id
       INNER JOIN products p ON p.canonical_product_id = cp.id
       INNER JOIN product_mappings pm ON p.id = pm.product_id
       INNER JOIN supermarkets s ON pm.supermarket_id = s.id
       INNER JOIN countries c ON s.country_id = c.id
-      LEFT JOIN LATERAL (
-        SELECT price, currency, original_price, is_on_sale, scraped_at, price_per_unit FROM prices
+      INNER JOIN LATERAL (
+        SELECT price, currency, original_price, is_on_sale, scraped_at, price_per_unit
+        FROM prices
         WHERE product_mapping_id = pm.id
         ORDER BY scraped_at DESC
         LIMIT 1
       ) pr ON true
-      WHERE (cp.disabled IS NOT TRUE)
+      ORDER BY cp.name, c.name, p.id
     `;
 
-    const params: any[] = [];
-    let paramIndex = 1;
+    const countSql = `
+      ${eligibleCanonicalCte}
+      SELECT COUNT(*)::int as total
+      FROM eligible_canonical
+    `;
 
-    if (search) {
-      sql += ` AND cp.name ILIKE $${paramIndex}`;
-      params.push(`%${search}%`);
-      paramIndex++;
-    }
-
-    sql += ` ORDER BY cp.name, c.name`;
-
-    const result = await query(sql, params);
+    const dataParams = [...baseParams, limitNum, offsetNum];
+    const countParams = [...baseParams];
+    const [result, countResult] = await Promise.all([
+      query(dataSql, dataParams),
+      query(countSql, countParams),
+    ]);
 
     // Group by canonical product and organize by country
     // First pass: collect all products per canonical product + country
@@ -408,11 +452,6 @@ router.get('/comparison', async (req, res, next) => {
       // Initialize array for this country if not exists
       if (!canonical.products_by_country[countryCode]) {
         canonical.products_by_country[countryCode] = [];
-      }
-
-      // Skip products without prices (e.g., products whose prices were deleted during cleanup)
-      if (row.price == null) {
-        return;
       }
 
       // Add product to the list
@@ -500,19 +539,13 @@ router.get('/comparison', async (req, res, next) => {
       delete canonical.products_by_country;
     });
 
-    // Convert to array and filter products available in multiple countries
+    // Convert to array
     let comparison = Array.from(canonicalMap.values())
-      .filter(p => Object.keys(p.prices_by_country).length >= 2)
       .map(p => ({
         ...p,
         country_count: Object.keys(p.prices_by_country).length,
       }));
-
-    // Apply pagination
-    const total = comparison.length;
-    const offsetNum = parseInt(offset as string);
-    const limitNum = parseInt(limit as string);
-    comparison = comparison.slice(offsetNum, offsetNum + limitNum);
+    const total = countResult.rows[0]?.total || 0;
 
     res.json({
       data: comparison,
