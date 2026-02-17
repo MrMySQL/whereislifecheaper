@@ -149,7 +149,8 @@
     "selectCanonicalProduct": "Оберіть канонічний товар...",
     "removeMapping": "Видалити зіставлення",
     "noMatchingProducts": "Немає відповідних товарів",
-    "mappedOnly": "Лише зіставлені"
+    "mappedOnly": "Лише зіставлені",
+    "createdAt": "Створено:"
   },
   "canonicalFreshness": {
     "title": "Актуальність",

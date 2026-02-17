@@ -85,6 +85,7 @@ export interface Product {
   unit: string | null;
   unit_quantity: number | null;
   image_url: string | null;
+  created_at: string | null;
   canonical_product_id: number | null;
   canonical_product_name: string | null;
   supermarket_id: number;

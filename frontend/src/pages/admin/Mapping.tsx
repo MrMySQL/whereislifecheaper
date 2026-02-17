@@ -6,6 +6,7 @@ import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronU
 import { countriesApi, canonicalApi, supermarketsApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
 import { convertToEUR } from '../../utils/currency';
+import { formatFullDate } from '../../utils/dateFormat';
 import type { Product, Country, CanonicalProductBasic, Supermarket } from '../../types';
 
 const PRODUCTS_PER_PAGE = 50;
@@ -628,6 +629,11 @@ function ProductRow({
             <> • {product.unit_quantity && product.unit_quantity !== 1 ? `${product.unit_quantity} ` : ''}{product.unit}</>
           )}
         </p>
+        {product.created_at && (
+          <p className="text-xs text-slate-500">
+            {t('mapping.createdAt')} {formatFullDate(product.created_at)}
+          </p>
+        )}
       </td>
 
       {/* Price */}

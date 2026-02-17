@@ -149,7 +149,8 @@
     "selectCanonicalProduct": "Select canonical product...",
     "removeMapping": "Remove mapping",
     "noMatchingProducts": "No matching products",
-    "mappedOnly": "Mapped only"
+    "mappedOnly": "Mapped only",
+    "createdAt": "Created:"
   },
   "canonicalFreshness": {
     "title": "Freshness",

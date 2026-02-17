@@ -544,6 +544,7 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
         p.unit,
         p.unit_quantity,
         p.image_url,
+        p.created_at,
         p.canonical_product_id,
         cp.name as canonical_product_name,
         s.id as supermarket_id,

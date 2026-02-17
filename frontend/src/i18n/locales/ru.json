@@ -149,7 +149,8 @@
     "selectCanonicalProduct": "Выберите канонический товар...",
     "removeMapping": "Удалить сопоставление",
     "noMatchingProducts": "Нет подходящих товаров",
-    "mappedOnly": "Только связанные"
+    "mappedOnly": "Только связанные",
+    "createdAt": "Создано:"
   },
   "canonicalFreshness": {
     "title": "Актуальность",
