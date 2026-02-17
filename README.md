@@ -191,7 +191,7 @@ LOG_LEVEL=info
 # OAuth (for authentication)
 GOOGLE_CLIENT_ID=your-client-id
 GOOGLE_CLIENT_SECRET=your-client-secret
-GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+GOOGLE_CALLBACK_URL=http://localhost:5173/api/auth/google/callback
 ADMIN_EMAILS=admin@example.com
 ```
 

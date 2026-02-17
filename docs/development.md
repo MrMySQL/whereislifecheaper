@@ -597,7 +597,7 @@ LOG_DIR=./logs
 # OAuth (optional for local dev)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+GOOGLE_CALLBACK_URL=http://localhost:5173/api/auth/google/callback
 ADMIN_EMAILS=your@email.com
 
 # Session

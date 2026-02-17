@@ -17,7 +17,7 @@ const envSchema = Joi.object({
   // Google OAuth
   GOOGLE_CLIENT_ID: Joi.string().optional(),
   GOOGLE_CLIENT_SECRET: Joi.string().optional(),
-  GOOGLE_CALLBACK_URL: Joi.string().default('http://localhost:3000/api/auth/google/callback'),
+  GOOGLE_CALLBACK_URL: Joi.string().default('http://localhost:5173/api/auth/google/callback'),
   // Session
   SESSION_SECRET: Joi.string().default('development-secret-change-in-production'),
   // Admin emails (comma-separated)
