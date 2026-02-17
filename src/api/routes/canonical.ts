@@ -59,6 +59,134 @@ router.get('/', async (req, res, next) => {
 });
 
 /**
+ * GET /api/canonical/mapped-products
+ * Get mapped products with canonical assignment and last price update metadata
+ * @requires Admin
+ */
+router.get('/mapped-products', isAdmin, async (req, res, next) => {
+  try {
+    const { search, stale_only = 'false', stale_days = '7', limit = '50', offset = '0' } = req.query;
+
+    const searchTerm = typeof search === 'string' ? search.trim() : '';
+    const staleOnly = stale_only === 'true';
+
+    const staleDaysRaw = parseInt(stale_days as string, 10);
+    const staleDaysThreshold = Number.isFinite(staleDaysRaw) && staleDaysRaw > 0 ? staleDaysRaw : 7;
+
+    const limitRaw = parseInt(limit as string, 10);
+    const offsetRaw = parseInt(offset as string, 10);
+    const limitNum = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50;
+    const offsetNum = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+
+    const whereClauses = ['p.canonical_product_id IS NOT NULL'];
+    const params: any[] = [];
+
+    if (searchTerm) {
+      params.push(`%${searchTerm}%`);
+      const searchParam = params.length;
+      whereClauses.push(
+        `(p.name ILIKE $${searchParam} OR p.brand ILIKE $${searchParam} OR cp.name ILIKE $${searchParam})`
+      );
+    }
+
+    const staleFilterSql = staleOnly
+      ? `WHERE last_price_updated_at IS NULL OR last_price_updated_at < NOW() - ($${params.length + 1} * INTERVAL '1 day')`
+      : '';
+
+    if (staleOnly) {
+      params.push(staleDaysThreshold);
+    }
+
+    const baseCteSql = `
+      WITH canonical_mapped_products AS (
+        SELECT
+          p.id as product_id,
+          p.name as product_name,
+          p.brand,
+          p.unit,
+          p.unit_quantity,
+          cp.id as canonical_product_id,
+          cp.name as canonical_product_name,
+          cp.disabled as canonical_disabled,
+          MAX(pr.scraped_at) as last_price_updated_at,
+          COUNT(DISTINCT pm.id) as mappings_count,
+          COUNT(DISTINCT s.country_id) as countries_count,
+          COALESCE(
+            JSONB_AGG(DISTINCT JSONB_BUILD_OBJECT(
+              'supermarket_id', s.id,
+              'supermarket_name', s.name,
+              'country_id', c.id,
+              'country_name', c.name,
+              'country_code', c.code,
+              'country_flag', c.flag_emoji
+            )) FILTER (WHERE s.id IS NOT NULL),
+            '[]'::jsonb
+          ) as markets
+        FROM products p
+        INNER JOIN canonical_products cp ON cp.id = p.canonical_product_id
+        LEFT JOIN product_mappings pm ON pm.product_id = p.id
+        LEFT JOIN supermarkets s ON s.id = pm.supermarket_id
+        LEFT JOIN countries c ON c.id = s.country_id
+        LEFT JOIN prices pr ON pr.product_mapping_id = pm.id
+        WHERE ${whereClauses.join(' AND ')}
+        GROUP BY
+          p.id,
+          p.name,
+          p.brand,
+          p.unit,
+          p.unit_quantity,
+          cp.id,
+          cp.name,
+          cp.disabled
+      ),
+      filtered_products AS (
+        SELECT
+          *,
+          CASE
+            WHEN last_price_updated_at IS NULL THEN NULL
+            ELSE FLOOR(EXTRACT(EPOCH FROM (NOW() - last_price_updated_at)) / 86400)::int
+          END as stale_days
+        FROM canonical_mapped_products
+        ${staleFilterSql}
+      )
+    `;
+
+    const dataSql = `
+      ${baseCteSql}
+      SELECT * FROM filtered_products
+      ORDER BY last_price_updated_at ASC NULLS FIRST, product_name ASC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+    const dataParams = [...params, limitNum, offsetNum];
+
+    const countSql = `
+      ${baseCteSql}
+      SELECT COUNT(*)::int as total FROM filtered_products
+    `;
+    const countParams = [...params];
+
+    const [result, countResult] = await Promise.all([
+      query(dataSql, dataParams),
+      query(countSql, countParams),
+    ]);
+
+    res.json({
+      data: result.rows,
+      count: countResult.rows[0]?.total || 0,
+      pagination: {
+        limit: limitNum,
+        offset: offsetNum,
+      },
+      meta: {
+        stale_days_threshold: staleDaysThreshold,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/canonical
  * Create a new canonical product
  * @requires Admin

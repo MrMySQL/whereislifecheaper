@@ -9,6 +9,7 @@ import Home from './pages/Home';
 import CountryProducts from './pages/CountryProducts';
 import Login from './pages/Login';
 import Mapping from './pages/admin/Mapping';
+import CanonicalFreshness from './pages/admin/CanonicalFreshness';
 import Scrapers from './pages/admin/Scrapers';
 import RequestCountry from './pages/RequestCountry';
 import { loadExchangeRates } from './utils/currency';
@@ -55,6 +56,14 @@ function App() {
                 element={
                   <ProtectedRoute requireAdmin>
                     <Mapping />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/canonical-freshness"
+                element={
+                  <ProtectedRoute requireAdmin>
+                    <CanonicalFreshness />
                   </ProtectedRoute>
                 }
               />

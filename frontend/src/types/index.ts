@@ -116,6 +116,31 @@ export interface CanonicalProductBasic {
   countries_count: number;
 }
 
+export interface CanonicalMappedProduct {
+  product_id: number;
+  product_name: string;
+  brand: string | null;
+  unit: string | null;
+  unit_quantity: number | null;
+  canonical_product_id: number;
+  canonical_product_name: string;
+  canonical_disabled: boolean;
+  last_price_updated_at: string | null;
+  stale_days: number | null;
+  mappings_count: number;
+  countries_count: number;
+  markets: CanonicalMappedMarket[];
+}
+
+export interface CanonicalMappedMarket {
+  supermarket_id: number;
+  supermarket_name: string;
+  country_id: number;
+  country_name: string;
+  country_code: string;
+  country_flag: string | null;
+}
+
 export interface PriceHistoryEntry {
   id: number;
   product_mapping_id: number;

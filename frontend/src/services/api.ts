@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { User, Country, CanonicalProduct, CanonicalProductBasic, PriceStats, Product, AuthStatus, Supermarket, PriceHistoryEntry } from '../types';
+import type { User, Country, CanonicalProduct, CanonicalProductBasic, CanonicalMappedProduct, PriceStats, Product, AuthStatus, Supermarket, PriceHistoryEntry } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -84,6 +84,26 @@ export const canonicalApi = {
     count: number;
   }> => {
     const response = await api.get<{ data: Product[]; count: number }>(`/canonical/products-by-country/${countryId}`, { params });
+    return response.data;
+  },
+  getMappedProducts: async (params?: {
+    search?: string;
+    stale_only?: boolean;
+    stale_days?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    data: CanonicalMappedProduct[];
+    count: number;
+    pagination: { limit: number; offset: number };
+    meta: { stale_days_threshold: number };
+  }> => {
+    const response = await api.get<{
+      data: CanonicalMappedProduct[];
+      count: number;
+      pagination: { limit: number; offset: number };
+      meta: { stale_days_threshold: number };
+    }>('/canonical/mapped-products', { params });
     return response.data;
   },
 };

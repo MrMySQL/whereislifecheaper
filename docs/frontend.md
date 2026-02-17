@@ -96,6 +96,7 @@ Routes are defined in `App.tsx`:
 | `/login` | `Login` | Google OAuth login |
 | `/country/:code` | `CountryProducts` | Products for a country |
 | `/admin/mapping` | `Mapping` | Canonical product management |
+| `/admin/canonical-freshness` | `CanonicalFreshness` | Canonical mapping freshness monitoring |
 | `/admin/scrapers` | `Scrapers` | Manual scraper triggering |
 
 ### Protected Routes
@@ -351,6 +352,15 @@ Canonical product management (`/admin/mapping`):
 - Search and link products
 - View linked products per canonical
 - Enable/disable canonical products
+
+### Admin: Canonical Freshness
+
+Canonical freshness monitoring (`/admin/canonical-freshness`):
+
+- Lists all products mapped to canonical products
+- Shows latest price scan datetime per mapped product
+- Highlights stale mappings and never-scanned products
+- Supports stale-only filtering and search
 
 ### Admin: Scrapers
 

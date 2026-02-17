@@ -44,6 +44,9 @@ export default function Header() {
                   <Link to="/admin/mapping" className={navLinkClass('/admin/mapping')}>
                     {t('nav.mapping')}
                   </Link>
+                  <Link to="/admin/canonical-freshness" className={navLinkClass('/admin/canonical-freshness')}>
+                    {t('nav.canonicalFreshness')}
+                  </Link>
                   <Link to="/admin/scrapers" className={navLinkClass('/admin/scrapers')}>
                     {t('nav.scrapers')}
                   </Link>
@@ -104,6 +107,9 @@ export default function Header() {
                 <>
                   <Link to="/admin/mapping" className={navLinkClass('/admin/mapping')} onClick={() => setMobileMenuOpen(false)}>
                     {t('nav.productMapping')}
+                  </Link>
+                  <Link to="/admin/canonical-freshness" className={navLinkClass('/admin/canonical-freshness')} onClick={() => setMobileMenuOpen(false)}>
+                    {t('nav.canonicalFreshness')}
                   </Link>
                   <Link to="/admin/scrapers" className={navLinkClass('/admin/scrapers')} onClick={() => setMobileMenuOpen(false)}>
                     {t('nav.scrapers')}

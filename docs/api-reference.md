@@ -16,7 +16,7 @@ This document provides complete documentation for the WhereIsLifeCheaper REST AP
 | Supermarkets | `/api/supermarkets` |
 | Products | `/api/products`, `/api/products/:id` |
 | Prices | `/api/prices/latest`, `/api/prices/stats` |
-| Canonical | `/api/canonical`, `/api/canonical/:id`, `/api/canonical/comparison` |
+| Canonical | `/api/canonical`, `/api/canonical/mapped-products`, `/api/canonical/:id`, `/api/canonical/comparison` |
 | Scraper | `/api/scraper/categories/:id`, `/api/scraper/trigger`, `/api/scraper/logs` |
 | Exchange Rates | `/api/rates`, `/api/rates/sync` |
 | Health | `/health` |
@@ -354,6 +354,61 @@ List canonical products with search and counts.
       "countries_count": 4
     }
   ]
+}
+```
+
+---
+
+### GET /api/canonical/mapped-products
+
+Get all mapped products (`canonical_product_id IS NOT NULL`) with canonical info and freshness metadata.
+
+**Authentication**: Admin required
+
+**Query Parameters**:
+- `search` (optional) - Search by product name, brand, or canonical name
+- `stale_only` (optional, default: `false`) - If `true`, include only stale or never-scanned products
+- `stale_days` (optional, default: `7`) - Staleness threshold in days
+- `limit` (optional, default: `50`) - Results per page
+- `offset` (optional, default: `0`) - Pagination offset
+
+**Response**:
+```json
+{
+  "data": [
+    {
+      "product_id": 1,
+      "product_name": "Organic Whole Milk 1L",
+      "brand": "Brand",
+      "unit": "L",
+      "unit_quantity": 1,
+      "canonical_product_id": 2,
+      "canonical_product_name": "Milk 1L",
+      "canonical_disabled": false,
+      "markets": [
+        {
+          "supermarket_id": 7,
+          "supermarket_name": "REWE",
+          "country_id": 5,
+          "country_name": "Germany",
+          "country_code": "DE",
+          "country_flag": "🇩🇪"
+        }
+      ],
+      "last_price_updated_at": "2024-01-15T10:00:00Z",
+      "stale_days": 2,
+      "mappings_count": 3,
+      "countries_count": 2
+    }
+  ],
+  "count": 120,
+  "pagination": {
+    "limit": 50,
+    "offset": 0
+  },
+  "meta": {
+    "stale_days_threshold": 7
+  }
 }
 ```
 
