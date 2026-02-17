@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info, EyeOff, Link } from 'lucide-react';
 import { countriesApi, canonicalApi, supermarketsApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
@@ -9,28 +10,72 @@ import type { Product, Country, CanonicalProductBasic, Supermarket } from '../..
 
 const PRODUCTS_PER_PAGE = 50;
 
+function parsePositiveIntParam(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 export default function Mapping() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
-  const [selectedSupermarketId, setSelectedSupermarketId] = useState<number | null>(null);
-  const [productSearchInput, setProductSearchInput] = useState('');
-  const [productSearch, setProductSearch] = useState('');
-  const [productPage, setProductPage] = useState(0);
-
-  // Debounce product search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setProductSearch(productSearchInput);
-      setProductPage(0);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [productSearchInput]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchParam = searchParams.get('search') || '';
+  const [productSearchInput, setProductSearchInput] = useState(searchParam);
+  const [productSearch, setProductSearch] = useState(searchParam);
   const [mappedOnly, setMappedOnly] = useState(false);
   const [showManageSection, setShowManageSection] = useState(false);
   const [canonicalSearch, setCanonicalSearch] = useState('');
   const [dropdownSearch, setDropdownSearch] = useState<{ [key: number]: string }>({});
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
+  const selectedCountryId = parsePositiveIntParam(searchParams.get('country'));
+  const selectedSupermarketId = parsePositiveIntParam(searchParams.get('supermarket'));
+  const pageParam = parsePositiveIntParam(searchParams.get('page'));
+  const productPage = pageParam ? pageParam - 1 : 0;
+
+  const updateUrlParams = useCallback((updater: (params: URLSearchParams) => void) => {
+    setSearchParams((prevParams) => {
+      const nextParams = new URLSearchParams(prevParams);
+      updater(nextParams);
+      if (nextParams.toString() === prevParams.toString()) {
+        return prevParams;
+      }
+      return nextParams;
+    });
+  }, [setSearchParams]);
+
+  const setPageInUrl = useCallback((nextPage: number) => {
+    const safePage = Math.max(0, nextPage);
+    updateUrlParams((params) => {
+      if (safePage === 0) {
+        params.delete('page');
+      } else {
+        params.set('page', String(safePage + 1));
+      }
+    });
+  }, [updateUrlParams]);
+
+  // Debounce product search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (productSearchInput === productSearch) return;
+      setProductSearch(productSearchInput);
+      updateUrlParams((params) => {
+        if (productSearchInput) {
+          params.set('search', productSearchInput);
+        } else {
+          params.delete('search');
+        }
+        params.delete('page');
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [productSearchInput, productSearch, updateUrlParams]);
+
+  useEffect(() => {
+    setProductSearchInput((current) => (current === searchParam ? current : searchParam));
+    setProductSearch((current) => (current === searchParam ? current : searchParam));
+  }, [searchParam]);
 
   // Fetch countries
   const { data: countries = [] } = useQuery({
@@ -39,7 +84,7 @@ export default function Mapping() {
   });
 
   // Fetch supermarkets for selected country
-  const { data: supermarkets = [] } = useQuery({
+  const { data: supermarkets = [], isFetched: supermarketsFetched } = useQuery({
     queryKey: ['supermarkets', selectedCountryId],
     queryFn: () => supermarketsApi.getByCountry(selectedCountryId!),
     enabled: !!selectedCountryId,
@@ -71,17 +116,30 @@ export default function Mapping() {
   // Reset page when search or country changes
   const handleCountryChange = (countryId: number | null) => {
     queryClient.cancelQueries({ queryKey: ['products'] });
-    setSelectedCountryId(countryId);
-    setSelectedSupermarketId(null);
+    updateUrlParams((params) => {
+      if (countryId) {
+        params.set('country', String(countryId));
+      } else {
+        params.delete('country');
+      }
+      params.delete('supermarket');
+      params.delete('search');
+      params.delete('page');
+    });
     setProductSearchInput('');
     setProductSearch('');
-    setProductPage(0);
     setOpenDropdown(null);
   };
 
   const handleSupermarketChange = (supermarketId: number | null) => {
-    setSelectedSupermarketId(supermarketId);
-    setProductPage(0);
+    updateUrlParams((params) => {
+      if (supermarketId) {
+        params.set('supermarket', String(supermarketId));
+      } else {
+        params.delete('supermarket');
+      }
+      params.delete('page');
+    });
   };
 
   const handleProductSearch = (search: string) => {
@@ -90,8 +148,40 @@ export default function Mapping() {
 
   const handleMappedOnlyChange = (checked: boolean) => {
     setMappedOnly(checked);
-    setProductPage(0);
+    setPageInUrl(0);
   };
+
+  useEffect(() => {
+    if (!selectedCountryId && (searchParams.has('supermarket') || searchParams.has('page'))) {
+      updateUrlParams((params) => {
+        params.delete('supermarket');
+        params.delete('page');
+      });
+    }
+  }, [selectedCountryId, searchParams, updateUrlParams]);
+
+  useEffect(() => {
+    if (!selectedCountryId || !selectedSupermarketId || !supermarketsFetched) return;
+    const existsInCountry = supermarkets.some((supermarket) => supermarket.id === selectedSupermarketId);
+    if (!existsInCountry) {
+      updateUrlParams((params) => {
+        params.delete('supermarket');
+        params.delete('page');
+      });
+    }
+  }, [selectedCountryId, selectedSupermarketId, supermarkets, supermarketsFetched, updateUrlParams]);
+
+  useEffect(() => {
+    if (!selectedCountryId || !productsData) return;
+    if (productsData.count === 0 && productPage > 0) {
+      setPageInUrl(0);
+      return;
+    }
+    const maxPage = Math.max(Math.ceil(productsData.count / PRODUCTS_PER_PAGE) - 1, 0);
+    if (productPage > maxPage) {
+      setPageInUrl(maxPage);
+    }
+  }, [selectedCountryId, productsData, productPage, setPageInUrl]);
 
   // Create canonical product mutation
   const createMutation = useMutation({
@@ -453,7 +543,7 @@ export default function Mapping() {
             </p>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setProductPage((p) => Math.max(0, p - 1))}
+                onClick={() => setPageInUrl(Math.max(0, productPage - 1))}
                 disabled={productPage === 0}
                 className="btn-secondary py-1 px-2 disabled:opacity-50"
               >
@@ -463,7 +553,7 @@ export default function Mapping() {
                 {t('common.page')} {productPage + 1} {t('common.of')} {Math.ceil(productsData.count / PRODUCTS_PER_PAGE)}
               </span>
               <button
-                onClick={() => setProductPage((p) => p + 1)}
+                onClick={() => setPageInUrl(productPage + 1)}
                 disabled={(productPage + 1) * PRODUCTS_PER_PAGE >= productsData.count}
                 className="btn-secondary py-1 px-2 disabled:opacity-50"
               >
