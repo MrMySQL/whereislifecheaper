@@ -43,7 +43,7 @@
     "comparePrices": "Compare Prices",
     "mapping": "Mapping",
     "productMapping": "Product Mapping",
-    "canonicalFreshness": "Canonical Freshness",
+    "canonicalFreshness": "Freshness",
     "scrapers": "Scrapers",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
@@ -152,7 +152,7 @@
     "mappedOnly": "Mapped only"
   },
   "canonicalFreshness": {
-    "title": "Canonical Freshness",
+    "title": "Freshness",
     "description": "Track mapped products and detect stale canonical links by last price scan date.",
     "searchPlaceholder": "Search by product, brand, or canonical...",
     "staleOnly": "Stale only",
