@@ -643,6 +643,39 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
 });
 
 /**
+ * DELETE /api/canonical/products/:id
+ * Delete a product and all related mappings/prices
+ * @requires Admin
+ */
+router.delete('/products/:id', isAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const result = await query(
+      `DELETE FROM products
+       WHERE id = $1
+       RETURNING id, name`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Product not found',
+      });
+      return;
+    }
+
+    res.json({
+      message: 'Product deleted successfully',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * DELETE /api/canonical/:id
  * Delete a canonical product
  * @requires Admin

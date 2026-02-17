@@ -75,6 +75,9 @@ export const canonicalApi = {
   delete: async (id: number): Promise<void> => {
     await api.delete(`/canonical/${id}`);
   },
+  deleteProduct: async (id: number): Promise<void> => {
+    await api.delete(`/canonical/products/${id}`);
+  },
   update: async (id: number, data: { show_per_unit_price?: boolean; disabled?: boolean }): Promise<CanonicalProductBasic> => {
     const response = await api.patch<{ data: CanonicalProductBasic }>(`/canonical/${id}`, data);
     return response.data.data;

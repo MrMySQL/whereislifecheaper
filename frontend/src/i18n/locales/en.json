@@ -148,6 +148,8 @@
     "noBrand": "No brand",
     "selectCanonicalProduct": "Select canonical product...",
     "removeMapping": "Remove mapping",
+    "removeProduct": "Remove",
+    "deleteProductConfirm": "Delete product \"{{name}}\"? This will remove its mappings and price history.",
     "noMatchingProducts": "No matching products",
     "mappedOnly": "Mapped only",
     "createdAt": "Created:"

@@ -148,6 +148,8 @@
     "noBrand": "Без бренду",
     "selectCanonicalProduct": "Оберіть канонічний товар...",
     "removeMapping": "Видалити зіставлення",
+    "removeProduct": "Видалити",
+    "deleteProductConfirm": "Видалити товар \"{{name}}\"? Це видалить його зіставлення та історію цін.",
     "noMatchingProducts": "Немає відповідних товарів",
     "mappedOnly": "Лише зіставлені",
     "createdAt": "Створено:"

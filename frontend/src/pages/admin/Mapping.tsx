@@ -218,6 +218,15 @@ export default function Mapping() {
     },
   });
 
+  // Delete product mutation
+  const deleteProductMutation = useMutation({
+    mutationFn: (id: number) => canonicalApi.deleteProduct(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['canonical'] });
+    },
+  });
+
   // Update canonical product mutation (for show_per_unit_price and disabled toggles)
   const updateMutation = useMutation({
     mutationFn: ({ id, show_per_unit_price, disabled }: { id: number; show_per_unit_price?: boolean; disabled?: boolean }) =>
@@ -258,6 +267,12 @@ export default function Mapping() {
   const handleDeleteCanonical = (cp: CanonicalProductBasic) => {
     if (confirm(t('mapping.deleteConfirm', { name: cp.name }))) {
       deleteMutation.mutate(cp.id);
+    }
+  };
+
+  const handleDeleteProduct = (product: Product) => {
+    if (confirm(t('mapping.deleteProductConfirm', { name: product.name }))) {
+      deleteProductMutation.mutate(product.id);
     }
   };
 
@@ -425,7 +440,7 @@ export default function Mapping() {
             <select
               value={selectedCountryId || ''}
               onChange={(e) => handleCountryChange(Number(e.target.value) || null)}
-              className="input"
+              className="input h-12 py-0"
             >
               <option value="">{t('mapping.chooseCountry')}</option>
               {countries.map((country: Country) => (
@@ -442,7 +457,7 @@ export default function Mapping() {
               <select
                 value={selectedSupermarketId || ''}
                 onChange={(e) => handleSupermarketChange(Number(e.target.value) || null)}
-                className="input"
+                className="input h-12 py-0"
               >
                 <option value="">{t('countryProducts.allSupermarkets')}</option>
                 {supermarkets.map((s: Supermarket) => (
@@ -463,7 +478,7 @@ export default function Mapping() {
                 placeholder={t('countryProducts.searchProducts')}
                 value={productSearchInput}
                 onChange={(e) => handleProductSearch(e.target.value)}
-                className="input pl-10"
+                className="input h-12 py-0 pl-10"
               />
             </div>
           )}
@@ -509,6 +524,9 @@ export default function Mapping() {
                   <th className="text-left py-3 px-2 text-sm font-medium text-slate-600 w-72">
                     {t('mapping.canonicalProduct')}
                   </th>
+                  <th className="text-left py-3 px-2 text-sm font-medium text-slate-600 w-10">
+                    {t('common.delete')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -527,6 +545,8 @@ export default function Mapping() {
                     }
                     onLink={(canonicalId) => handleLinkProduct(product.id, canonicalId)}
                     isLinking={linkMutation.isPending}
+                    onDelete={() => handleDeleteProduct(product)}
+                    isDeleting={deleteProductMutation.isPending}
                   />
                 ))}
               </tbody>
@@ -580,6 +600,8 @@ function ProductRow({
   onSearchChange,
   onLink,
   isLinking,
+  onDelete,
+  isDeleting,
 }: {
   product: Product;
   canonicalProducts: CanonicalProductBasic[];
@@ -591,6 +613,8 @@ function ProductRow({
   onSearchChange: (value: string) => void;
   onLink: (canonicalId: number | null) => void;
   isLinking: boolean;
+  onDelete: () => void;
+  isDeleting: boolean;
 }) {
   const { t } = useTranslation();
   const currentCanonical = useMemo(() => {
@@ -740,6 +764,17 @@ function ProductRow({
             </>
           )}
         </div>
+      </td>
+
+      {/* Row Actions */}
+      <td className="py-2 px-2">
+        <button
+          onClick={onDelete}
+          disabled={isDeleting}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 text-xs font-medium transition-colors"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </td>
     </tr>
   );

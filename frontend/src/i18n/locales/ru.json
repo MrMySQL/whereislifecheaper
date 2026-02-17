@@ -148,6 +148,8 @@
     "noBrand": "Без бренда",
     "selectCanonicalProduct": "Выберите канонический товар...",
     "removeMapping": "Удалить сопоставление",
+    "removeProduct": "Удалить",
+    "deleteProductConfirm": "Удалить товар \"{{name}}\"? Это удалит его связи и историю цен.",
     "noMatchingProducts": "Нет подходящих товаров",
     "mappedOnly": "Только связанные",
     "createdAt": "Создано:"
