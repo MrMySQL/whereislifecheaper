@@ -588,6 +588,7 @@ router.get('/products-by-country/:countryId', async (req, res, next) => {
         pr.price,
         pr.currency,
         pr.scraped_at as price_updated_at,
+        pm.last_scraped_at as last_seen_at,
         pm.url as product_url
       FROM products p
       INNER JOIN product_mappings pm ON p.id = pm.product_id

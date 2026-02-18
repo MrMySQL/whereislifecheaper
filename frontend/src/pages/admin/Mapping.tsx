@@ -17,6 +17,20 @@ function parsePositiveIntParam(value: string | null): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+function getLastSeenTextClass(lastSeenAt: string | null): string {
+  if (!lastSeenAt) return 'text-slate-500';
+
+  const parsed = new Date(lastSeenAt);
+  if (Number.isNaN(parsed.getTime())) return 'text-slate-500';
+
+  const ageMs = Date.now() - parsed.getTime();
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+
+  if (ageDays > 7) return 'text-red-600';
+  if (ageDays > 2) return 'text-yellow-600';
+  return 'text-green-600';
+}
+
 export default function Mapping() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -653,9 +667,19 @@ function ProductRow({
             <> • {product.unit_quantity && product.unit_quantity !== 1 ? `${product.unit_quantity} ` : ''}{product.unit}</>
           )}
         </p>
-        {product.created_at && (
+        {(product.created_at || product.last_seen_at) && (
           <p className="text-xs text-slate-500">
-            {t('mapping.createdAt')} {formatFullDate(product.created_at)}
+            {product.created_at && (
+              <>
+                {t('mapping.createdAt')} {formatFullDate(product.created_at)}
+              </>
+            )}
+            {product.created_at && product.last_seen_at && ' • '}
+            {product.last_seen_at && (
+              <span className={getLastSeenTextClass(product.last_seen_at)}>
+                {t('mapping.lastSeenAt')} {formatFullDate(product.last_seen_at)}
+              </span>
+            )}
           </p>
         )}
       </td>

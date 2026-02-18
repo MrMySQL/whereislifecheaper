@@ -152,7 +152,8 @@
     "deleteProductConfirm": "Удалить товар \"{{name}}\"? Это удалит его связи и историю цен.",
     "noMatchingProducts": "Нет подходящих товаров",
     "mappedOnly": "Только связанные",
-    "createdAt": "Создано:"
+    "createdAt": "Создано:",
+    "lastSeenAt": "Последний раз видели:"
   },
   "canonicalFreshness": {
     "title": "Актуальность",

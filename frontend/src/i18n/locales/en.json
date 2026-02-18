@@ -152,7 +152,8 @@
     "deleteProductConfirm": "Delete product \"{{name}}\"? This will remove its mappings and price history.",
     "noMatchingProducts": "No matching products",
     "mappedOnly": "Mapped only",
-    "createdAt": "Created:"
+    "createdAt": "Created:",
+    "lastSeenAt": "Last seen:"
   },
   "canonicalFreshness": {
     "title": "Freshness",

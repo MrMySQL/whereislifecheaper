@@ -96,6 +96,7 @@ export interface Product {
   price: number | null;
   currency: string | null;
   price_updated_at: string | null;
+  last_seen_at: string | null;
   product_url: string | null;
 }
 

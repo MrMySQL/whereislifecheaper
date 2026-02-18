@@ -152,7 +152,8 @@
     "deleteProductConfirm": "Видалити товар \"{{name}}\"? Це видалить його зіставлення та історію цін.",
     "noMatchingProducts": "Немає відповідних товарів",
     "mappedOnly": "Лише зіставлені",
-    "createdAt": "Створено:"
+    "createdAt": "Створено:",
+    "lastSeenAt": "Бачили востаннє:"
   },
   "canonicalFreshness": {
     "title": "Актуальність",
