@@ -12,6 +12,8 @@ import { KnusprScraper, knusprConfig, knusprCategories } from './germany/KnusprS
 import { LotussScraper, lotussConfig, lotussCategories } from './malaysia/LotussScraper';
 import { LotussApiScraper, lotussApiConfig, lotussApiCategories } from './malaysia/LotussApiScraper';
 import { SparAlbaniaScraper, sparAlbaniaConfig, sparAlbaniaCategories } from './albania/SparAlbaniaScraper';
+import { WoltBelaFrutaScraper, woltBelaFrutaConfig, woltBelaFrutaCategories } from './albania/WoltBelaFrutaScraper';
+import { WoltEcoMarketKikaScraper, woltEcoMarketKikaConfig, woltEcoMarketKikaCategories } from './albania/WoltEcoMarketKikaScraper';
 import { GurkeralScraper, gurkeralConfig, gurkeralCategories } from './austria/GurkeralScraper';
 import { AuchanMoscowScraper, auchanMoscowConfig, auchanMoscowCategories } from './russia/AuchanMoscowScraper';
 
@@ -145,6 +147,24 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: SparAlbaniaScraper,
       defaultConfig: sparAlbaniaConfig,
       categories: sparAlbaniaCategories,
+    },
+  ],
+  [
+    'WoltBelaFrutaScraper',
+    {
+      className: 'WoltBelaFrutaScraper',
+      scraperClass: WoltBelaFrutaScraper,
+      defaultConfig: woltBelaFrutaConfig,
+      categories: woltBelaFrutaCategories,
+    },
+  ],
+  [
+    'WoltEcoMarketKikaScraper',
+    {
+      className: 'WoltEcoMarketKikaScraper',
+      scraperClass: WoltEcoMarketKikaScraper,
+      defaultConfig: woltEcoMarketKikaConfig,
+      categories: woltEcoMarketKikaCategories,
     },
   ],
   [
