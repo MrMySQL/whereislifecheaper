@@ -11,6 +11,35 @@ export class ProductService {
     return `${normalizedName}::${brand ?? ''}`;
   }
 
+  private normalizeExternalId(externalId?: string): string | undefined {
+    if (!externalId) return undefined;
+
+    const trimmed = externalId.trim();
+    if (!trimmed) return undefined;
+
+    try {
+      return decodeURIComponent(trimmed).normalize('NFC').toLowerCase();
+    } catch {
+      return trimmed.normalize('NFC').toLowerCase();
+    }
+  }
+
+  private normalizeProductUrl(url: string): string {
+    const trimmed = url.trim();
+    if (!trimmed) return trimmed;
+
+    try {
+      const parsed = new URL(trimmed);
+      parsed.hash = '';
+      parsed.search = '';
+      const normalizedPath = parsed.pathname.replace(/\/+$/, '') || '/';
+      parsed.pathname = normalizedPath;
+      return parsed.toString();
+    } catch {
+      return trimmed.replace(/\/+$/, '') || trimmed;
+    }
+  }
+
   /**
    * Find or create a product in the database
    * Returns the product mapping ID (for recording prices)
@@ -21,7 +50,10 @@ export class ProductService {
     categoryId?: string
   ): Promise<string> {
     const normalizedName = normalizeProductName(productData.name);
-    const externalId = productData.externalId || this.extractExternalId(productData.productUrl);
+    const productUrl = this.normalizeProductUrl(productData.productUrl);
+    const externalId = this.normalizeExternalId(
+      productData.externalId || this.extractExternalId(productUrl)
+    );
 
     try {
       let productId: string | null = null;
@@ -42,26 +74,28 @@ export class ProductService {
             unit: productData.unit,
             unitQuantity: productData.unitQuantity,
           });
-        } else {
-          // Fallback for legacy rows that were saved without external_id
-          const existingMappingByUrl = await this.findMappingByUrl(supermarketId, productData.productUrl);
-          if (existingMappingByUrl) {
-            productId = existingMappingByUrl.productId;
-            existingMappingId = existingMappingByUrl.mappingId;
+        }
+      }
 
-            await this.updateMappingById(existingMappingId, {
-              productUrl: productData.productUrl,
-              externalId,
-            });
+      // Fallback for legacy rows or products without external_id: match by URL.
+      if (!productId) {
+        const existingMappingByUrl = await this.findMappingByUrl(supermarketId, productUrl);
+        if (existingMappingByUrl) {
+          productId = existingMappingByUrl.productId;
+          existingMappingId = existingMappingByUrl.mappingId;
 
-            await this.updateProductIfChanged(productId, {
-              name: productData.name,
-              normalizedName,
-              imageUrl: productData.imageUrl,
-              unit: productData.unit,
-              unitQuantity: productData.unitQuantity,
-            });
-          }
+          await this.updateMappingById(existingMappingId, {
+            productUrl,
+            externalId,
+          });
+
+          await this.updateProductIfChanged(productId, {
+            name: productData.name,
+            normalizedName,
+            imageUrl: productData.imageUrl,
+            unit: productData.unit,
+            unitQuantity: productData.unitQuantity,
+          });
         }
       }
 
@@ -96,7 +130,7 @@ export class ProductService {
       // Returns the mapping ID for recording prices
       const mappingId = await this.createOrUpdateMapping(productId, supermarketId, {
         externalId,
-        productUrl: productData.productUrl,
+        productUrl,
       });
 
       return mappingId;
@@ -138,7 +172,11 @@ export class ProductService {
   ): Promise<{ productId: string; mappingId: string } | null> {
     const result = await query<{ product_id: string; id: string }>(
       `SELECT product_id, id FROM product_mappings
-       WHERE supermarket_id = $1 AND url = $2
+       WHERE supermarket_id = $1
+       AND (
+         url = $2
+         OR TRIM(TRAILING '/' FROM url) = TRIM(TRAILING '/' FROM $2)
+       )
        ORDER BY id DESC
        LIMIT 1`,
       [supermarketId, url]
@@ -341,13 +379,13 @@ export class ProductService {
     const patterns = [
       /-p-([a-zA-Z0-9]+)/i, // Migros style
       /\/proizvod\/([a-zA-Z0-9_-]+)/i, // Voli style
-      /\/product\/([a-zA-Z0-9_-]+)(?:[/?#]|$)/i, // Generic product URL
+      /\/product\/([^/?#]+)(?:[/?#]|$)/i, // Generic product URL (supports unicode/encoded slugs)
     ];
 
     for (const pattern of patterns) {
       const match = url.match(pattern);
       if (match?.[1]) {
-        return match[1];
+        return this.normalizeExternalId(match[1]);
       }
     }
 
@@ -409,18 +447,43 @@ export class ProductService {
 
     try {
       // Step 1: Prepare product data with external IDs and normalized names
-      const preparedProducts = products.map(p => ({
-        ...p,
-        externalId: p.externalId || this.extractExternalId(p.productUrl),
-        normalizedName: normalizeProductName(p.name),
-      }));
+      const preparedProducts = products.map(p => {
+        const normalizedUrl = this.normalizeProductUrl(p.productUrl);
+
+        return {
+          ...p,
+          productUrl: normalizedUrl,
+          externalId: this.normalizeExternalId(
+            p.externalId || this.extractExternalId(normalizedUrl)
+          ),
+          normalizedName: normalizeProductName(p.name),
+        };
+      });
+
+      // Deduplicate items inside the same batch to avoid creating duplicate
+      // mappings when the same product appears more than once on a page.
+      const seenKeys = new Set<string>();
+      const uniquePreparedProducts = preparedProducts.filter((p) => {
+        const key = p.externalId ? `ext:${p.externalId}` : `url:${p.productUrl}`;
+        if (seenKeys.has(key)) {
+          return false;
+        }
+        seenKeys.add(key);
+        return true;
+      });
+
+      if (uniquePreparedProducts.length !== preparedProducts.length) {
+        scraperLogger.debug(
+          `Deduplicated page batch: ${preparedProducts.length} -> ${uniquePreparedProducts.length}`
+        );
+      }
 
       // Step 2: Batch fetch existing mappings by external_id and URL
-      const externalIds = preparedProducts
+      const externalIds = uniquePreparedProducts
         .map(p => p.externalId)
         .filter((id): id is string => !!id);
 
-      const urls = preparedProducts.map(p => p.productUrl);
+      const urls = uniquePreparedProducts.map(p => p.productUrl);
 
       const [existingMappingsByExternalId, existingMappingsByUrl] = await Promise.all([
         this.batchFindMappingsByExternalIds(supermarketId, externalIds),
@@ -439,13 +502,13 @@ export class ProductService {
 
       // Step 3: Separate products into existing vs new
       const existingProducts: Array<{
-        product: typeof preparedProducts[0];
+        product: typeof uniquePreparedProducts[0];
         mapping: { id: string; product_id: string; external_id: string | null; url: string };
       }> = [];
-      const productsForNameBrandLookup: typeof preparedProducts = [];
-      const newProducts: typeof preparedProducts = [];
+      const productsForNameBrandLookup: typeof uniquePreparedProducts = [];
+      const newProducts: typeof uniquePreparedProducts = [];
 
-      for (const product of preparedProducts) {
+      for (const product of uniquePreparedProducts) {
         if (product.externalId && mappingsByExternalId.has(product.externalId)) {
           existingProducts.push({
             product,
@@ -569,15 +632,15 @@ export class ProductService {
     if (urls.length === 0) return [];
 
     const result = await query<{ id: string; product_id: string; external_id: string | null; url: string }>(
-      `SELECT DISTINCT ON (pm.url)
+      `SELECT DISTINCT ON (TRIM(TRAILING '/' FROM pm.url))
         pm.id,
         pm.product_id,
         pm.external_id,
-        pm.url
+        TRIM(TRAILING '/' FROM pm.url) AS url
        FROM product_mappings pm
        WHERE pm.supermarket_id = $1
-       AND pm.url = ANY($2)
-       ORDER BY pm.url, pm.id DESC`,
+       AND TRIM(TRAILING '/' FROM pm.url) = ANY($2)
+       ORDER BY TRIM(TRAILING '/' FROM pm.url), pm.id DESC`,
       [supermarketId, urls]
     );
 

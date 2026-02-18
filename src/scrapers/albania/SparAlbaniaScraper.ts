@@ -334,6 +334,7 @@ export class SparAlbaniaScraper extends BaseScraper {
       const fullUrl = productUrl.startsWith('http')
         ? productUrl
         : `${this.config.baseUrl}${productUrl}`;
+      const externalId = await this.extractExternalId(article, fullUrl);
 
       const productData: ProductData = {
         name: name.trim(),
@@ -343,6 +344,7 @@ export class SparAlbaniaScraper extends BaseScraper {
         isOnSale: !!originalPrice,
         imageUrl,
         productUrl: fullUrl,
+        externalId,
         brand: undefined,
         unit: quantityInfo?.unit,
         unitQuantity: quantityInfo?.value,
@@ -419,6 +421,7 @@ export class SparAlbaniaScraper extends BaseScraper {
       isOnSale: !!originalPrice,
       imageUrl: imageUrl || undefined,
       productUrl: url,
+      externalId: this.extractExternalIdFromUrl(url),
       description: description || undefined,
       brand: undefined,
       unit: quantityInfo?.unit,
@@ -428,6 +431,64 @@ export class SparAlbaniaScraper extends BaseScraper {
 
     this.productsScraped++;
     return productData;
+  }
+
+  private normalizeExternalId(rawId?: string | null): string | undefined {
+    if (!rawId) return undefined;
+
+    const trimmed = rawId.trim();
+    if (!trimmed) return undefined;
+
+    try {
+      return decodeURIComponent(trimmed).normalize('NFC').toLowerCase();
+    } catch {
+      return trimmed.normalize('NFC').toLowerCase();
+    }
+  }
+
+  private extractExternalIdFromUrl(url: string): string | undefined {
+    const match = url.match(/\/product\/([^/?#]+)(?:[/?#]|$)/i);
+    return this.normalizeExternalId(match?.[1]);
+  }
+
+  private async extractExternalId(article: any, fullUrl: string): Promise<string | undefined> {
+    try {
+      const articleDataId = await article.getAttribute('data-product_id');
+      const normalizedArticleId = this.normalizeExternalId(articleDataId);
+      if (normalizedArticleId) {
+        return normalizedArticleId;
+      }
+
+      const nestedDataIdElement = await article.$('[data-product_id]');
+      if (nestedDataIdElement) {
+        const nestedDataId = await nestedDataIdElement.getAttribute('data-product_id');
+        const normalizedNestedId = this.normalizeExternalId(nestedDataId);
+        if (normalizedNestedId) {
+          return normalizedNestedId;
+        }
+      }
+
+      const articleClass = await article.getAttribute('class');
+      const articleClassId = articleClass?.match(/\bpost-(\d+)\b/)?.[1];
+      const normalizedArticleClassId = this.normalizeExternalId(articleClassId);
+      if (normalizedArticleClassId) {
+        return normalizedArticleClassId;
+      }
+
+      const listItemClass = await article.evaluate((el: Element) => {
+        const listItem = el.closest('li');
+        return listItem?.getAttribute('class') || '';
+      });
+      const listItemClassId = listItemClass?.match(/\bpost-(\d+)\b/)?.[1];
+      const normalizedListItemClassId = this.normalizeExternalId(listItemClassId);
+      if (normalizedListItemClassId) {
+        return normalizedListItemClassId;
+      }
+    } catch {
+      this.logger.debug('Could not extract external ID from article, using URL fallback');
+    }
+
+    return this.extractExternalIdFromUrl(fullUrl);
   }
 
   /**
