@@ -1,4 +1,4 @@
-import { productRepository, priceRepository } from '../repositories';
+import { productRepository, productMappingRepository, priceRepository } from '../repositories';
 import { ProductData } from '../types/scraper.types';
 import { normalizeProductName } from '../utils/normalizer';
 import { scraperLogger } from '../utils/logger';
@@ -66,11 +66,11 @@ export class ProductService {
       let existingMappingId: string | null = null;
 
       if (externalId) {
-        const existingMapping = await productRepository.findMappingByExternalId(supermarketId, externalId);
+        const existingMapping = await productMappingRepository.findMappingByExternalId(supermarketId, externalId);
         if (existingMapping) {
           productId = existingMapping.product_id;
           existingMappingId = existingMapping.id;
-          await productRepository.updateProduct(productId, {
+          await productMappingRepository.updateProduct(productId, {
             name: productData.name,
             normalizedName,
             imageUrl: productData.imageUrl,
@@ -81,12 +81,12 @@ export class ProductService {
       }
 
       if (!productId) {
-        const existingMappingByUrl = await productRepository.findMappingByUrl(supermarketId, productUrl);
+        const existingMappingByUrl = await productMappingRepository.findMappingByUrl(supermarketId, productUrl);
         if (existingMappingByUrl) {
           productId = existingMappingByUrl.product_id;
           existingMappingId = existingMappingByUrl.id;
-          await productRepository.updateMappingById(existingMappingId, { productUrl, externalId });
-          await productRepository.updateProduct(productId, {
+          await productMappingRepository.updateMappingById(existingMappingId, { productUrl, externalId });
+          await productMappingRepository.updateProduct(productId, {
             name: productData.name,
             normalizedName,
             imageUrl: productData.imageUrl,
@@ -97,11 +97,11 @@ export class ProductService {
       }
 
       if (!productId && !externalId) {
-        productId = await productRepository.findProductByNameAndBrand(normalizedName, productData.brand);
+        productId = await productMappingRepository.findProductByNameAndBrand(normalizedName, productData.brand);
       }
 
       if (!productId) {
-        productId = await productRepository.createProduct({
+        productId = await productMappingRepository.createProduct({
           name: productData.name,
           normalizedName,
           brand: productData.brand,
@@ -115,7 +115,7 @@ export class ProductService {
 
       if (existingMappingId) return existingMappingId;
 
-      return productRepository.createOrUpdateMapping(productId, supermarketId, { externalId, productUrl });
+      return productMappingRepository.createOrUpdateMapping(productId, supermarketId, { externalId, productUrl });
     } catch (error) {
       scraperLogger.error('Error in findOrCreateProduct:', error);
       throw error;
@@ -179,8 +179,8 @@ export class ProductService {
       const urls = uniqueProducts.map(p => p.productUrl);
 
       const [byExternalId, byUrl] = await Promise.all([
-        productRepository.batchFindMappingsByExternalIds(supermarketId, externalIds),
-        productRepository.batchFindMappingsByUrls(supermarketId, urls),
+        productMappingRepository.batchFindMappingsByExternalIds(supermarketId, externalIds),
+        productMappingRepository.batchFindMappingsByUrls(supermarketId, urls),
       ]);
 
       const mappingsByExternalId = new Map(
@@ -213,7 +213,7 @@ export class ProductService {
       }
 
       if (forNameBrandLookup.length > 0) {
-        const byNameBrand = await productRepository.batchFindMappingsByNameAndBrand(
+        const byNameBrand = await productMappingRepository.batchFindMappingsByNameAndBrand(
           supermarketId,
           forNameBrandLookup
         );
@@ -238,14 +238,14 @@ export class ProductService {
       // Batch update existing
       const existingMappingIds: string[] = [];
       if (existingProducts.length > 0) {
-        await productRepository.batchUpdateExistingProducts(existingProducts);
+        await productMappingRepository.batchUpdateExistingProducts(existingProducts);
         existingMappingIds.push(...existingProducts.map(ep => ep.mapping.id));
       }
 
       // Batch create new
       const newMappingIds: string[] = [];
       if (newProducts.length > 0) {
-        const created = await productRepository.batchCreateProductsAndMappings(newProducts, supermarketId);
+        const created = await productMappingRepository.batchCreateProductsAndMappings(newProducts, supermarketId);
         newMappingIds.push(...created);
       }
 

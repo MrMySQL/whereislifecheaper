@@ -101,7 +101,7 @@ export interface ScrapeLogRow {
 
 export interface ExchangeRateRow {
   currency_code: string;
-  rate_to_eur: number;
+  rate_to_eur: string; // pg returns NUMERIC as string
   source: string;
   fetched_at: Date;
 }

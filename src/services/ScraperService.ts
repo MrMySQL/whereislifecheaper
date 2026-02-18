@@ -45,7 +45,7 @@ export class ScraperService {
       scrapeLogId = await scrapeLogRepository.create(supermarketId, 'running');
 
       const scraperOptions: CreateScraperOptions = { categoryIds: options?.categoryIds };
-      scraper = ScraperFactory.createFromSupermarket(supermarket as any, scraperOptions);
+      scraper = ScraperFactory.createFromSupermarket(supermarket, scraperOptions);
       scraper.setRunId(runId);
 
       scraper.setOnPageScrapedCallback(async (products: ProductData[], pageInfo: PageInfo): Promise<number> => {

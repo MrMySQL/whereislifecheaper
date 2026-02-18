@@ -14,7 +14,7 @@ router.get('/', async (_req, res, next) => {
       let source = 'database';
 
       for (const row of rows) {
-        data[row.currency_code] = parseFloat(row.rate_to_eur as unknown as string);
+        data[row.currency_code] = parseFloat(row.rate_to_eur);
         const fetchedAt = new Date(row.fetched_at);
         if (!latestFetchedAt || fetchedAt > latestFetchedAt) {
           latestFetchedAt = fetchedAt;
