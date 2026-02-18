@@ -248,45 +248,56 @@ export class ProductRepository {
     const imageUrls = products.map(p => p.product.imageUrl || null);
     const units = products.map(p => p.product.unit || null);
     const unitQuantities = products.map(p => p.product.unitQuantity || null);
-
-    await query(
-      `UPDATE products AS p SET
-        name = u.name,
-        normalized_name = u.normalized_name,
-        image_url = COALESCE(u.image_url, p.image_url),
-        unit = COALESCE(u.unit, p.unit),
-        unit_quantity = COALESCE(u.unit_quantity, p.unit_quantity),
-        updated_at = CURRENT_TIMESTAMP
-      FROM (SELECT
-        unnest($1::int[]) AS id,
-        unnest($2::text[]) AS name,
-        unnest($3::text[]) AS normalized_name,
-        unnest($4::text[]) AS image_url,
-        unnest($5::text[]) AS unit,
-        unnest($6::numeric[]) AS unit_quantity
-      ) AS u
-      WHERE p.id = u.id`,
-      [productIds, names, normalizedNames, imageUrls, units, unitQuantities]
-    );
-
     const mappingIds = products.map(p => parseInt(p.mapping.id, 10));
     const urls = products.map(p => p.product.productUrl);
     const externalIds = products.map(p => p.product.externalId || null);
 
-    await query(
-      `UPDATE product_mappings AS pm SET
-        url = u.url,
-        external_id = COALESCE(pm.external_id, u.external_id),
-        last_scraped_at = CURRENT_TIMESTAMP,
-        updated_at = CURRENT_TIMESTAMP
-      FROM (SELECT
-        unnest($1::int[]) AS id,
-        unnest($2::text[]) AS url,
-        unnest($3::text[]) AS external_id
-      ) AS u
-      WHERE pm.id = u.id`,
-      [mappingIds, urls, externalIds]
-    );
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+
+      await client.query(
+        `UPDATE products AS p SET
+          name = u.name,
+          normalized_name = u.normalized_name,
+          image_url = COALESCE(u.image_url, p.image_url),
+          unit = COALESCE(u.unit, p.unit),
+          unit_quantity = COALESCE(u.unit_quantity, p.unit_quantity),
+          updated_at = CURRENT_TIMESTAMP
+        FROM (SELECT
+          unnest($1::int[]) AS id,
+          unnest($2::text[]) AS name,
+          unnest($3::text[]) AS normalized_name,
+          unnest($4::text[]) AS image_url,
+          unnest($5::text[]) AS unit,
+          unnest($6::numeric[]) AS unit_quantity
+        ) AS u
+        WHERE p.id = u.id`,
+        [productIds, names, normalizedNames, imageUrls, units, unitQuantities]
+      );
+
+      await client.query(
+        `UPDATE product_mappings AS pm SET
+          url = u.url,
+          external_id = COALESCE(pm.external_id, u.external_id),
+          last_scraped_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+        FROM (SELECT
+          unnest($1::int[]) AS id,
+          unnest($2::text[]) AS url,
+          unnest($3::text[]) AS external_id
+        ) AS u
+        WHERE pm.id = u.id`,
+        [mappingIds, urls, externalIds]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async batchCreateProductsAndMappings(
@@ -432,10 +443,10 @@ export class ProductRepository {
       INNER JOIN supermarkets s ON pm.supermarket_id = s.id
       INNER JOIN countries c ON s.country_id = c.id
       WHERE pm.product_id = $1
-      AND pr.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '${options.days} days'
+      AND pr.scraped_at >= CURRENT_TIMESTAMP - ($2 * INTERVAL '1 day')
     `;
-    const params: unknown[] = [productId];
-    let i = 2;
+    const params: unknown[] = [productId, options.days];
+    let i = 3;
 
     if (options.supermarketId) {
       sql += ` AND pm.supermarket_id = $${i++}`;

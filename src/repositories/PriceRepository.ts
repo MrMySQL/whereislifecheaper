@@ -61,7 +61,8 @@ export class PriceRepository {
   async cleanupOld(daysToKeep: number): Promise<number> {
     const result = await query(
       `DELETE FROM prices
-       WHERE scraped_at < CURRENT_TIMESTAMP - INTERVAL '${daysToKeep} days'`
+       WHERE scraped_at < CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')`,
+      [daysToKeep]
     );
     return result.rowCount || 0;
   }
