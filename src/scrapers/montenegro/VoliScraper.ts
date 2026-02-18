@@ -137,6 +137,62 @@ export class VoliScraper extends BaseScraper {
     super(config);
   }
 
+  private getFirstUrlFromSrcSet(srcset?: string | null): string | undefined {
+    if (!srcset) return undefined;
+
+    const firstEntry = srcset
+      .split(',')
+      .map(part => part.trim())
+      .find(Boolean);
+
+    if (!firstEntry) return undefined;
+    return firstEntry.split(/\s+/)[0];
+  }
+
+  private normalizeImageUrl(url?: string | null): string | undefined {
+    if (!url) return undefined;
+
+    const trimmed = url.trim();
+    if (!trimmed || trimmed.startsWith('data:')) return undefined;
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+
+    if (trimmed.startsWith('//')) {
+      return `https:${trimmed}`;
+    }
+
+    if (trimmed.startsWith('/')) {
+      return `${this.config.baseUrl}${trimmed}`;
+    }
+
+    return `${this.config.baseUrl}/${trimmed.replace(/^\.?\//, '')}`;
+  }
+
+  private isDefaultImage(url: string): boolean {
+    return url.includes('/storage/images/products/default-image/default.png');
+  }
+
+  private async extractImageUrl(imgElement: any): Promise<string | undefined> {
+    const candidates = [
+      await imgElement.getAttribute('data-src'),
+      await imgElement.getAttribute('data-lazy-src'),
+      await imgElement.getAttribute('data-original'),
+      this.getFirstUrlFromSrcSet(await imgElement.getAttribute('data-srcset')),
+      this.getFirstUrlFromSrcSet(await imgElement.getAttribute('srcset')),
+      await imgElement.getAttribute('src'),
+    ]
+      .map(url => this.normalizeImageUrl(url))
+      .filter((url): url is string => !!url);
+
+    if (candidates.length === 0) return undefined;
+
+    const uniqueCandidates = Array.from(new Set(candidates));
+    const nonDefault = uniqueCandidates.find(url => !this.isDefaultImage(url));
+    return nonDefault || uniqueCandidates[0];
+  }
+
   /**
    * Initialize the scraper
    */
@@ -387,7 +443,7 @@ export class VoliScraper extends BaseScraper {
       // Extract image URL
       let imageUrl: string | undefined;
       if (imgElement) {
-        imageUrl = await imgElement.getAttribute('src') || undefined;
+        imageUrl = await this.extractImageUrl(imgElement);
       }
 
       // Build full product URL
@@ -465,8 +521,14 @@ export class VoliScraper extends BaseScraper {
       throw new Error(`Could not parse price from ${url}`);
     }
 
-    // Extract image URL
-    const imageUrl = await this.extractAttribute('img[alt]', 'src');
+    // Extract image URL from detail page with lazy-load fallbacks
+    let imageUrl: string | undefined;
+    const detailImage = await this.page.$(
+      'img[data-src*="/storage/images/products/"], img[src*="/storage/images/products/"], img[alt]'
+    );
+    if (detailImage) {
+      imageUrl = await this.extractImageUrl(detailImage);
+    }
 
     // Extract unit
     let unit: string | undefined;
@@ -487,7 +549,7 @@ export class VoliScraper extends BaseScraper {
       currency: 'EUR',
       originalPrice,
       isOnSale: !!originalPrice,
-      imageUrl: imageUrl || undefined,
+      imageUrl,
       productUrl: url,
       externalId,
       brand: undefined,
