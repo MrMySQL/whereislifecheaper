@@ -159,6 +159,13 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'SparAlbaniaScraper',
     is_active: true,
   },
+  {
+    country_code: 'AL',
+    name: 'Wolt Bela Fruta',
+    website_url: 'https://wolt.com/en/alb/tirana/venue/bela-fruta',
+    scraper_class: 'WoltBelaFrutaScraper',
+    is_active: true,
+  },
   // Austria
   {
     country_code: 'AT',
