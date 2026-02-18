@@ -46,6 +46,23 @@ interface DehydratedCategoryResult {
 }
 
 /**
+ * Shared wait/retry configuration for all Wolt Albania venue scrapers.
+ * Spread this into the venue-specific config objects.
+ */
+export const woltAlbaniaBaseConfig = {
+  waitTimes: {
+    pageLoad: 5000,
+    dynamicContent: 3000,
+    betweenRequests: 2000,
+  },
+  maxRetries: 3,
+  concurrentPages: 1,
+  userAgents: [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  ],
+};
+
+/**
  * Base scraper for any Wolt venue (Albania).
  *
  * Wolt serves product data via SSR with dehydrated React Query state
@@ -122,7 +139,7 @@ export abstract class WoltVenueScraper extends BaseScraper {
           await this.navigateToUrl(subUrl);
           await this.waitForDynamicContent();
 
-          const subItems = await this.extractLeafItems(subSlug, subUrl);
+          const subItems = await this.extractLeafItems(subSlug, subUrl, category.name);
           scraperLogger.info(
             `  Sub-category ${subSlug}: ${subItems.length} products`
           );
@@ -130,7 +147,7 @@ export abstract class WoltVenueScraper extends BaseScraper {
           if (this.onPageScraped && subItems.length > 0) {
             const saved = await this.onPageScraped(subItems, {
               categoryId: subSlug,
-              categoryName: `${category.name} / ${subSlug}`,
+              categoryName: category.name,
               pageNumber: 1,
               totalProductsOnPage: subItems.length,
             });
@@ -169,10 +186,14 @@ export abstract class WoltVenueScraper extends BaseScraper {
   /**
    * Navigate to a known leaf sub-category URL and return its items.
    */
-  private async extractLeafItems(subSlug: string, subUrl: string): Promise<ProductData[]> {
+  private async extractLeafItems(
+    subSlug: string,
+    subUrl: string,
+    parentCategoryName: string
+  ): Promise<ProductData[]> {
     try {
       const result = await this.readDehydratedState(subSlug);
-      return result.items.map((item) => this.mapItem(item, subSlug, subUrl));
+      return result.items.map((item) => this.mapItem(item, parentCategoryName, subUrl));
     } catch (error) {
       scraperLogger.error(`Failed to extract items for sub-category ${subSlug}:`, error);
       await this.takeScreenshot(`wolt-sub-error-${subSlug}`);
@@ -193,7 +214,7 @@ export abstract class WoltVenueScraper extends BaseScraper {
     const venueSlug = this.venueSlug;
 
     try {
-      return await this.page.evaluate(
+      const result = await this.page.evaluate(
         ({
           venueSlug,
           categorySlug,
@@ -239,16 +260,25 @@ export abstract class WoltVenueScraper extends BaseScraper {
 
           // Otherwise this is a parent category: extract sub-slugs from the query key.
           // Key format: ["venue-assortment", "category", venueSlug, sub1, sub2, ..., null, null, "en", "no-user"]
+          // Take all strings starting from position 3; stop at the first non-string (null sentinel).
           const key: any[] = catQuery.queryKey;
-          const trailingFixed = 4; // null, null, "en", "no-user"
           const subSlugs: string[] = key
-            .slice(3, key.length - trailingFixed)
+            .slice(3)
             .filter((s: any) => typeof s === 'string');
 
           return { items: [], subSlugs };
         },
         { venueSlug, categorySlug }
       );
+
+      if (result.items.length === 0 && result.subSlugs.length === 0) {
+        scraperLogger.warn(
+          `readDehydratedState: no items or sub-slugs found for "${categorySlug}" in venue "${venueSlug}". ` +
+          `Query key format may have changed.`
+        );
+      }
+
+      return result;
     } catch (error) {
       scraperLogger.error(`Failed to read dehydrated state for ${categorySlug}:`, error);
       await this.takeScreenshot(`wolt-dehydrated-error-${categorySlug}`);

@@ -26,9 +26,7 @@
       "mcp__playwright__browser_wait_for",
       "mcp__playwright__browser_network_requests",
       "Bash(ls:*)",
-      "Bash(tree:*)",
-      "Bash(npx tsc:*)",
-      "Skill(commit-commands:commit)"
+      "Bash(tree:*)"
     ]
   }
 }

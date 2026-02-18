@@ -1,5 +1,5 @@
 import { ScraperConfig, CategoryConfig } from '../../types/scraper.types';
-import { WoltVenueScraper } from './WoltVenueScraper';
+import { WoltVenueScraper, woltAlbaniaBaseConfig } from './WoltVenueScraper';
 
 /**
  * Wolt Bela Fruta categories configuration
@@ -23,21 +23,7 @@ export const woltBelaFrutaConfig: Partial<ScraperConfig> = {
   name: 'Wolt Bela Fruta',
   baseUrl: 'https://wolt.com/en/alb/tirana/venue/bela-fruta',
   categories: woltBelaFrutaCategories,
-  selectors: {
-    productCard: 'li[role="listitem"]',
-    productName: 'h3',
-    productPrice: '[data-test-id="product-price"]',
-  },
-  waitTimes: {
-    pageLoad: 5000,
-    dynamicContent: 3000,
-    betweenRequests: 2000,
-  },
-  maxRetries: 3,
-  concurrentPages: 1,
-  userAgents: [
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  ],
+  ...woltAlbaniaBaseConfig,
 };
 
 export class WoltBelaFrutaScraper extends WoltVenueScraper {
