@@ -394,6 +394,8 @@ export class VoliScraper extends BaseScraper {
       const fullUrl = productUrl.startsWith('http')
         ? productUrl
         : `${this.config.baseUrl}${productUrl}`;
+      const externalIdMatch = fullUrl.match(/\/proizvod\/([a-zA-Z0-9_-]+)/i);
+      const externalId = externalIdMatch ? externalIdMatch[1] : undefined;
 
       const productData: ProductData = {
         name,
@@ -403,6 +405,7 @@ export class VoliScraper extends BaseScraper {
         isOnSale: !!originalPrice,
         imageUrl,
         productUrl: fullUrl,
+        externalId,
         brand: undefined,
         unit,
         unitQuantity: quantityInfo?.value,
@@ -475,6 +478,8 @@ export class VoliScraper extends BaseScraper {
 
     // Extract quantity from name
     const quantityInfo = extractQuantity(name);
+    const externalIdMatch = url.match(/\/proizvod\/([a-zA-Z0-9_-]+)/i);
+    const externalId = externalIdMatch ? externalIdMatch[1] : undefined;
 
     const productData: ProductData = {
       name,
@@ -484,6 +489,7 @@ export class VoliScraper extends BaseScraper {
       isOnSale: !!originalPrice,
       imageUrl: imageUrl || undefined,
       productUrl: url,
+      externalId,
       brand: undefined,
       unit: unit || quantityInfo?.unit,
       unitQuantity: quantityInfo?.value,

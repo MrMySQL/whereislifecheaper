@@ -7,6 +7,10 @@ import { scraperLogger } from '../utils/logger';
  * Service for managing products in the database
  */
 export class ProductService {
+  private buildNameBrandKey(normalizedName: string, brand?: string | null): string {
+    return `${normalizedName}::${brand ?? ''}`;
+  }
+
   /**
    * Find or create a product in the database
    * Returns the product mapping ID (for recording prices)
@@ -38,6 +42,26 @@ export class ProductService {
             unit: productData.unit,
             unitQuantity: productData.unitQuantity,
           });
+        } else {
+          // Fallback for legacy rows that were saved without external_id
+          const existingMappingByUrl = await this.findMappingByUrl(supermarketId, productData.productUrl);
+          if (existingMappingByUrl) {
+            productId = existingMappingByUrl.productId;
+            existingMappingId = existingMappingByUrl.mappingId;
+
+            await this.updateMappingById(existingMappingId, {
+              productUrl: productData.productUrl,
+              externalId,
+            });
+
+            await this.updateProductIfChanged(productId, {
+              name: productData.name,
+              normalizedName,
+              imageUrl: productData.imageUrl,
+              unit: productData.unit,
+              unitQuantity: productData.unitQuantity,
+            });
+          }
         }
       }
 
@@ -94,6 +118,30 @@ export class ProductService {
        WHERE supermarket_id = $1 AND external_id = $2
        LIMIT 1`,
       [supermarketId, externalId]
+    );
+
+    if (result.rows.length > 0) {
+      return {
+        productId: result.rows[0].product_id,
+        mappingId: result.rows[0].id,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Find existing mapping by supermarket and URL
+   */
+  private async findMappingByUrl(
+    supermarketId: string,
+    url: string
+  ): Promise<{ productId: string; mappingId: string } | null> {
+    const result = await query<{ product_id: string; id: string }>(
+      `SELECT product_id, id FROM product_mappings
+       WHERE supermarket_id = $1 AND url = $2
+       ORDER BY id DESC
+       LIMIT 1`,
+      [supermarketId, url]
     );
 
     if (result.rows.length > 0) {
@@ -219,14 +267,7 @@ export class ProductService {
 
     if (existingMapping.rows.length > 0) {
       // Update existing mapping
-      await query(
-        `UPDATE product_mappings SET
-          url = $2,
-          last_scraped_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1`,
-        [existingMapping.rows[0].id, data.productUrl]
-      );
+      await this.updateMappingById(existingMapping.rows[0].id, data);
       return existingMapping.rows[0].id;
     }
 
@@ -272,15 +313,45 @@ export class ProductService {
   }
 
   /**
+   * Update existing mapping and backfill external_id when available
+   */
+  private async updateMappingById(
+    mappingId: string,
+    data: { productUrl: string; externalId?: string }
+  ): Promise<void> {
+    await query(
+      `UPDATE product_mappings SET
+        url = $2,
+        external_id = COALESCE(external_id, $3),
+        last_scraped_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [mappingId, data.productUrl, data.externalId || null]
+    );
+  }
+
+  /**
    * Extract external product ID from URL
    * Examples:
    *   https://www.migros.com.tr/sut-1l-p-12345 -> 12345
    *   https://www.migros.com.tr/sut-1l-p-f4725a -> f4725a
+   *   https://voli.me/proizvod/835 -> 835
    */
   private extractExternalId(url: string): string | undefined {
-    // Match both numeric and hex IDs after -p-
-    const match = url.match(/-p-([a-zA-Z0-9]+)/);
-    return match ? match[1] : undefined;
+    const patterns = [
+      /-p-([a-zA-Z0-9]+)/i, // Migros style
+      /\/proizvod\/([a-zA-Z0-9_-]+)/i, // Voli style
+      /\/product\/([a-zA-Z0-9_-]+)(?:[/?#]|$)/i, // Generic product URL
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match?.[1]) {
+        return match[1];
+      }
+    }
+
+    return undefined;
   }
 
   /**
@@ -344,23 +415,34 @@ export class ProductService {
         normalizedName: normalizeProductName(p.name),
       }));
 
-      // Step 2: Batch fetch existing mappings by external_id
+      // Step 2: Batch fetch existing mappings by external_id and URL
       const externalIds = preparedProducts
         .map(p => p.externalId)
         .filter((id): id is string => !!id);
 
-      const existingMappings = await this.batchFindMappingsByExternalIds(
-        supermarketId,
-        externalIds
-      );
+      const urls = preparedProducts.map(p => p.productUrl);
+
+      const [existingMappingsByExternalId, existingMappingsByUrl] = await Promise.all([
+        this.batchFindMappingsByExternalIds(supermarketId, externalIds),
+        this.batchFindMappingsByUrls(supermarketId, urls),
+      ]);
 
       // Create lookup map for quick access
       const mappingsByExternalId = new Map(
-        existingMappings.map(m => [m.external_id, m])
+        existingMappingsByExternalId
+          .filter(m => !!m.external_id)
+          .map(m => [m.external_id, m])
+      );
+      const mappingsByUrl = new Map(
+        existingMappingsByUrl.map(m => [m.url, m])
       );
 
       // Step 3: Separate products into existing vs new
-      const existingProducts: Array<{ product: typeof preparedProducts[0]; mapping: typeof existingMappings[0] }> = [];
+      const existingProducts: Array<{
+        product: typeof preparedProducts[0];
+        mapping: { id: string; product_id: string; external_id: string | null; url: string };
+      }> = [];
+      const productsForNameBrandLookup: typeof preparedProducts = [];
       const newProducts: typeof preparedProducts = [];
 
       for (const product of preparedProducts) {
@@ -369,8 +451,50 @@ export class ProductService {
             product,
             mapping: mappingsByExternalId.get(product.externalId)!,
           });
+          continue;
+        }
+
+        if (mappingsByUrl.has(product.productUrl)) {
+          existingProducts.push({
+            product,
+            mapping: mappingsByUrl.get(product.productUrl)!,
+          });
+          continue;
+        }
+
+        if (!product.externalId) {
+          productsForNameBrandLookup.push(product);
         } else {
           newProducts.push(product);
+        }
+      }
+
+      // Step 3b: For products without external_id and no URL match, fallback to name+brand matching
+      if (productsForNameBrandLookup.length > 0) {
+        const existingByNameBrand = await this.batchFindMappingsByNameAndBrand(
+          supermarketId,
+          productsForNameBrandLookup
+        );
+
+        const mappingsByNameBrand = new Map(
+          existingByNameBrand.map(m => [
+            this.buildNameBrandKey(m.lookup_normalized_name, m.lookup_brand),
+            m,
+          ])
+        );
+
+        for (const product of productsForNameBrandLookup) {
+          const key = this.buildNameBrandKey(product.normalizedName, product.brand);
+          const mapping = mappingsByNameBrand.get(key);
+
+          if (mapping) {
+            existingProducts.push({
+              product,
+              mapping,
+            });
+          } else {
+            newProducts.push(product);
+          }
         }
       }
 
@@ -422,13 +546,95 @@ export class ProductService {
   private async batchFindMappingsByExternalIds(
     supermarketId: string,
     externalIds: string[]
-  ): Promise<Array<{ id: string; product_id: string; external_id: string }>> {
+  ): Promise<Array<{ id: string; product_id: string; external_id: string | null; url: string }>> {
     if (externalIds.length === 0) return [];
 
-    const result = await query<{ id: string; product_id: string; external_id: string }>(
-      `SELECT id, product_id, external_id FROM product_mappings
+    const result = await query<{ id: string; product_id: string; external_id: string | null; url: string }>(
+      `SELECT id, product_id, external_id, url FROM product_mappings
        WHERE supermarket_id = $1 AND external_id = ANY($2)`,
       [supermarketId, externalIds]
+    );
+
+    return result.rows;
+  }
+
+  /**
+   * Batch find mappings by product URL.
+   * For duplicate URL rows, keeps the most recently created mapping.
+   */
+  private async batchFindMappingsByUrls(
+    supermarketId: string,
+    urls: string[]
+  ): Promise<Array<{ id: string; product_id: string; external_id: string | null; url: string }>> {
+    if (urls.length === 0) return [];
+
+    const result = await query<{ id: string; product_id: string; external_id: string | null; url: string }>(
+      `SELECT DISTINCT ON (pm.url)
+        pm.id,
+        pm.product_id,
+        pm.external_id,
+        pm.url
+       FROM product_mappings pm
+       WHERE pm.supermarket_id = $1
+       AND pm.url = ANY($2)
+       ORDER BY pm.url, pm.id DESC`,
+      [supermarketId, urls]
+    );
+
+    return result.rows;
+  }
+
+  /**
+   * Batch find mappings by normalized name and brand.
+   * If brand is null in lookup input, it matches any brand for that normalized name.
+   */
+  private async batchFindMappingsByNameAndBrand(
+    supermarketId: string,
+    products: Array<ProductData & { normalizedName: string }>
+  ): Promise<Array<{
+    id: string;
+    product_id: string;
+    external_id: string | null;
+    url: string;
+    lookup_normalized_name: string;
+    lookup_brand: string | null;
+  }>> {
+    if (products.length === 0) return [];
+
+    const normalizedNames = products.map(p => p.normalizedName);
+    const brands = products.map(p => p.brand || null);
+
+    const result = await query<{
+      id: string;
+      product_id: string;
+      external_id: string | null;
+      url: string;
+      lookup_normalized_name: string;
+      lookup_brand: string | null;
+    }>(
+      `WITH lookup AS (
+        SELECT DISTINCT normalized_name, brand
+        FROM unnest($2::text[], $3::text[]) AS l(normalized_name, brand)
+      )
+      SELECT DISTINCT ON (l.normalized_name, COALESCE(l.brand, ''))
+        pm.id,
+        pm.product_id,
+        pm.external_id,
+        pm.url,
+        l.normalized_name AS lookup_normalized_name,
+        l.brand AS lookup_brand
+      FROM lookup l
+      INNER JOIN products p
+        ON p.normalized_name = l.normalized_name
+       AND (l.brand IS NULL OR p.brand = l.brand)
+      INNER JOIN product_mappings pm
+        ON pm.product_id = p.id
+       AND pm.supermarket_id = $1
+      ORDER BY
+        l.normalized_name,
+        COALESCE(l.brand, ''),
+        pm.id DESC`,
+      [supermarketId, normalizedNames, brands]
     );
 
     return result.rows;
@@ -440,7 +646,7 @@ export class ProductService {
   private async batchUpdateProducts(
     products: Array<{
       product: ProductData & { normalizedName: string };
-      mapping: { id: string; product_id: string }
+      mapping: { id: string; product_id: string; external_id: string | null; url: string }
     }>
   ): Promise<void> {
     if (products.length === 0) return;
@@ -473,14 +679,25 @@ export class ProductService {
       [productIds, names, normalizedNames, imageUrls, units, unitQuantities]
     );
 
-    // Update mapping last_scraped_at
+    // Update mapping URL + timestamps and backfill external_id when available
     const mappingIds = products.map(p => parseInt(p.mapping.id, 10));
+    const urls = products.map(p => p.product.productUrl);
+    const externalIds = products.map(p => p.product.externalId || null);
+
     await query(
-      `UPDATE product_mappings SET
+      `UPDATE product_mappings AS pm SET
+        url = u.url,
+        external_id = COALESCE(pm.external_id, u.external_id),
         last_scraped_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ANY($1::int[])`,
-      [mappingIds]
+      FROM (
+        SELECT
+          unnest($1::int[]) AS id,
+          unnest($2::text[]) AS url,
+          unnest($3::text[]) AS external_id
+      ) AS u
+      WHERE pm.id = u.id`,
+      [mappingIds, urls, externalIds]
     );
   }
 
