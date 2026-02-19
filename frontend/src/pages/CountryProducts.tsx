@@ -22,13 +22,8 @@ export default function CountryProducts() {
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch((prev) => {
-        if (prev !== search) {
-          setPage(0);
-          return search;
-        }
-        return prev;
-      });
+      setDebouncedSearch((prev) => (prev === search ? prev : search));
+      setPage(0);
     }, 400);
     return () => clearTimeout(timer);
   }, [search]);

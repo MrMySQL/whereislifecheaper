@@ -44,14 +44,9 @@ export default function CanonicalFreshness() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setSearch((prev) => {
-        const nextSearch = searchInput.trim();
-        if (nextSearch !== prev) {
-          setPageInUrl(0);
-          return nextSearch;
-        }
-        return prev;
-      });
+      const nextSearch = searchInput.trim();
+      setSearch((prev) => (prev === nextSearch ? prev : nextSearch));
+      setPageInUrl(0);
     }, 500);
     return () => clearTimeout(timer);
   }, [searchInput]); // eslint-disable-line react-hooks/exhaustive-deps

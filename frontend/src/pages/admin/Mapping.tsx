@@ -407,7 +407,7 @@ export default function Mapping() {
                             <div className="absolute bottom-0 right-3 translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900" />
                           </div>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className="relative inline-flex items-center cursor-pointer" aria-label="Toggle per-unit price">
                           <input
                             type="checkbox"
                             className="sr-only peer"
@@ -635,6 +635,7 @@ function ProductRow({
     if (!product.canonical_product_id) return null;
     return canonicalProducts.find((cp) => cp.id === product.canonical_product_id);
   }, [product.canonical_product_id, canonicalProducts]);
+  const focusRef = useCallback((el: HTMLInputElement | null) => { el?.focus(); }, []);
 
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50">
@@ -742,7 +743,7 @@ function ProductRow({
                       value={searchValue}
                       onChange={(e) => onSearchChange(e.target.value)}
                       className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      ref={(el) => el?.focus()}
+                      ref={focusRef}
                     />
                   </div>
                 </div>
