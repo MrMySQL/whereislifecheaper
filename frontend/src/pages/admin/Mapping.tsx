@@ -382,7 +382,7 @@ export default function Mapping() {
                             <div className="absolute bottom-0 right-3 translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900" />
                           </div>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className="relative inline-flex items-center cursor-pointer" aria-label="Toggle disabled">
                           <input
                             type="checkbox"
                             className="sr-only peer"
@@ -588,7 +588,7 @@ export default function Mapping() {
                 {t('common.page')} {productPage + 1} {t('common.of')} {Math.ceil(productsData.count / PRODUCTS_PER_PAGE)}
               </span>
               <button
-                onClick={() => setPageInUrl(productPage + 1)}
+                onClick={() => setPageInUrl(Math.min(Math.ceil(productsData.count / PRODUCTS_PER_PAGE) - 1, productPage + 1))}
                 disabled={(productPage + 1) * PRODUCTS_PER_PAGE >= productsData.count}
                 className="btn-secondary py-1 px-2 disabled:opacity-50"
               >
@@ -726,6 +726,8 @@ function ProductRow({
               <div
                 className="fixed inset-0 z-10"
                 onClick={onClose}
+                onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+                role="presentation"
               />
 
               {/* Dropdown Content */}
@@ -740,7 +742,7 @@ function ProductRow({
                       value={searchValue}
                       onChange={(e) => onSearchChange(e.target.value)}
                       className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      autoFocus
+                      ref={(el) => el?.focus()}
                     />
                   </div>
                 </div>

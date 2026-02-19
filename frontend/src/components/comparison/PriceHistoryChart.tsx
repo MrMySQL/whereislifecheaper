@@ -32,6 +32,38 @@ const COUNTRY_COLORS: Record<string, string> = {
   UZ: '#4f4f4f', // charcoal-700
 };
 
+function CustomTooltip({ active, payload, label }: {
+  active?: boolean;
+  payload?: Array<{ dataKey: string; value: number; color: string }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-cream-200 p-3">
+      <p className="text-xs text-charcoal-500 mb-2">
+        {formatDateTime(label || '', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })}
+      </p>
+      <div className="space-y-1">
+        {payload.map((entry) => (
+          <div key={entry.dataKey} className="flex items-center gap-2 text-sm">
+            <span
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: entry.color }}
+            />
+            <span className="font-medium text-charcoal-700">{entry.dataKey}:</span>
+            <span className="text-charcoal-900">{'\u20AC'}{entry.value.toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PriceHistoryChart({
   product,
   selectedCountries,
@@ -101,39 +133,6 @@ export default function PriceHistoryChart({
       (a, b) => new Date(a.date as string).getTime() - new Date(b.date as string).getTime()
     );
   }, [priceHistoryQueries, countryProductIds, isLoading, isError]);
-
-  // Custom tooltip component
-  const CustomTooltip = ({ active, payload, label }: {
-    active?: boolean;
-    payload?: Array<{ dataKey: string; value: number; color: string }>;
-    label?: string;
-  }) => {
-    if (!active || !payload?.length) return null;
-
-    return (
-      <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-cream-200 p-3">
-        <p className="text-xs text-charcoal-500 mb-2">
-          {formatDateTime(label || '', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          })}
-        </p>
-        <div className="space-y-1">
-          {payload.map((entry) => (
-            <div key={entry.dataKey} className="flex items-center gap-2 text-sm">
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: entry.color }}
-              />
-              <span className="font-medium text-charcoal-700">{entry.dataKey}:</span>
-              <span className="text-charcoal-900">{'\u20AC'}{entry.value.toFixed(2)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
 
   if (isLoading) {
     return (

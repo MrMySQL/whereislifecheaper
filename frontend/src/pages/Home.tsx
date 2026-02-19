@@ -260,8 +260,8 @@ export default function Home() {
       {/* Country Stats - Compact Cards */}
       {statsLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="card !p-4">
+          {['skeleton-1', 'skeleton-2', 'skeleton-3'].map((id) => (
+            <div key={id} className="card !p-4">
               <div className="flex gap-3">
                 <div className="skeleton h-12 w-12 rounded-xl" />
                 <div className="flex-1 space-y-2">

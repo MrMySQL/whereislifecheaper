@@ -44,14 +44,17 @@ export default function CanonicalFreshness() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const nextSearch = searchInput.trim();
-      if (nextSearch !== search) {
-        setSearch(nextSearch);
-        setPageInUrl(0);
-      }
+      setSearch((prev) => {
+        const nextSearch = searchInput.trim();
+        if (nextSearch !== prev) {
+          setPageInUrl(0);
+          return nextSearch;
+        }
+        return prev;
+      });
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchInput, search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchInput]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, isLoading } = useQuery({
     queryKey: ['canonical-freshness', search, staleOnly, page],
@@ -235,7 +238,7 @@ export default function CanonicalFreshness() {
                 {t('common.page')} {page + 1} {t('common.of')} {Math.ceil(total / ROWS_PER_PAGE)}
               </span>
               <button
-                onClick={() => setPageInUrl(page + 1)}
+                onClick={() => setPageInUrl(Math.min(Math.ceil(total / ROWS_PER_PAGE) - 1, page + 1))}
                 disabled={(page + 1) * ROWS_PER_PAGE >= total}
                 className="btn-secondary py-1 px-2 disabled:opacity-50"
                 aria-label={t('common.goToNextPage')}

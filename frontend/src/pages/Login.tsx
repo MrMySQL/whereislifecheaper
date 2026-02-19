@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { ShoppingCart, AlertCircle } from 'lucide-react';
@@ -7,15 +6,12 @@ import { ShoppingCart, AlertCircle } from 'lucide-react';
 export default function Login() {
   const { t } = useTranslation();
   const { isAuthenticated, login } = useAuth();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const error = searchParams.get('error');
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/');
-    }
-  }, [isAuthenticated, navigate]);
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
