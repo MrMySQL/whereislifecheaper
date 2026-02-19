@@ -382,7 +382,7 @@ export default function Mapping() {
                             <div className="absolute bottom-0 right-3 translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900" />
                           </div>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer" aria-label={t('mapping.toggleDisabled')}>
+                        <label className="relative inline-flex items-center cursor-pointer" aria-label="Toggle disabled">
                           <input
                             type="checkbox"
                             className="sr-only peer"
