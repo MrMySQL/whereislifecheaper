@@ -44,23 +44,25 @@ export class ScraperFactory {
     supermarket: {
       id: string;
       name: string;
-      website_url: string;
-      scraper_class: string;
-      scraper_config: any;
+      website_url: string | null;
+      scraper_class: string | null;
+      scraper_config: Record<string, unknown> | null;
     },
     options?: CreateScraperOptions
   ): BaseScraper {
-    const registration = getScraperRegistration(supermarket.scraper_class);
+    const scraperClass = supermarket.scraper_class ?? '';
+    const registration = getScraperRegistration(scraperClass);
 
     if (!registration) {
-      const error = `Scraper class not found: ${supermarket.scraper_class} for ${supermarket.name}`;
+      const error = `Scraper class not found: ${scraperClass} for ${supermarket.name}`;
       logger.error(error);
       throw new Error(error);
     }
 
     // Get default config from registry
     const defaultConfig = registration.defaultConfig || {};
-    const dbConfig = supermarket.scraper_config || {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dbConfig: any = supermarket.scraper_config || {};
 
     // Get categories - prioritize database config, then default from registry
     let categories: CategoryConfig[] = dbConfig.categories || registration.categories || [];
