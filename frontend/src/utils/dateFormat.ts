@@ -6,11 +6,11 @@ const localeMap: Record<string, string> = {
   uk: 'uk-UA',
 };
 
-export function getLocale(): string {
+function getLocale(): string {
   return localeMap[i18n.language] || 'en-US';
 }
 
-export function formatDate(
+function formatDate(
   date: Date | string | null,
   options?: Intl.DateTimeFormatOptions
 ): string {
@@ -35,7 +35,7 @@ export function formatDateTime(
   return d.toLocaleString(getLocale(), options || defaultOptions);
 }
 
-export function formatShortDate(date: Date | string | null): string {
+function formatShortDate(date: Date | string | null): string {
   return formatDate(date, { month: 'short', day: 'numeric' });
 }
 

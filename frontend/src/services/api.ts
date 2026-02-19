@@ -125,7 +125,7 @@ export const productsApi = {
 };
 
 // Exchange Rates API
-export interface ExchangeRatesResponse {
+interface ExchangeRatesResponse {
   data: Record<string, number>;
   source: string;
   last_updated: string | null;

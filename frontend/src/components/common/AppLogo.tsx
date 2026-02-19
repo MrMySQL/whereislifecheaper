@@ -39,5 +39,3 @@ export function AppLogo({ size = 32, className = '' }: AppLogoProps) {
     </svg>
   );
 }
-
-export default AppLogo;

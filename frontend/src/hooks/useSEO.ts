@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-export interface SEOProps {
+interface SEOProps {
   title?: string;
   description?: string;
   keywords?: string;
@@ -155,37 +155,6 @@ export function generateWebsiteSchema() {
       },
       'query-input': 'required name=search_term_string',
     },
-  };
-}
-
-// Generate structured data for a product comparison
-export function generateComparisonSchema(products: Array<{
-  name: string;
-  prices: Array<{ country: string; price: number; currency: string }>;
-}>) {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'ItemList',
-    name: 'Grocery Price Comparison',
-    description: 'Compare grocery prices across multiple countries',
-    numberOfItems: products.length,
-    itemListElement: products.slice(0, 10).map((product, index) => ({
-      '@type': 'ListItem',
-      position: index + 1,
-      item: {
-        '@type': 'Product',
-        name: product.name,
-        offers: product.prices.map((price) => ({
-          '@type': 'Offer',
-          price: price.price,
-          priceCurrency: price.currency,
-          availableAtOrFrom: {
-            '@type': 'Place',
-            name: price.country,
-          },
-        })),
-      },
-    })),
   };
 }
 

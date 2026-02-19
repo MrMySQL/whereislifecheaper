@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TrendingDown, Tag, Trophy, Package, ImageOff, Store, Calendar, Calculator, ChevronDown } from 'lucide-react';
 import type { CanonicalProduct, CountryPrice, Country } from '../../types';
 import { formatPrice, convertToEUR, findCheapestCountry, isNormalizableUnit, getUnitLabel, formatPackageSize } from '../../utils/currency';
 import { formatFullDate } from '../../utils/dateFormat';
-import PriceHistoryChart from './PriceHistoryChart';
+
+const PriceHistoryChart = lazy(() => import('./PriceHistoryChart'));
 
 interface ComparisonTableProps {
   products: CanonicalProduct[];
@@ -347,8 +348,8 @@ export default function ComparisonTable({
       <div className="card !p-3">
         <div className="space-y-2">
           <div className="skeleton h-8 w-full rounded-lg" />
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="skeleton h-12 w-full rounded-lg" />
+          {['skel-1', 'skel-2', 'skel-3', 'skel-4'].map((id) => (
+            <div key={id} className="skeleton h-12 w-full rounded-lg" />
           ))}
         </div>
       </div>
@@ -514,11 +515,13 @@ export default function ComparisonTable({
                         colSpan={selectedCountries.length + 2}
                         className="p-0 border-b border-cream-100"
                       >
-                        <div className="p-4" onClick={(e) => e.stopPropagation()}>
-                          <PriceHistoryChart
-                            product={product}
-                            selectedCountries={selectedCountries}
-                          />
+                        <div className="p-4" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} role="presentation">
+                          <Suspense fallback={<div className="flex items-center justify-center py-8"><div className="w-5 h-5 border-2 border-terracotta-300 border-t-terracotta-600 rounded-full animate-spin" /></div>}>
+                            <PriceHistoryChart
+                              product={product}
+                              selectedCountries={selectedCountries}
+                            />
+                          </Suspense>
                         </div>
                       </td>
                     </tr>

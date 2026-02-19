@@ -51,13 +51,6 @@ export async function loadExchangeRates(): Promise<void> {
   }
 }
 
-/**
- * Get the current exchange rates (for debugging/display)
- */
-export function getExchangeRates(): Record<string, number> {
-  return { ...exchangeRates };
-}
-
 const currencySymbols: Record<string, string> = {
   USD: '$',
   EUR: '€',
@@ -81,17 +74,6 @@ export function convertToEUR(price: number, currency: string): number {
   return price * rate;
 }
 
-export function formatPriceWithEUR(price: number, currency: string): {
-  local: string;
-  eur: string;
-} {
-  const eurValue = convertToEUR(price, currency);
-  return {
-    local: formatPrice(price, currency),
-    eur: `€${eurValue.toFixed(2)}`,
-  };
-}
-
 /**
  * Check if a unit is normalizable (weight or volume)
  */
@@ -113,19 +95,6 @@ export function getUnitLabel(unit: string | null): string | null {
   if (normalized === 'kg' || normalized === 'g') return 'kg';
   if (normalized === 'l' || normalized === 'ml') return 'L';
   return null;
-}
-
-/**
- * Format price per unit (e.g., "€5.20/kg" or "$3.50/L")
- */
-export function formatPricePerUnit(
-  pricePerUnit: number,
-  currency: string,
-  unit: string | null
-): string {
-  const unitLabel = getUnitLabel(unit);
-  if (!unitLabel) return formatPrice(pricePerUnit, currency);
-  return `${formatPrice(pricePerUnit, currency)}/${unitLabel}`;
 }
 
 /**

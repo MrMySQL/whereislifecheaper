@@ -253,9 +253,9 @@ function CurrencyCard({ code, rate, index }: CurrencyCardProps) {
 function LoadingSkeleton() {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-      {[...Array(6)].map((_, i) => (
+      {['skel-1', 'skel-2', 'skel-3', 'skel-4', 'skel-5', 'skel-6'].map((id, i) => (
         <div
-          key={i}
+          key={id}
           className="rounded-xl border border-cream-200/60 bg-cream-50 p-4 animate-pulse"
           style={{ animationDelay: `${i * 100}ms` }}
         >
