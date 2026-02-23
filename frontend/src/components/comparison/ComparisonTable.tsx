@@ -260,7 +260,7 @@ function PriceCell({ priceData, isCheapest, rowIndex, showPerUnitPrice }: { pric
           </span>
         )}
         {priceData.is_on_sale && (
-          <span className="inline-flex items-center gap-0.5 text-[10px] text-terracotta-600">
+          <span className="flex items-center justify-center gap-0.5 text-[10px] text-terracotta-600">
             <Tag className="h-2.5 w-2.5" />
             {t('comparison.sale')}
           </span>
