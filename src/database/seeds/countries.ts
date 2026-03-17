@@ -86,6 +86,12 @@ export const countriesData: CountrySeedData[] = [
     currency_code: 'RON',
     flag_emoji: '🇷🇴',
   },
+  {
+    name: 'Italy',
+    code: 'IT',
+    currency_code: 'EUR',
+    flag_emoji: '🇮🇹',
+  },
 ];
 
 export async function seedCountries(): Promise<void> {
