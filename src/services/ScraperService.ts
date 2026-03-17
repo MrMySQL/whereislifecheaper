@@ -1,7 +1,8 @@
 import { BaseScraper } from '../scrapers/base/BaseScraper';
 import { ScraperFactory, CreateScraperOptions } from '../scrapers/base/ScraperFactory';
 import { ProductService } from './ProductService';
-import { supermarketRepository, scrapeLogRepository } from '../repositories';
+import { SupermarketRepository, ScrapeLogRepository } from '../repositories';
+import { supermarketRepository as defaultSupermarketRepo, scrapeLogRepository as defaultScrapeLogRepo } from '../repositories';
 import { scraperLogger } from '../utils/logger';
 import { ProductData, ScrapeResult, CategoryConfig, PageInfo } from '../types/scraper.types';
 import { calculatePricePerUnit } from '../utils/normalizer';
@@ -14,9 +15,17 @@ export interface RunScraperOptions {
 
 export class ScraperService {
   private productService: ProductService;
+  private supermarketRepository: SupermarketRepository;
+  private scrapeLogRepository: ScrapeLogRepository;
 
-  constructor() {
-    this.productService = new ProductService();
+  constructor(
+    productService?: ProductService,
+    supermarketRepo?: SupermarketRepository,
+    scrapeLogRepo?: ScrapeLogRepository,
+  ) {
+    this.productService = productService ?? new ProductService();
+    this.supermarketRepository = supermarketRepo ?? defaultSupermarketRepo;
+    this.scrapeLogRepository = scrapeLogRepo ?? defaultScrapeLogRepo;
   }
 
   async runScraper(supermarketId: string, options?: RunScraperOptions): Promise<ScrapeResult> {
@@ -32,7 +41,7 @@ export class ScraperService {
     let totalStoredCount = 0;
 
     try {
-      const supermarket = await supermarketRepository.findById(supermarketId);
+      const supermarket = await this.supermarketRepository.findById(supermarketId);
 
       if (!supermarket) {
         throw new Error(`Supermarket not found: ${supermarketId}`);
@@ -42,7 +51,7 @@ export class ScraperService {
         return this.buildEmptyResult(supermarketId, 'Supermarket not active');
       }
 
-      scrapeLogId = await scrapeLogRepository.create(supermarketId, 'running');
+      scrapeLogId = await this.scrapeLogRepository.create(supermarketId, 'running');
 
       const scraperOptions: CreateScraperOptions = { categoryIds: options?.categoryIds };
       scraper = ScraperFactory.createFromSupermarket(supermarket, scraperOptions);
@@ -65,7 +74,7 @@ export class ScraperService {
       );
 
       if (scrapeLogId) {
-        await scrapeLogRepository.update(scrapeLogId, 'success', {
+        await this.scrapeLogRepository.update(scrapeLogId, 'success', {
           productsScraped: totalStoredCount,
           duration: Date.now() - startTime,
         });
@@ -95,7 +104,7 @@ export class ScraperService {
       scraperLogger.error(`Scraping failed for supermarket ${supermarketId}:`, error);
 
       if (scrapeLogId) {
-        await scrapeLogRepository.update(scrapeLogId, 'failed', {
+        await this.scrapeLogRepository.update(scrapeLogId, 'failed', {
           error: errorMessage,
           duration: Date.now() - startTime,
         });
@@ -110,7 +119,7 @@ export class ScraperService {
   async runAllScrapers(concurrency: number = 3): Promise<ScrapeResult[]> {
     scraperLogger.info(`Starting scrape for all active supermarkets (concurrency: ${concurrency})`);
 
-    const supermarkets = await supermarketRepository.getActive();
+    const supermarkets = await this.supermarketRepository.getActive();
     scraperLogger.info(`Found ${supermarkets.length} active supermarkets to scrape`);
 
     const results: ScrapeResult[] = [];
@@ -173,15 +182,15 @@ export class ScraperService {
   }
 
   async getScrapeHistory(supermarketId: string, limit: number = 10): Promise<Record<string, unknown>[]> {
-    return scrapeLogRepository.getHistoryForSupermarket(supermarketId, limit);
+    return this.scrapeLogRepository.getHistoryForSupermarket(supermarketId, limit);
   }
 
   async getLatestStats(): Promise<Record<string, unknown>[]> {
-    return scrapeLogRepository.getLatestStats();
+    return this.scrapeLogRepository.getLatestStats();
   }
 
   async getAvailableCategories(supermarketId: string): Promise<CategoryConfig[]> {
-    const supermarket = await supermarketRepository.findById(supermarketId);
+    const supermarket = await this.supermarketRepository.findById(supermarketId);
     if (!supermarket) return [];
     return getScraperCategories(supermarket.scraper_class ?? '');
   }
