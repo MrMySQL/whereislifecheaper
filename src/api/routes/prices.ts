@@ -1,30 +1,34 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { priceRepository } from '../../repositories';
+import { validateQuery, paginationSchema } from '../middleware/validate';
 
 const router = Router();
 
-router.get('/latest', async (req, res, next) => {
+const latestPricesSchema = paginationSchema.extend({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  country_id: z.string().uuid().optional(),
+  supermarket_id: z.string().uuid().optional(),
+});
+
+const compareSchema = paginationSchema.extend({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  search: z.string().optional(),
+});
+
+router.get('/latest', validateQuery(latestPricesSchema), async (req, res, next) => {
   try {
-    const { country_id, supermarket_id, limit = '100', offset = '0' } = req.query;
+    const { country_id, supermarket_id, limit, offset } = req.validatedQuery!;
 
     const data = await priceRepository.getLatest(
-      {
-        countryId: country_id as string | undefined,
-        supermarketId: supermarket_id as string | undefined,
-      },
-      {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      }
+      { countryId: country_id, supermarketId: supermarket_id },
+      { limit, offset }
     );
 
     res.json({
       data,
       count: data.length,
-      pagination: {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      },
+      pagination: { limit, offset },
     });
   } catch (error) {
     next(error);
@@ -44,7 +48,7 @@ router.get('/basket', async (req, res, next) => {
   try {
     const { products } = req.query;
 
-    if (!products) {
+    if (!products || typeof products !== 'string') {
       res.status(400).json({
         error: 'Bad Request',
         message: 'products query parameter is required (comma-separated product names)',
@@ -52,7 +56,15 @@ router.get('/basket', async (req, res, next) => {
       return;
     }
 
-    const productList = (products as string).split(',').map(p => p.trim());
+    const productList = products.split(',').map(p => p.trim()).filter(Boolean);
+    if (productList.length === 0) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'At least one product name is required',
+      });
+      return;
+    }
+
     const rows = await priceRepository.getBasket(productList);
 
     const byCountry = rows.reduce((acc: Record<string, any>, row: any) => {
@@ -86,13 +98,13 @@ router.get('/basket', async (req, res, next) => {
   }
 });
 
-router.get('/compare', async (req, res, next) => {
+router.get('/compare', validateQuery(compareSchema), async (req, res, next) => {
   try {
-    const { search, limit = '100', offset = '0' } = req.query;
+    const { search, limit, offset } = req.validatedQuery!;
 
     const rows = await priceRepository.compare(
-      { search: search as string | undefined },
-      { limit: parseInt(limit as string), offset: parseInt(offset as string) }
+      { search },
+      { limit, offset }
     );
 
     const productMap = new Map<string, any>();
@@ -136,10 +148,7 @@ router.get('/compare', async (req, res, next) => {
     res.json({
       data: comparison,
       total: comparison.length,
-      pagination: {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      },
+      pagination: { limit, offset },
     });
   } catch (error) {
     next(error);

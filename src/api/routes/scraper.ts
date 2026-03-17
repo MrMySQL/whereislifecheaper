@@ -1,11 +1,18 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { ScraperService } from '../../services/ScraperService';
 import { supermarketRepository, scrapeLogRepository } from '../../repositories';
 import { scraperLogger } from '../../utils/logger';
 import { isAdmin } from '../../auth';
+import { validateQuery, paginationSchema } from '../middleware/validate';
 
 const router = Router();
 const scraperService = new ScraperService();
+
+const logsSchema = paginationSchema.extend({
+  supermarket_id: z.string().uuid().optional(),
+  status: z.string().optional(),
+});
 
 router.get('/categories/:supermarketId', async (req, res, next) => {
   try {
@@ -40,7 +47,7 @@ router.post('/trigger', isAdmin, async (req, res, next) => {
       if (categories && Array.isArray(categories) && categories.length > 0) {
         const availableCategories = await scraperService.getAvailableCategories(supermarket_id);
         const availableIds = availableCategories.map(c => c.id);
-        const invalidCategories = categories.filter(c => !availableIds.includes(c));
+        const invalidCategories = categories.filter((c: string) => !availableIds.includes(c));
         if (invalidCategories.length > 0) {
           res.status(400).json({
             error: 'Bad Request',
@@ -93,28 +100,19 @@ router.get('/status', isAdmin, async (_req, res, next) => {
   }
 });
 
-router.get('/logs', isAdmin, async (req, res, next) => {
+router.get('/logs', isAdmin, validateQuery(logsSchema), async (req, res, next) => {
   try {
-    const { supermarket_id, status, limit = '50', offset = '0' } = req.query;
+    const { supermarket_id, status, limit, offset } = req.validatedQuery!;
 
     const data = await scrapeLogRepository.getLogs(
-      {
-        supermarketId: supermarket_id as string | undefined,
-        status: status as string | undefined,
-      },
-      {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      }
+      { supermarketId: supermarket_id, status },
+      { limit, offset }
     );
 
     res.json({
       data,
       count: data.length,
-      pagination: {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      },
+      pagination: { limit, offset },
     });
   } catch (error) {
     next(error);

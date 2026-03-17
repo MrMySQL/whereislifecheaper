@@ -1,31 +1,34 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { productRepository } from '../../repositories';
+import { validateQuery, paginationSchema } from '../middleware/validate';
 
 const router = Router();
 
-router.get('/', async (req, res, next) => {
+const productListSchema = paginationSchema.extend({
+  search: z.string().optional(),
+  category_id: z.string().uuid().optional(),
+  brand: z.string().optional(),
+});
+
+const priceHistoryQuerySchema = z.object({
+  supermarket_id: z.string().uuid().optional(),
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
+
+router.get('/', validateQuery(productListSchema), async (req, res, next) => {
   try {
-    const { search, category_id, brand, limit = '50', offset = '0' } = req.query;
+    const { search, category_id, brand, limit, offset } = req.validatedQuery!;
 
     const data = await productRepository.findAll(
-      {
-        search: search as string | undefined,
-        categoryId: category_id as string | undefined,
-        brand: brand as string | undefined,
-      },
-      {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      }
+      { search, categoryId: category_id, brand },
+      { limit, offset }
     );
 
     res.json({
       data,
       count: data.length,
-      pagination: {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      },
+      pagination: { limit, offset },
     });
   } catch (error) {
     next(error);
@@ -36,7 +39,7 @@ router.get('/compare/countries', async (req, res, next) => {
   try {
     const { product_name } = req.query;
 
-    if (!product_name) {
+    if (!product_name || typeof product_name !== 'string') {
       res.status(400).json({
         error: 'Bad Request',
         message: 'product_name query parameter is required',
@@ -44,7 +47,7 @@ router.get('/compare/countries', async (req, res, next) => {
       return;
     }
 
-    const rows = await productRepository.compareByCountry(product_name as string);
+    const rows = await productRepository.compareByCountry(product_name);
 
     const byCountry = rows.reduce((acc: Record<string, any>, row: any) => {
       const countryKey = row.country_code;
@@ -97,14 +100,14 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.get('/:id/price-history', async (req, res, next) => {
+router.get('/:id/price-history', validateQuery(priceHistoryQuerySchema), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { supermarket_id, days = '30' } = req.query;
+    const { supermarket_id, days } = req.validatedQuery!;
 
     const data = await productRepository.getPriceHistory(id, {
-      supermarketId: supermarket_id as string | undefined,
-      days: parseInt(days as string),
+      supermarketId: supermarket_id,
+      days,
     });
 
     res.json({ data, count: data.length });

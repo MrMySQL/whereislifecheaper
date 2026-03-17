@@ -1,61 +1,92 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { canonicalProductRepository } from '../../repositories';
 import { isAdmin } from '../../auth';
+import { validateQuery, validateBody, paginationSchema } from '../middleware/validate';
 
 const router = Router();
+
+const mappedProductsSchema = paginationSchema.extend({
+  search: z.string().optional(),
+  stale_only: z.enum(['true', 'false']).default('false'),
+  stale_days: z.coerce.number().int().min(1).default(7),
+});
+
+const comparisonSchema = paginationSchema.extend({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  search: z.string().optional(),
+});
+
+const productsByCountrySchema = paginationSchema.extend({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  search: z.string().optional(),
+  supermarket_id: z.string().uuid().optional(),
+  mapped_only: z.enum(['true', 'false']).optional(),
+});
+
+const createCanonicalSchema = z.object({
+  name: z.string().min(1, 'name is required'),
+  description: z.string().optional(),
+  category_id: z.string().uuid().optional(),
+  show_per_unit_price: z.boolean().optional(),
+});
+
+const linkProductSchema = z.object({
+  product_id: z.string().min(1, 'product_id is required'),
+  canonical_product_id: z.string().nullable().optional(),
+});
+
+const updateCanonicalSchema = z.object({
+  show_per_unit_price: z.boolean().optional(),
+  disabled: z.boolean().optional(),
+}).refine(
+  data => data.show_per_unit_price !== undefined || data.disabled !== undefined,
+  { message: 'At least one field (show_per_unit_price or disabled) must be provided' }
+);
 
 router.get('/', async (req, res, next) => {
   try {
     const { search } = req.query;
-    const data = await canonicalProductRepository.findAll(search as string | undefined);
+    const data = await canonicalProductRepository.findAll(
+      typeof search === 'string' ? search : undefined
+    );
     res.json({ data, count: data.length });
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/mapped-products', isAdmin, async (req, res, next) => {
+router.get('/mapped-products', isAdmin, validateQuery(mappedProductsSchema), async (req, res, next) => {
   try {
-    const { search, stale_only = 'false', stale_days = '7', limit = '50', offset = '0' } = req.query;
-
-    const staleDaysRaw = parseInt(stale_days as string, 10);
-    const staleDaysThreshold = Number.isFinite(staleDaysRaw) && staleDaysRaw > 0 ? staleDaysRaw : 7;
-    const limitRaw = parseInt(limit as string, 10);
-    const offsetRaw = parseInt(offset as string, 10);
-    const limitNum = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50;
-    const offsetNum = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+    const { search, stale_only, stale_days, limit, offset } = req.validatedQuery!;
 
     const { data, total } = await canonicalProductRepository.getMappedProducts(
       {
-        search: typeof search === 'string' ? search.trim() : undefined,
+        search: search?.trim(),
         staleOnly: stale_only === 'true',
-        staleDays: staleDaysThreshold,
+        staleDays: stale_days,
       },
-      { limit: limitNum, offset: offsetNum }
+      { limit, offset }
     );
 
     res.json({
       data,
       count: total,
-      pagination: { limit: limitNum, offset: offsetNum },
-      meta: { stale_days_threshold: staleDaysThreshold },
+      pagination: { limit, offset },
+      meta: { stale_days_threshold: stale_days },
     });
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/comparison', async (req, res, next) => {
+router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next) => {
   try {
-    const { search, limit = '100', offset = '0' } = req.query;
-    const limitRaw = parseInt(limit as string, 10);
-    const offsetRaw = parseInt(offset as string, 10);
-    const limitNum = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 100;
-    const offsetNum = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+    const { search, limit, offset } = req.validatedQuery!;
 
     const { data: rows, total } = await canonicalProductRepository.getComparison(
-      { search: typeof search === 'string' ? search.trim() : undefined },
-      { limit: limitNum, offset: offsetNum }
+      { search: search?.trim() },
+      { limit, offset }
     );
 
     // Group by canonical product and organize by country
@@ -108,13 +139,13 @@ router.get('/comparison', async (req, res, next) => {
           if (products.length === 0) return;
 
           const productCount = products.length;
-          const totalPrice = products.reduce((sum, p) => sum + p.price, 0);
+          const totalPrice = products.reduce((sum: number, p: any) => sum + p.price, 0);
           const avgPrice = totalPrice / productCount;
 
-          const productsWithPpu = products.filter(p => p.price_per_unit != null);
+          const productsWithPpu = products.filter((p: any) => p.price_per_unit != null);
           const avgPricePerUnit =
             productsWithPpu.length > 0
-              ? productsWithPpu.reduce((sum, p) => sum + p.price_per_unit, 0) / productsWithPpu.length
+              ? productsWithPpu.reduce((sum: number, p: any) => sum + p.price_per_unit, 0) / productsWithPpu.length
               : null;
 
           const firstProduct = products[0];
@@ -130,12 +161,12 @@ router.get('/comparison', async (req, res, next) => {
             price_per_unit: avgPricePerUnit,
             currency: firstProduct.currency,
             original_price: firstProduct.original_price,
-            is_on_sale: products.some(p => p.is_on_sale),
+            is_on_sale: products.some((p: any) => p.is_on_sale),
             supermarket: firstProduct.supermarket,
             country_name: firstProduct.country_name,
             scraped_at: firstProduct.scraped_at,
             product_count: productCount,
-            products: products.map(p => ({
+            products: products.map((p: any) => ({
               product_id: p.product_id,
               product_name: p.product_name,
               brand: p.brand,
@@ -160,51 +191,40 @@ router.get('/comparison', async (req, res, next) => {
       country_count: Object.keys(p.prices_by_country).length,
     }));
 
-    res.json({ data: comparison, total, pagination: { limit: limitNum, offset: offsetNum } });
+    res.json({ data: comparison, total, pagination: { limit, offset } });
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/products-by-country/:countryId', async (req, res, next) => {
+router.get('/products-by-country/:countryId', validateQuery(productsByCountrySchema), async (req, res, next) => {
   try {
     const { countryId } = req.params;
-    const { search, supermarket_id, mapped_only, limit = '100', offset = '0' } = req.query;
+    const { search, supermarket_id, mapped_only, limit, offset } = req.validatedQuery!;
 
     const { data, total } = await canonicalProductRepository.getProductsByCountry(
       countryId,
       {
-        search: search as string | undefined,
-        supermarketId: supermarket_id as string | undefined,
+        search,
+        supermarketId: supermarket_id,
         mappedOnly: mapped_only === 'true',
       },
-      {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      }
+      { limit, offset }
     );
 
     res.json({
       data,
       count: total,
-      pagination: {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      },
+      pagination: { limit, offset },
     });
   } catch (error) {
     next(error);
   }
 });
 
-router.post('/', isAdmin, async (req, res, next) => {
+router.post('/', isAdmin, validateBody(createCanonicalSchema), async (req, res, next) => {
   try {
-    const { name, description, category_id, show_per_unit_price } = req.body;
-
-    if (!name) {
-      res.status(400).json({ error: 'Bad Request', message: 'name is required' });
-      return;
-    }
+    const { name, description, category_id, show_per_unit_price } = req.validatedBody!;
 
     const data = await canonicalProductRepository.create({
       name,
@@ -219,14 +239,9 @@ router.post('/', isAdmin, async (req, res, next) => {
   }
 });
 
-router.put('/link', isAdmin, async (req, res, next) => {
+router.put('/link', isAdmin, validateBody(linkProductSchema), async (req, res, next) => {
   try {
-    const { product_id, canonical_product_id } = req.body;
-
-    if (!product_id) {
-      res.status(400).json({ error: 'Bad Request', message: 'product_id is required' });
-      return;
-    }
+    const { product_id, canonical_product_id } = req.validatedBody!;
 
     const data = await canonicalProductRepository.linkProduct(
       product_id,
@@ -247,15 +262,10 @@ router.put('/link', isAdmin, async (req, res, next) => {
   }
 });
 
-router.patch('/:id', isAdmin, async (req, res, next) => {
+router.patch('/:id', isAdmin, validateBody(updateCanonicalSchema), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { show_per_unit_price, disabled } = req.body;
-
-    if (show_per_unit_price === undefined && disabled === undefined) {
-      res.status(400).json({ error: 'Bad Request', message: 'No fields to update' });
-      return;
-    }
+    const { show_per_unit_price, disabled } = req.validatedBody!;
 
     const data = await canonicalProductRepository.update(id, {
       showPerUnitPrice: show_per_unit_price,

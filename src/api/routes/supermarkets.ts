@@ -1,14 +1,25 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { supermarketRepository, scrapeLogRepository, productRepository } from '../../repositories';
+import { validateQuery, paginationSchema } from '../middleware/validate';
 
 const router = Router();
 
-router.get('/', async (req, res, next) => {
+const supermarketListSchema = z.object({
+  country_id: z.string().uuid().optional(),
+  active_only: z.enum(['true', 'false']).optional(),
+});
+
+const supermarketProductsSchema = paginationSchema.extend({
+  search: z.string().optional(),
+});
+
+router.get('/', validateQuery(supermarketListSchema), async (req, res, next) => {
   try {
-    const { country_id, active_only } = req.query;
+    const { country_id, active_only } = req.validatedQuery!;
 
     const data = await supermarketRepository.findAll({
-      countryId: country_id as string | undefined,
+      countryId: country_id,
       activeOnly: active_only === 'true',
     });
 
@@ -38,24 +49,21 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.get('/:id/products', async (req, res, next) => {
+router.get('/:id/products', validateQuery(supermarketProductsSchema), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { limit = '50', offset = '0', search } = req.query;
+    const { search, limit, offset } = req.validatedQuery!;
 
     const data = await productRepository.getProductsForSupermarket(
       id,
-      { search: search as string | undefined },
-      { limit: parseInt(limit as string), offset: parseInt(offset as string) }
+      { search },
+      { limit, offset }
     );
 
     res.json({
       data,
       count: data.length,
-      pagination: {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      },
+      pagination: { limit, offset },
     });
   } catch (error) {
     next(error);
