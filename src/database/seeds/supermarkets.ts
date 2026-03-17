@@ -219,6 +219,14 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'SezamoScraper',
     is_active: true,
   },
+  // Italy
+  {
+    country_code: 'IT',
+    name: 'Carrefour',
+    website_url: 'https://www.carrefour.it',
+    scraper_class: 'CarrefourItScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {
