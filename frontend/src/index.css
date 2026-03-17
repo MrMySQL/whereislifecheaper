@@ -137,23 +137,6 @@
     @apply badge bg-saffron-100 text-saffron-700;
   }
 
-  /* Animated gradient background */
-  .gradient-animated {
-    background: linear-gradient(
-      135deg,
-      rgba(212, 168, 75, 0.15) 0%,
-      rgba(196, 93, 53, 0.1) 50%,
-      rgba(74, 93, 58, 0.12) 100%
-    );
-    background-size: 200% 200%;
-    animation: gradientShift 15s ease infinite;
-  }
-
-  @keyframes gradientShift {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-  }
 
   /* Decorative elements */
   .decorative-circle {
@@ -214,26 +197,6 @@
     perspective: 1000px;
   }
 
-  /* Hero decorative shapes */
-  .hero-shape {
-    @apply absolute pointer-events-none;
-  }
-
-  .hero-shape-1 {
-    @apply hero-shape w-72 h-72 -top-20 -right-20 bg-terracotta-300/20 rounded-full;
-    filter: blur(80px);
-  }
-
-  .hero-shape-2 {
-    @apply hero-shape w-96 h-96 -bottom-40 -left-40 bg-saffron-300/20 rounded-full;
-    filter: blur(100px);
-  }
-
-  .hero-shape-3 {
-    @apply hero-shape w-64 h-64 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
-           bg-olive-300/15 rounded-full;
-    filter: blur(70px);
-  }
 
   /* Scrollbar styling */
   ::-webkit-scrollbar {

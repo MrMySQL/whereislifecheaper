@@ -111,11 +111,9 @@ export default function Home() {
   return (
     <div className="space-y-5">
       {/* Compact Hero Section */}
-      <section className="relative overflow-hidden rounded-2xl gradient-animated px-5 py-5">
-        <div className="hero-shape-1 !w-48 !h-48" />
-        <div className="hero-shape-2 !w-56 !h-56" />
+      <section className="rounded-2xl bg-saffron-50 px-5 py-5">
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/80 backdrop-blur-sm border border-cream-200 mb-3 text-xs">
               <Sparkles className="w-3 h-3 text-saffron-500" />
