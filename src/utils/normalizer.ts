@@ -51,7 +51,7 @@ export function extractQuantity(name: string): QuantityInfo | null {
     // Grams: 500g, 500 g
     /(\d+)\s*(g|gram|gr)s?(?!\s*r)/i, // Negative lookahead for 'gr' followed by 'r' (grams vs greater)
     // Pieces: 6x330ml, 12pcs, 6 pieces
-    /(\d+)\s*(?:x|pcs|pieces|adet)/i,
+    /(\d+)\s*(x|pcs|pieces|adet)/i,
   ];
 
   for (const pattern of patterns) {
@@ -165,9 +165,9 @@ export function parsePrice(priceString: string): number | null {
 
   // Remove currency symbols, currency codes, and extra spaces
   let cleaned = priceString
-    .replace(/[€$£¥₺₽]/g, '')           // Currency symbols
+    .replace(/[€$£¥₺₽₫]/g, '')           // Currency symbols
     .replace(/\bRM\b/gi, '')             // Malaysian Ringgit symbol
-    .replace(/\b(TL|TRY|EUR|USD|GBP|RUB|UZS|MYR)\b/gi, '')  // Currency codes
+    .replace(/\b(TL|TRY|EUR|USD|GBP|RUB|UZS|MYR|VND)\b/gi, '')  // Currency codes
     .replace(/\s/g, '')
     .trim();
 

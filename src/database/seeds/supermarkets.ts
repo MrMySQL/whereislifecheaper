@@ -189,6 +189,28 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'AuchanMoscowScraper',
     is_active: true,
   },
+  // Vietnam
+  {
+    country_code: 'VN',
+    name: 'Annam Gourmet',
+    website_url: 'https://shop.annam-gourmet.com/hn-xd',
+    scraper_class: 'AnnamGourmetScraper',
+    is_active: true,
+  },
+  {
+    country_code: 'VN',
+    name: 'Organica',
+    website_url: 'https://www.organica.vn',
+    scraper_class: 'OrganicaScraper',
+    is_active: false,
+  },
+  {
+    country_code: 'VN',
+    name: 'WinMart',
+    website_url: 'https://winmart.vn',
+    scraper_class: 'WinMartScraper',
+    is_active: false,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {

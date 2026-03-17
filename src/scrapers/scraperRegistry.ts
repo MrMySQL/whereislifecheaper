@@ -16,6 +16,8 @@ import { WoltBelaFrutaScraper, woltBelaFrutaConfig, woltBelaFrutaCategories } fr
 import { WoltEcoMarketKikaScraper, woltEcoMarketKikaConfig, woltEcoMarketKikaCategories } from './albania/WoltEcoMarketKikaScraper';
 import { GurkeralScraper, gurkeralConfig, gurkeralCategories } from './austria/GurkeralScraper';
 import { AuchanMoscowScraper, auchanMoscowConfig, auchanMoscowCategories } from './russia/AuchanMoscowScraper';
+import { OrganicaScraper, organicaConfig, organicaCategories } from './vietnam/OrganicaScraper';
+import { AnnamGourmetScraper, annamGourmetConfig, annamGourmetCategories } from './vietnam/AnnamGourmetScraper';
 
 /**
  * Scraper registration entry containing all metadata for a scraper
@@ -183,6 +185,24 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: AuchanMoscowScraper,
       defaultConfig: auchanMoscowConfig,
       categories: auchanMoscowCategories,
+    },
+  ],
+  [
+    'OrganicaScraper',
+    {
+      className: 'OrganicaScraper',
+      scraperClass: OrganicaScraper,
+      defaultConfig: organicaConfig,
+      categories: organicaCategories,
+    },
+  ],
+  [
+    'AnnamGourmetScraper',
+    {
+      className: 'AnnamGourmetScraper',
+      scraperClass: AnnamGourmetScraper,
+      defaultConfig: annamGourmetConfig,
+      categories: annamGourmetCategories,
     },
   ],
 ]);
