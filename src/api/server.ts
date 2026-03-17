@@ -33,7 +33,7 @@ app.use(cors({
   origin: config.api.env === 'development' ? ['http://localhost:5173', 'http://localhost:3000'] : true,
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Session middleware
 const PgSession = connectPgSimple(session);
