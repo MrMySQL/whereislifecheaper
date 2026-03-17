@@ -26,7 +26,7 @@ const app = express();
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // Disable for development
+  contentSecurityPolicy: config.api.env === 'production' ? undefined : false,
 }));
 app.use(cors({
   origin: config.api.env === 'development' ? ['http://localhost:5173', 'http://localhost:3000'] : true,
