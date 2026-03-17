@@ -18,6 +18,7 @@ import { GurkeralScraper, gurkeralConfig, gurkeralCategories } from './austria/G
 import { AuchanMoscowScraper, auchanMoscowConfig, auchanMoscowCategories } from './russia/AuchanMoscowScraper';
 import { OrganicaScraper, organicaConfig, organicaCategories } from './vietnam/OrganicaScraper';
 import { AnnamGourmetScraper, annamGourmetConfig, annamGourmetCategories } from './vietnam/AnnamGourmetScraper';
+import { WinMartScraper, winMartConfig, winMartCategories } from './vietnam/WinMartScraper';
 
 /**
  * Scraper registration entry containing all metadata for a scraper
@@ -203,6 +204,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: AnnamGourmetScraper,
       defaultConfig: annamGourmetConfig,
       categories: annamGourmetCategories,
+    },
+  ],
+  [
+    'WinMartScraper',
+    {
+      className: 'WinMartScraper',
+      scraperClass: WinMartScraper,
+      defaultConfig: winMartConfig,
+      categories: winMartCategories,
     },
   ],
 ]);
