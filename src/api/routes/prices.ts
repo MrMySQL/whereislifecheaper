@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { priceRepository } from '../../repositories';
+import { BasketEntry } from '../../types/db.types';
 import { validateQuery, paginationSchema } from '../middleware/validate';
 
 const router = Router();
@@ -67,7 +68,16 @@ router.get('/basket', async (req, res, next) => {
 
     const rows = await priceRepository.getBasket(productList);
 
-    const byCountry = rows.reduce((acc: Record<string, any>, row: any) => {
+    interface BasketByCountry {
+      country_id: string;
+      country_name: string;
+      country_code: string;
+      currency: string;
+      items: { product_name: string; price: number; supermarket: string }[];
+      total: number;
+    }
+
+    const byCountry = rows.reduce((acc: Record<string, BasketByCountry>, row: BasketEntry) => {
       const countryKey = row.country_code;
       if (!acc[countryKey]) {
         acc[countryKey] = {
@@ -88,7 +98,7 @@ router.get('/basket', async (req, res, next) => {
       return acc;
     }, {});
 
-    Object.values(byCountry).forEach((country: any) => {
+    Object.values(byCountry).forEach(country => {
       country.total = Math.round(country.total * 100) / 100;
     });
 
@@ -107,9 +117,26 @@ router.get('/compare', validateQuery(compareSchema), async (req, res, next) => {
       { limit, offset }
     );
 
-    const productMap = new Map<string, any>();
+    interface CountryPrice {
+      price: number;
+      currency: string;
+      original_price: number | null;
+      is_on_sale: boolean;
+      supermarket: string;
+      country_name: string;
+      scraped_at: Date;
+    }
+    interface CompareProduct {
+      product_name: string;
+      brand: string | null;
+      unit: string | null;
+      unit_quantity: number | null;
+      prices_by_country: Record<string, CountryPrice>;
+    }
 
-    rows.forEach((row: any) => {
+    const productMap = new Map<string, CompareProduct>();
+
+    rows.forEach((row) => {
       const key = row.normalized_name || row.product_name.toLowerCase();
 
       if (!productMap.has(key)) {
@@ -122,7 +149,7 @@ router.get('/compare', validateQuery(compareSchema), async (req, res, next) => {
         });
       }
 
-      const product = productMap.get(key);
+      const product = productMap.get(key)!;
       const countryCode = row.country_code;
 
       if (
@@ -130,9 +157,9 @@ router.get('/compare', validateQuery(compareSchema), async (req, res, next) => {
         row.price < product.prices_by_country[countryCode].price
       ) {
         product.prices_by_country[countryCode] = {
-          price: parseFloat(row.price),
+          price: row.price,
           currency: row.currency || row.currency_code,
-          original_price: row.original_price ? parseFloat(row.original_price) : null,
+          original_price: row.original_price,
           is_on_sale: row.is_on_sale,
           supermarket: row.supermarket_name,
           country_name: row.country_name,

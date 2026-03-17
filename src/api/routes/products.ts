@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { productRepository } from '../../repositories';
+import { CountryComparisonEntry } from '../../types/db.types';
 import { validateQuery, paginationSchema } from '../middleware/validate';
 
 const router = Router();
@@ -49,7 +50,7 @@ router.get('/compare/countries', async (req, res, next) => {
 
     const rows = await productRepository.compareByCountry(product_name);
 
-    const byCountry = rows.reduce((acc: Record<string, any>, row: any) => {
+    const byCountry = rows.reduce((acc: Record<string, { country_id: string; country_name: string; country_code: string; currency: string; products: Partial<CountryComparisonEntry>[] }>, row) => {
       const countryKey = row.country_code;
       if (!acc[countryKey]) {
         acc[countryKey] = {
