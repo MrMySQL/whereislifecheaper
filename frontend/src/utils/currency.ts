@@ -10,6 +10,8 @@ const FALLBACK_RATES: Record<string, number> = {
   MYR: 0.19865000,
   ALL: 0.01034616,
   RUB: 0.00952381, // ~105 RUB per EUR
+  VND: 0.0000362,  // ~27,600 VND per EUR
+  RON: 0.20080000, // ~4.98 RON per EUR
 };
 
 // Current exchange rates (mutable, updated via loadExchangeRates)
@@ -61,6 +63,7 @@ const currencySymbols: Record<string, string> = {
   MYR: 'RM',
   ALL: 'L',
   RUB: '₽',
+  RON: 'lei',
 };
 
 export function formatPrice(price: number | string, currency: string): string {
