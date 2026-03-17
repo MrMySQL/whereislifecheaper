@@ -211,6 +211,14 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'WinMartScraper',
     is_active: true,
   },
+  // Romania
+  {
+    country_code: 'RO',
+    name: 'Sezamo',
+    website_url: 'https://www.sezamo.ro',
+    scraper_class: 'SezamoScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {
