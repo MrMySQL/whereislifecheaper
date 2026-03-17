@@ -47,8 +47,8 @@ export const paginationSchema = z.object({
 declare global {
   namespace Express {
     interface Request {
-      validatedQuery?: any;
-      validatedBody?: any;
+      validatedQuery?: unknown;
+      validatedBody?: unknown;
     }
   }
 }

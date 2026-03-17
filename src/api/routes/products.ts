@@ -12,6 +12,10 @@ const productListSchema = paginationSchema.extend({
   brand: z.string().optional(),
 });
 
+const compareCountriesSchema = z.object({
+  product_name: z.string().min(1, 'product_name query parameter is required'),
+});
+
 const priceHistoryQuerySchema = z.object({
   supermarket_id: z.string().uuid().optional(),
   days: z.coerce.number().int().min(1).max(365).default(30),
@@ -19,7 +23,7 @@ const priceHistoryQuerySchema = z.object({
 
 router.get('/', validateQuery(productListSchema), async (req, res, next) => {
   try {
-    const { search, category_id, brand, limit, offset } = req.validatedQuery!;
+    const { search, category_id, brand, limit, offset } = req.validatedQuery as z.infer<typeof productListSchema>;
 
     const data = await productRepository.findAll(
       { search, categoryId: category_id, brand },
@@ -36,17 +40,9 @@ router.get('/', validateQuery(productListSchema), async (req, res, next) => {
   }
 });
 
-router.get('/compare/countries', async (req, res, next) => {
+router.get('/compare/countries', validateQuery(compareCountriesSchema), async (req, res, next) => {
   try {
-    const { product_name } = req.query;
-
-    if (!product_name || typeof product_name !== 'string') {
-      res.status(400).json({
-        error: 'Bad Request',
-        message: 'product_name query parameter is required',
-      });
-      return;
-    }
+    const { product_name } = req.validatedQuery as z.infer<typeof compareCountriesSchema>;
 
     const rows = await productRepository.compareByCountry(product_name);
 
@@ -104,7 +100,7 @@ router.get('/:id', async (req, res, next) => {
 router.get('/:id/price-history', validateQuery(priceHistoryQuerySchema), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { supermarket_id, days } = req.validatedQuery!;
+    const { supermarket_id, days } = req.validatedQuery as z.infer<typeof priceHistoryQuerySchema>;
 
     const data = await productRepository.getPriceHistory(id, {
       supermarketId: supermarket_id,

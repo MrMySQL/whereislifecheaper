@@ -16,7 +16,7 @@ const supermarketProductsSchema = paginationSchema.extend({
 
 router.get('/', validateQuery(supermarketListSchema), async (req, res, next) => {
   try {
-    const { country_id, active_only } = req.validatedQuery!;
+    const { country_id, active_only } = req.validatedQuery as z.infer<typeof supermarketListSchema>;
 
     const data = await supermarketRepository.findAll({
       countryId: country_id,
@@ -52,7 +52,7 @@ router.get('/:id', async (req, res, next) => {
 router.get('/:id/products', validateQuery(supermarketProductsSchema), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { search, limit, offset } = req.validatedQuery!;
+    const { search, limit, offset } = req.validatedQuery as z.infer<typeof supermarketProductsSchema>;
 
     const data = await productRepository.getProductsForSupermarket(
       id,

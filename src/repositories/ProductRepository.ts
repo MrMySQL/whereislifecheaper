@@ -42,7 +42,7 @@ export class ProductRepository {
     sql += ` ORDER BY p.name LIMIT $${i++} OFFSET $${i++}`;
     params.push(pagination.limit, pagination.offset);
 
-    const result = await query<ProductWithCategory>(sql, params as any[]);
+    const result = await query<ProductWithCategory>(sql, params);
     return result.rows;
   }
 
@@ -114,7 +114,7 @@ export class ProductRepository {
     }
     sql += ` ORDER BY pr.scraped_at DESC`;
 
-    const result = await query<PriceHistoryEntry>(sql, params as any[]);
+    const result = await query<PriceHistoryEntry>(sql, params);
     return result.rows;
   }
 
@@ -187,7 +187,7 @@ export class ProductRepository {
     sql += ` ORDER BY p.name LIMIT $${i++} OFFSET $${i++}`;
     params.push(pagination.limit, pagination.offset);
 
-    const result = await query<SupermarketProductEntry>(sql, params as any[]);
+    const result = await query<SupermarketProductEntry>(sql, params);
     return result.rows;
   }
 

@@ -1,37 +1,42 @@
 import dotenv from 'dotenv';
-import Joi from 'joi';
+import { z } from 'zod';
 
 dotenv.config();
 
 // Environment variable validation schema
-const envSchema = Joi.object({
-  DATABASE_URL: Joi.string().required(),
-  API_PORT: Joi.number().default(3000),
-  NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
-  PLAYWRIGHT_HEADLESS: Joi.boolean().default(true),
-  SCRAPER_MAX_RETRIES: Joi.number().default(3),
-  SCRAPER_TIMEOUT: Joi.number().default(30000),
-  SCRAPER_CONCURRENT_BROWSERS: Joi.number().default(3),
-  LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug').default('info'),
-  LOG_DIR: Joi.string().default('./logs'),
+const envSchema = z.object({
+  DATABASE_URL: z.string(),
+  API_PORT: z.coerce.number().default(3000),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  PLAYWRIGHT_HEADLESS: z.preprocess(
+    (val) => val === 'true' || val === '1' || val === true,
+    z.boolean().default(true)
+  ),
+  SCRAPER_MAX_RETRIES: z.coerce.number().default(3),
+  SCRAPER_TIMEOUT: z.coerce.number().default(30000),
+  SCRAPER_CONCURRENT_BROWSERS: z.coerce.number().default(3),
+  LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+  LOG_DIR: z.string().default('./logs'),
   // Google OAuth
-  GOOGLE_CLIENT_ID: Joi.string().optional(),
-  GOOGLE_CLIENT_SECRET: Joi.string().optional(),
-  GOOGLE_CALLBACK_URL: Joi.string().default('http://localhost:5173/api/auth/google/callback'),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CALLBACK_URL: z.string().default('http://localhost:5173/api/auth/google/callback'),
   // Session
-  SESSION_SECRET: Joi.string().default('development-secret-change-in-production'),
+  SESSION_SECRET: z.string().default('development-secret-change-in-production'),
   // Admin emails (comma-separated)
-  ADMIN_EMAILS: Joi.string().default(''),
+  ADMIN_EMAILS: z.string().default(''),
   // Proxy configuration - JSON mapping supermarket names to proxy URLs
   // Format: {"migros":"http://proxy1:8080","rewe":"http://proxy2:8080"}
-  SCRAPER_PROXY_CONFIG: Joi.string().optional(),
-}).unknown();
+  SCRAPER_PROXY_CONFIG: z.string().optional(),
+});
 
-const { error, value: envVars } = envSchema.validate(process.env);
+const parsed = envSchema.safeParse(process.env);
 
-if (error) {
-  throw new Error(`Environment validation error: ${error.message}`);
+if (!parsed.success) {
+  throw new Error(`Environment validation error: ${parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
 }
+
+const envVars = parsed.data;
 
 /**
  * Parse proxy config JSON into a Map for quick lookup
@@ -56,32 +61,32 @@ function parseProxyConfig(configJson: string | undefined): Map<string, string> {
 
 export const config = {
   database: {
-    url: envVars.DATABASE_URL as string,
+    url: envVars.DATABASE_URL,
   },
   api: {
-    port: envVars.API_PORT as number,
-    env: envVars.NODE_ENV as string,
+    port: envVars.API_PORT,
+    env: envVars.NODE_ENV,
   },
   scraper: {
-    headless: envVars.PLAYWRIGHT_HEADLESS as boolean,
-    maxRetries: envVars.SCRAPER_MAX_RETRIES as number,
-    timeout: envVars.SCRAPER_TIMEOUT as number,
-    concurrentBrowsers: envVars.SCRAPER_CONCURRENT_BROWSERS as number,
-    proxyConfig: parseProxyConfig(envVars.SCRAPER_PROXY_CONFIG as string | undefined),
+    headless: envVars.PLAYWRIGHT_HEADLESS,
+    maxRetries: envVars.SCRAPER_MAX_RETRIES,
+    timeout: envVars.SCRAPER_TIMEOUT,
+    concurrentBrowsers: envVars.SCRAPER_CONCURRENT_BROWSERS,
+    proxyConfig: parseProxyConfig(envVars.SCRAPER_PROXY_CONFIG),
   },
   logging: {
-    level: envVars.LOG_LEVEL as string,
-    dir: envVars.LOG_DIR as string,
+    level: envVars.LOG_LEVEL,
+    dir: envVars.LOG_DIR,
   },
   google: {
-    clientId: envVars.GOOGLE_CLIENT_ID as string | undefined,
-    clientSecret: envVars.GOOGLE_CLIENT_SECRET as string | undefined,
-    callbackUrl: envVars.GOOGLE_CALLBACK_URL as string,
+    clientId: envVars.GOOGLE_CLIENT_ID,
+    clientSecret: envVars.GOOGLE_CLIENT_SECRET,
+    callbackUrl: envVars.GOOGLE_CALLBACK_URL,
   },
   session: {
-    secret: envVars.SESSION_SECRET as string,
+    secret: envVars.SESSION_SECRET,
   },
   auth: {
-    adminEmails: (envVars.ADMIN_EMAILS as string).split(',').map(e => e.trim()).filter(Boolean),
+    adminEmails: envVars.ADMIN_EMAILS.split(',').map(e => e.trim()).filter(Boolean),
   },
 };

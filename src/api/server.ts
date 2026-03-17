@@ -27,7 +27,16 @@ const app = express();
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: config.api.env === 'production' ? undefined : false,
+  contentSecurityPolicy: config.api.env === 'production' ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+    },
+  } : false,
 }));
 app.use(cors({
   origin: config.api.env === 'development' ? ['http://localhost:5173', 'http://localhost:3000'] : true,

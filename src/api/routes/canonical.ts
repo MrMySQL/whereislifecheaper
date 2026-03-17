@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { canonicalProductRepository } from '../../repositories';
+import { CanonicalComparisonRow } from '../../types/db.types';
 import { isAdmin } from '../../auth';
 import { validateQuery, validateBody, paginationSchema } from '../middleware/validate';
 
@@ -58,7 +59,7 @@ router.get('/', async (req, res, next) => {
 
 router.get('/mapped-products', isAdmin, validateQuery(mappedProductsSchema), async (req, res, next) => {
   try {
-    const { search, stale_only, stale_days, limit, offset } = req.validatedQuery!;
+    const { search, stale_only, stale_days, limit, offset } = req.validatedQuery as z.infer<typeof mappedProductsSchema>;
 
     const { data, total } = await canonicalProductRepository.getMappedProducts(
       {
@@ -82,17 +83,44 @@ router.get('/mapped-products', isAdmin, validateQuery(mappedProductsSchema), asy
 
 router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next) => {
   try {
-    const { search, limit, offset } = req.validatedQuery!;
+    const { search, limit, offset } = req.validatedQuery as z.infer<typeof comparisonSchema>;
 
     const { data: rows, total } = await canonicalProductRepository.getComparison(
       { search: search?.trim() },
       { limit, offset }
     );
 
-    // Group by canonical product and organize by country
-    const canonicalMap = new Map<number, any>();
+    interface CountryProduct {
+      product_id: string;
+      product_name: string;
+      brand: string | null;
+      unit: string | null;
+      unit_quantity: number | null;
+      image_url: string | null;
+      product_url: string;
+      price: number;
+      price_per_unit: number | null;
+      currency: string;
+      original_price: number | null;
+      is_on_sale: boolean;
+      supermarket: string;
+      country_name: string;
+      scraped_at: Date;
+    }
 
-    rows.forEach((row: any) => {
+    interface CanonicalGroup {
+      canonical_id: string;
+      canonical_name: string;
+      canonical_description: string | null;
+      show_per_unit_price: boolean;
+      category: string | null;
+      products_by_country: Record<string, CountryProduct[]>;
+    }
+
+    // Group by canonical product and organize by country
+    const canonicalMap = new Map<string, CanonicalGroup>();
+
+    rows.forEach((row: CanonicalComparisonRow) => {
       if (!canonicalMap.has(row.canonical_id)) {
         canonicalMap.set(row.canonical_id, {
           canonical_id: row.canonical_id,
@@ -104,7 +132,7 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
         });
       }
 
-      const canonical = canonicalMap.get(row.canonical_id);
+      const canonical = canonicalMap.get(row.canonical_id)!;
       const countryCode = row.country_code;
 
       if (!canonical.products_by_country[countryCode]) {
@@ -130,22 +158,22 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
       });
     });
 
-    canonicalMap.forEach(canonical => {
-      const pricesByCountry: Record<string, any> = {};
+    const comparison = Array.from(canonicalMap.values()).map(canonical => {
+      const pricesByCountry: Record<string, unknown> = {};
       const usePerUnitPrice = canonical.show_per_unit_price;
 
-      (Object.entries(canonical.products_by_country) as [string, any[]][]).forEach(
+      Object.entries(canonical.products_by_country).forEach(
         ([countryCode, products]) => {
           if (products.length === 0) return;
 
           const productCount = products.length;
-          const totalPrice = products.reduce((sum: number, p: any) => sum + p.price, 0);
+          const totalPrice = products.reduce((sum, p) => sum + p.price, 0);
           const avgPrice = totalPrice / productCount;
 
-          const productsWithPpu = products.filter((p: any) => p.price_per_unit != null);
+          const productsWithPpu = products.filter(p => p.price_per_unit != null);
           const avgPricePerUnit =
             productsWithPpu.length > 0
-              ? productsWithPpu.reduce((sum: number, p: any) => sum + p.price_per_unit, 0) / productsWithPpu.length
+              ? productsWithPpu.reduce((sum, p) => sum + p.price_per_unit!, 0) / productsWithPpu.length
               : null;
 
           const firstProduct = products[0];
@@ -161,12 +189,12 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
             price_per_unit: avgPricePerUnit,
             currency: firstProduct.currency,
             original_price: firstProduct.original_price,
-            is_on_sale: products.some((p: any) => p.is_on_sale),
+            is_on_sale: products.some(p => p.is_on_sale),
             supermarket: firstProduct.supermarket,
             country_name: firstProduct.country_name,
             scraped_at: firstProduct.scraped_at,
             product_count: productCount,
-            products: products.map((p: any) => ({
+            products: products.map(p => ({
               product_id: p.product_id,
               product_name: p.product_name,
               brand: p.brand,
@@ -182,14 +210,16 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
         }
       );
 
-      canonical.prices_by_country = pricesByCountry;
-      delete canonical.products_by_country;
+      return {
+        canonical_id: canonical.canonical_id,
+        canonical_name: canonical.canonical_name,
+        canonical_description: canonical.canonical_description,
+        show_per_unit_price: canonical.show_per_unit_price,
+        category: canonical.category,
+        prices_by_country: pricesByCountry,
+        country_count: Object.keys(pricesByCountry).length,
+      };
     });
-
-    const comparison = Array.from(canonicalMap.values()).map(p => ({
-      ...p,
-      country_count: Object.keys(p.prices_by_country).length,
-    }));
 
     res.json({ data: comparison, total, pagination: { limit, offset } });
   } catch (error) {
@@ -200,7 +230,7 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
 router.get('/products-by-country/:countryId', validateQuery(productsByCountrySchema), async (req, res, next) => {
   try {
     const { countryId } = req.params;
-    const { search, supermarket_id, mapped_only, limit, offset } = req.validatedQuery!;
+    const { search, supermarket_id, mapped_only, limit, offset } = req.validatedQuery as z.infer<typeof productsByCountrySchema>;
 
     const { data, total } = await canonicalProductRepository.getProductsByCountry(
       countryId,
@@ -224,7 +254,7 @@ router.get('/products-by-country/:countryId', validateQuery(productsByCountrySch
 
 router.post('/', isAdmin, validateBody(createCanonicalSchema), async (req, res, next) => {
   try {
-    const { name, description, category_id, show_per_unit_price } = req.validatedBody!;
+    const { name, description, category_id, show_per_unit_price } = req.validatedBody as z.infer<typeof createCanonicalSchema>;
 
     const data = await canonicalProductRepository.create({
       name,
@@ -241,7 +271,7 @@ router.post('/', isAdmin, validateBody(createCanonicalSchema), async (req, res, 
 
 router.put('/link', isAdmin, validateBody(linkProductSchema), async (req, res, next) => {
   try {
-    const { product_id, canonical_product_id } = req.validatedBody!;
+    const { product_id, canonical_product_id } = req.validatedBody as z.infer<typeof linkProductSchema>;
 
     const data = await canonicalProductRepository.linkProduct(
       product_id,
@@ -265,7 +295,7 @@ router.put('/link', isAdmin, validateBody(linkProductSchema), async (req, res, n
 router.patch('/:id', isAdmin, validateBody(updateCanonicalSchema), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { show_per_unit_price, disabled } = req.validatedBody!;
+    const { show_per_unit_price, disabled } = req.validatedBody as z.infer<typeof updateCanonicalSchema>;
 
     const data = await canonicalProductRepository.update(id, {
       showPerUnitPrice: show_per_unit_price,

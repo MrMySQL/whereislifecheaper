@@ -4,10 +4,15 @@ import { ScraperService } from '../../services/ScraperService';
 import { supermarketRepository, scrapeLogRepository } from '../../repositories';
 import { scraperLogger } from '../../utils/logger';
 import { isAdmin } from '../../auth';
-import { validateQuery, paginationSchema } from '../middleware/validate';
+import { validateQuery, validateBody, paginationSchema } from '../middleware/validate';
 
 const router = Router();
 const scraperService = new ScraperService();
+
+const triggerSchema = z.object({
+  supermarket_id: z.string().uuid().optional(),
+  categories: z.array(z.string()).optional(),
+});
 
 const logsSchema = paginationSchema.extend({
   supermarket_id: z.string().uuid().optional(),
@@ -31,9 +36,9 @@ router.get('/categories/:supermarketId', async (req, res, next) => {
   }
 });
 
-router.post('/trigger', isAdmin, async (req, res, next) => {
+router.post('/trigger', isAdmin, validateBody(triggerSchema), async (req, res, next) => {
   try {
-    const { supermarket_id, categories } = req.body;
+    const { supermarket_id, categories } = req.validatedBody as z.infer<typeof triggerSchema>;
     scraperLogger.info('Manual scrape triggered via API', { supermarket_id, categories });
 
     if (supermarket_id) {
@@ -44,10 +49,10 @@ router.post('/trigger', isAdmin, async (req, res, next) => {
       }
 
       let categoryIds: string[] | undefined;
-      if (categories && Array.isArray(categories) && categories.length > 0) {
+      if (categories && categories.length > 0) {
         const availableCategories = await scraperService.getAvailableCategories(supermarket_id);
         const availableIds = availableCategories.map(c => c.id);
-        const invalidCategories = categories.filter((c: string) => !availableIds.includes(c));
+        const invalidCategories = categories.filter(c => !availableIds.includes(c));
         if (invalidCategories.length > 0) {
           res.status(400).json({
             error: 'Bad Request',
@@ -102,7 +107,7 @@ router.get('/status', isAdmin, async (_req, res, next) => {
 
 router.get('/logs', isAdmin, validateQuery(logsSchema), async (req, res, next) => {
   try {
-    const { supermarket_id, status, limit, offset } = req.validatedQuery!;
+    const { supermarket_id, status, limit, offset } = req.validatedQuery as z.infer<typeof logsSchema>;
 
     const data = await scrapeLogRepository.getLogs(
       { supermarketId: supermarket_id, status },

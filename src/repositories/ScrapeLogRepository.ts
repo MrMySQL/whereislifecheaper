@@ -1,5 +1,12 @@
 import { query } from '../config/database';
-import { ScrapeLogRow } from '../types/db.types';
+import {
+  ScrapeLogRow,
+  ScrapeLogWithSupermarket,
+  ScrapeLogWithDetails,
+  ScrapeLogWithCountryCode,
+  ScrapeLogLatestStats,
+  ScrapeLog24hSummary,
+} from '../types/db.types';
 
 export class ScrapeLogRepository {
   async create(supermarketId: string, status: string): Promise<string> {
@@ -46,8 +53,8 @@ export class ScrapeLogRepository {
   async getHistoryForSupermarket(
     supermarketId: string,
     limit: number
-  ): Promise<Record<string, unknown>[]> {
-    const result = await query(
+  ): Promise<ScrapeLogWithSupermarket[]> {
+    const result = await query<ScrapeLogWithSupermarket>(
       `SELECT sl.*, s.name as supermarket_name
        FROM scrape_logs sl
        INNER JOIN supermarkets s ON sl.supermarket_id = s.id
@@ -74,8 +81,8 @@ export class ScrapeLogRepository {
     return result.rows;
   }
 
-  async getLatestStats(): Promise<Record<string, unknown>[]> {
-    const result = await query(`
+  async getLatestStats(): Promise<ScrapeLogLatestStats[]> {
+    const result = await query<ScrapeLogLatestStats>(`
       SELECT
         s.name as supermarket_name,
         c.name as country_name,
@@ -91,8 +98,8 @@ export class ScrapeLogRepository {
     return result.rows;
   }
 
-  async getRecentWithDetails(limit: number): Promise<Record<string, unknown>[]> {
-    const result = await query(
+  async getRecentWithDetails(limit: number): Promise<ScrapeLogWithDetails[]> {
+    const result = await query<ScrapeLogWithDetails>(
       `SELECT sl.*, s.name as supermarket_name, c.name as country_name
        FROM scrape_logs sl
        INNER JOIN supermarkets s ON sl.supermarket_id = s.id
@@ -104,8 +111,8 @@ export class ScrapeLogRepository {
     return result.rows;
   }
 
-  async getRunning(): Promise<Record<string, unknown>[]> {
-    const result = await query(`
+  async getRunning(): Promise<ScrapeLogWithSupermarket[]> {
+    const result = await query<ScrapeLogWithSupermarket>(`
       SELECT sl.*, s.name as supermarket_name
       FROM scrape_logs sl
       INNER JOIN supermarkets s ON sl.supermarket_id = s.id
@@ -114,8 +121,8 @@ export class ScrapeLogRepository {
     return result.rows;
   }
 
-  async get24hSummary(): Promise<Record<string, unknown>> {
-    const result = await query(`
+  async get24hSummary(): Promise<ScrapeLog24hSummary> {
+    const result = await query<ScrapeLog24hSummary>(`
       SELECT
         COUNT(*) FILTER (WHERE status = 'success' AND started_at > CURRENT_TIMESTAMP - INTERVAL '24 hours') as success_24h,
         COUNT(*) FILTER (WHERE status = 'failed' AND started_at > CURRENT_TIMESTAMP - INTERVAL '24 hours') as failed_24h,
@@ -129,7 +136,7 @@ export class ScrapeLogRepository {
   async getLogs(
     filters: { supermarketId?: string; status?: string },
     pagination: { limit: number; offset: number }
-  ): Promise<Record<string, unknown>[]> {
+  ): Promise<ScrapeLogWithCountryCode[]> {
     let sql = `
       SELECT sl.*, s.name as supermarket_name, c.name as country_name, c.code as country_code
       FROM scrape_logs sl
@@ -152,7 +159,7 @@ export class ScrapeLogRepository {
     sql += ` ORDER BY sl.started_at DESC LIMIT $${i++} OFFSET $${i++}`;
     params.push(pagination.limit, pagination.offset);
 
-    const result = await query(sql, params as any[]);
+    const result = await query<ScrapeLogWithCountryCode>(sql, params);
     return result.rows;
   }
 }

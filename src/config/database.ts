@@ -33,9 +33,9 @@ pool.on('connect', () => {
 /**
  * Execute a SQL query with parameters
  */
-export async function query<T extends QueryResultRow = any>(
+export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
-  params?: any[]
+  params?: unknown[]
 ): Promise<QueryResult<T>> {
   try {
     const result = await pool.query<T>(text, params);

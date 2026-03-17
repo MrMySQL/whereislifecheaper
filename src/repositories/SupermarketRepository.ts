@@ -1,5 +1,13 @@
 import { query } from '../config/database';
-import { CountryRow, SupermarketRow, SupermarketWithCountry } from '../types/db.types';
+import {
+  CountryRow,
+  SupermarketRow,
+  SupermarketWithCountry,
+  SupermarketWithProductCount,
+  SupermarketWithProductCountAndScrape,
+  SupermarketBasicEntry,
+  SupermarketForCountryEntry,
+} from '../types/db.types';
 
 export class SupermarketRepository {
   async findById(supermarketId: string): Promise<SupermarketWithCountry | null> {
@@ -13,8 +21,8 @@ export class SupermarketRepository {
     return result.rows[0] ?? null;
   }
 
-  async findByIdWithProductCount(supermarketId: string): Promise<Record<string, unknown> | null> {
-    const result = await query(
+  async findByIdWithProductCount(supermarketId: string): Promise<SupermarketWithProductCount | null> {
+    const result = await query<SupermarketWithProductCount>(
       `SELECT
         s.*,
         c.name as country_name, c.code as country_code, c.currency_code,
@@ -41,7 +49,7 @@ export class SupermarketRepository {
   async findAll(filters: {
     countryId?: string;
     activeOnly?: boolean;
-  }): Promise<Record<string, unknown>[]> {
+  }): Promise<SupermarketWithProductCountAndScrape[]> {
     let sql = `
       SELECT
         s.*,
@@ -72,7 +80,7 @@ export class SupermarketRepository {
     }
 
     sql += ` ORDER BY c.name, s.name`;
-    const result = await query(sql, params as any[]);
+    const result = await query<SupermarketWithProductCountAndScrape>(sql, params);
     return result.rows;
   }
 
@@ -91,8 +99,8 @@ export class SupermarketRepository {
     return result.rows[0] ?? null;
   }
 
-  async getSupermarketsForCountry(countryId: string): Promise<Record<string, unknown>[]> {
-    const result = await query(
+  async getSupermarketsForCountry(countryId: string): Promise<SupermarketForCountryEntry[]> {
+    const result = await query<SupermarketForCountryEntry>(
       `SELECT id, name, website_url, logo_url, is_active
        FROM supermarkets
        WHERE country_id = $1
@@ -102,8 +110,8 @@ export class SupermarketRepository {
     return result.rows;
   }
 
-  async getAllSupermarketsBasic(): Promise<Record<string, unknown>[]> {
-    const result = await query(
+  async getAllSupermarketsBasic(): Promise<SupermarketBasicEntry[]> {
+    const result = await query<SupermarketBasicEntry>(
       `SELECT id, name, country_id, is_active FROM supermarkets ORDER BY name`
     );
     return result.rows;

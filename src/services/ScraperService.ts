@@ -5,6 +5,7 @@ import { SupermarketRepository, ScrapeLogRepository } from '../repositories';
 import { supermarketRepository as defaultSupermarketRepo, scrapeLogRepository as defaultScrapeLogRepo } from '../repositories';
 import { scraperLogger } from '../utils/logger';
 import { ProductData, ScrapeResult, CategoryConfig, PageInfo } from '../types/scraper.types';
+import { ScrapeLogWithSupermarket, ScrapeLogLatestStats } from '../types/db.types';
 import { calculatePricePerUnit } from '../utils/normalizer';
 import { getScraperCategories } from '../scrapers/scraperRegistry';
 import { generateRunId } from '../utils/runId';
@@ -181,11 +182,11 @@ export class ScraperService {
     }
   }
 
-  async getScrapeHistory(supermarketId: string, limit: number = 10): Promise<Record<string, unknown>[]> {
+  async getScrapeHistory(supermarketId: string, limit: number = 10): Promise<ScrapeLogWithSupermarket[]> {
     return this.scrapeLogRepository.getHistoryForSupermarket(supermarketId, limit);
   }
 
-  async getLatestStats(): Promise<Record<string, unknown>[]> {
+  async getLatestStats(): Promise<ScrapeLogLatestStats[]> {
     return this.scrapeLogRepository.getLatestStats();
   }
 

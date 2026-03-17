@@ -17,9 +17,13 @@ const compareSchema = paginationSchema.extend({
   search: z.string().optional(),
 });
 
+const basketSchema = z.object({
+  products: z.string().min(1, 'products query parameter is required (comma-separated product names)'),
+});
+
 router.get('/latest', validateQuery(latestPricesSchema), async (req, res, next) => {
   try {
-    const { country_id, supermarket_id, limit, offset } = req.validatedQuery!;
+    const { country_id, supermarket_id, limit, offset } = req.validatedQuery as z.infer<typeof latestPricesSchema>;
 
     const data = await priceRepository.getLatest(
       { countryId: country_id, supermarketId: supermarket_id },
@@ -45,17 +49,9 @@ router.get('/stats', async (_req, res, next) => {
   }
 });
 
-router.get('/basket', async (req, res, next) => {
+router.get('/basket', validateQuery(basketSchema), async (req, res, next) => {
   try {
-    const { products } = req.query;
-
-    if (!products || typeof products !== 'string') {
-      res.status(400).json({
-        error: 'Bad Request',
-        message: 'products query parameter is required (comma-separated product names)',
-      });
-      return;
-    }
+    const { products } = req.validatedQuery as z.infer<typeof basketSchema>;
 
     const productList = products.split(',').map(p => p.trim()).filter(Boolean);
     if (productList.length === 0) {
@@ -110,7 +106,7 @@ router.get('/basket', async (req, res, next) => {
 
 router.get('/compare', validateQuery(compareSchema), async (req, res, next) => {
   try {
-    const { search, limit, offset } = req.validatedQuery!;
+    const { search, limit, offset } = req.validatedQuery as z.infer<typeof compareSchema>;
 
     const rows = await priceRepository.compare(
       { search },

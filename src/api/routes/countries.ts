@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { supermarketRepository } from '../../repositories';
+import { SupermarketBasicEntry } from '../../types/db.types';
 
 const router = Router();
 
@@ -10,8 +11,8 @@ router.get('/', async (_req, res, next) => {
       supermarketRepository.getAllSupermarketsBasic(),
     ]);
 
-    const supermarketsByCountry = (supermarkets as any[]).reduce(
-      (acc: Record<number, any[]>, sm) => {
+    const supermarketsByCountry = supermarkets.reduce<Record<string, SupermarketBasicEntry[]>>(
+      (acc, sm) => {
         if (!acc[sm.country_id]) acc[sm.country_id] = [];
         acc[sm.country_id].push(sm);
         return acc;
@@ -21,7 +22,7 @@ router.get('/', async (_req, res, next) => {
 
     const data = countries.map(country => ({
       ...country,
-      supermarkets: supermarketsByCountry[(country as any).id] || [],
+      supermarkets: supermarketsByCountry[country.id] || [],
     }));
 
     res.json({ data, count: data.length });

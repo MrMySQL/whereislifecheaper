@@ -1,8 +1,15 @@
 import { query, getClient } from '../config/database';
-import { CanonicalProductRow } from '../types/db.types';
+import {
+  CanonicalProductRow,
+  CanonicalProductWithCounts,
+  MappedProductEntry,
+  LinkedProductEntry,
+  CanonicalComparisonRow,
+  CountryProductEntry,
+} from '../types/db.types';
 
 export class CanonicalProductRepository {
-  async findAll(search?: string): Promise<Record<string, unknown>[]> {
+  async findAll(search?: string): Promise<CanonicalProductWithCounts[]> {
     let sql = `
       SELECT
         cp.id, cp.name, cp.description, cp.category_id,
@@ -31,14 +38,14 @@ export class CanonicalProductRepository {
     }
 
     sql += ` ORDER BY cp.name`;
-    const result = await query(sql, params as any[]);
+    const result = await query<CanonicalProductWithCounts>(sql, params);
     return result.rows;
   }
 
   async getMappedProducts(
     filters: { search?: string; staleOnly?: boolean; staleDays?: number },
     pagination: { limit: number; offset: number }
-  ): Promise<{ data: Record<string, unknown>[]; total: number }> {
+  ): Promise<{ data: MappedProductEntry[]; total: number }> {
     const staleDaysThreshold = filters.staleDays ?? 7;
     const whereClauses = ['p.canonical_product_id IS NOT NULL'];
     const params: unknown[] = [];
@@ -111,8 +118,8 @@ export class CanonicalProductRepository {
     `;
 
     const [dataResult, countResult] = await Promise.all([
-      query(dataSql, [...params as any[], pagination.limit, pagination.offset]),
-      query(countSql, params as any[]),
+      query<MappedProductEntry>(dataSql, [...params, pagination.limit, pagination.offset]),
+      query<{ total: number }>(countSql, params),
     ]);
 
     return {
@@ -160,7 +167,7 @@ export class CanonicalProductRepository {
     params.push(id);
     const result = await query<CanonicalProductRow>(
       `UPDATE canonical_products SET ${updates.join(', ')} WHERE id = $${i} RETURNING *`,
-      params as any[]
+      params
     );
     return result.rows[0] ?? null;
   }
@@ -209,8 +216,8 @@ export class CanonicalProductRepository {
     return result.rows[0] ?? null;
   }
 
-  async getLinkedProducts(canonicalId: string): Promise<Record<string, unknown>[]> {
-    const result = await query(
+  async getLinkedProducts(canonicalId: string): Promise<LinkedProductEntry[]> {
+    const result = await query<LinkedProductEntry>(
       `SELECT
         p.id, p.name, p.brand, p.unit, p.unit_quantity,
         s.id as supermarket_id, s.name as supermarket_name,
@@ -236,7 +243,7 @@ export class CanonicalProductRepository {
   async getComparison(
     filters: { search?: string },
     pagination: { limit: number; offset: number }
-  ): Promise<{ data: Record<string, unknown>[]; total: number }> {
+  ): Promise<{ data: CanonicalComparisonRow[]; total: number }> {
     const whereClauses = ['cp.disabled IS NOT TRUE'];
     const baseParams: unknown[] = [];
 
@@ -302,8 +309,8 @@ export class CanonicalProductRepository {
     `;
 
     const [dataResult, countResult] = await Promise.all([
-      query(dataSql, [...baseParams as any[], pagination.limit, pagination.offset]),
-      query(countSql, baseParams as any[]),
+      query<CanonicalComparisonRow>(dataSql, [...baseParams, pagination.limit, pagination.offset]),
+      query<{ total: number }>(countSql, baseParams),
     ]);
 
     return {
@@ -316,7 +323,7 @@ export class CanonicalProductRepository {
     countryId: string,
     filters: { search?: string; supermarketId?: string; mappedOnly?: boolean },
     pagination: { limit: number; offset: number }
-  ): Promise<{ data: Record<string, unknown>[]; total: number }> {
+  ): Promise<{ data: CountryProductEntry[]; total: number }> {
     let sql = `
       SELECT DISTINCT ON (p.id)
         p.id, p.name, p.brand, p.unit, p.unit_quantity, p.image_url, p.created_at,
@@ -359,7 +366,7 @@ export class CanonicalProductRepository {
     sql = `SELECT * FROM (${sql}) sub ORDER BY name LIMIT $${i++} OFFSET $${i++}`;
     params.push(pagination.limit, pagination.offset);
 
-    const dataResult = await query(sql, params as any[]);
+    const dataResult = await query<CountryProductEntry>(sql, params);
 
     let countSql = `
       SELECT COUNT(DISTINCT p.id) as total
@@ -385,7 +392,7 @@ export class CanonicalProductRepository {
       countSql += ` AND p.canonical_product_id IS NOT NULL`;
     }
 
-    const countResult = await query(countSql, countParams as any[]);
+    const countResult = await query<{ total: string }>(countSql, countParams);
 
     return {
       data: dataResult.rows,

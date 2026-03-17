@@ -107,7 +107,7 @@ export class PriceRepository {
     sql += ` LIMIT $${i++} OFFSET $${i++}`;
     params.push(pagination.limit, pagination.offset);
 
-    const result = await query<LatestPriceEntry>(sql, params as any[]);
+    const result = await query<LatestPriceEntry>(sql, params);
     return result.rows;
   }
 
@@ -199,7 +199,7 @@ export class PriceRepository {
     `;
     params.push(pagination.limit, pagination.offset);
 
-    const result = await query<PriceCompareEntry>(sql, params as any[]);
+    const result = await query<PriceCompareEntry>(sql, params);
     return result.rows;
   }
 }
