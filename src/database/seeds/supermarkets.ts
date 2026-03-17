@@ -209,7 +209,7 @@ export const supermarketsData: SupermarketSeedData[] = [
     name: 'WinMart',
     website_url: 'https://winmart.vn',
     scraper_class: 'WinMartScraper',
-    is_active: false,
+    is_active: true,
   },
 ];
 
