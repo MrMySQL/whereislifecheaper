@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
@@ -85,6 +86,14 @@ app.get('/health', async (_req, res) => {
     });
   }
 });
+
+// Rate limiting for API routes
+app.use('/api/', rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
 // API routes
 app.use('/api/auth', authRouter);
