@@ -52,6 +52,9 @@ screenshots/
 # Temporary files
 tmp/
 temp/
+
+# Git worktrees
+.worktrees/
 .vercel
 
 terraform/.terraform
