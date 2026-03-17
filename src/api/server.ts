@@ -134,7 +134,7 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   apiLogger.error('API Error:', err);
   res.status(500).json({
     error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'An error occurred',
+    message: config.api.env === 'development' ? err.message : 'An error occurred',
   });
 });
 
