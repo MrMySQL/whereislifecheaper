@@ -20,6 +20,7 @@ import { OrganicaScraper, organicaConfig, organicaCategories } from './vietnam/O
 import { AnnamGourmetScraper, annamGourmetConfig, annamGourmetCategories } from './vietnam/AnnamGourmetScraper';
 import { WinMartScraper, winMartConfig, winMartCategories } from './vietnam/WinMartScraper';
 import { SezamoScraper, sezamoConfig, sezamoCategories } from './romania/SezamoScraper';
+import { CarrefourItScraper, carrefourItConfig, carrefourItCategories } from './italy/CarrefourItScraper';
 
 /**
  * Scraper registration entry containing all metadata for a scraper
@@ -223,6 +224,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: SezamoScraper,
       defaultConfig: sezamoConfig,
       categories: sezamoCategories,
+    },
+  ],
+  [
+    'CarrefourItScraper',
+    {
+      className: 'CarrefourItScraper',
+      scraperClass: CarrefourItScraper,
+      defaultConfig: carrefourItConfig,
+      categories: carrefourItCategories,
     },
   ],
 ]);
