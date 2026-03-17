@@ -242,7 +242,14 @@ export interface MappedProductEntry {
   last_price_updated_at: Date | null;
   mappings_count: string;
   countries_count: string;
-  markets: unknown; // JSONB aggregate
+  markets: Array<{
+    supermarket_id: string;
+    supermarket_name: string;
+    country_id: string;
+    country_name: string;
+    country_code: string;
+    country_flag: string | null;
+  }>;
   stale_days: number | null;
 }
 

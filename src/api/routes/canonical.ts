@@ -108,6 +108,26 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
       scraped_at: Date;
     }
 
+    interface CountryPriceSummary {
+      product_id: string;
+      product_name: string;
+      brand: string | null;
+      unit: string | null;
+      unit_quantity: number | null;
+      image_url: string | null;
+      product_url: string;
+      price: number;
+      price_per_unit: number | null;
+      currency: string;
+      original_price: number | null;
+      is_on_sale: boolean;
+      supermarket: string;
+      country_name: string;
+      scraped_at: Date;
+      product_count: number;
+      products: Omit<CountryProduct, 'currency' | 'original_price' | 'is_on_sale' | 'country_name' | 'scraped_at'>[];
+    }
+
     interface CanonicalGroup {
       canonical_id: string;
       canonical_name: string;
@@ -159,7 +179,7 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
     });
 
     const comparison = Array.from(canonicalMap.values()).map(canonical => {
-      const pricesByCountry: Record<string, unknown> = {};
+      const pricesByCountry: Record<string, CountryPriceSummary> = {};
       const usePerUnitPrice = canonical.show_per_unit_price;
 
       Object.entries(canonical.products_by_country).forEach(
