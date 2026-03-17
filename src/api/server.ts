@@ -5,7 +5,7 @@ import path from 'path';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { config } from '../config/env';
-import { scraperLogger } from '../utils/logger';
+import { apiLogger } from '../utils/logger';
 import { checkConnection, closePool } from '../config/database';
 import pool from '../config/database';
 
@@ -63,7 +63,7 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    scraperLogger.debug(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
+    apiLogger.debug(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
   });
   next();
 });
@@ -122,7 +122,7 @@ app.get('*', (_req, res) => {
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  scraperLogger.error('API Error:', err);
+  apiLogger.error('API Error:', err);
   res.status(500).json({
     error: 'Internal Server Error',
     message: process.env.NODE_ENV === 'development' ? err.message : 'An error occurred',
@@ -155,7 +155,7 @@ async function startServer() {
       console.log(`   - POST /api/scraper/trigger (Admin only)`);
       console.log(`   - GET  /api/rates`);
       console.log(`\n❤️  Health check: http://localhost:${PORT}/health`);
-      scraperLogger.info(`Server started on port ${PORT}`);
+      apiLogger.info(`Server started on port ${PORT}`);
     });
 
     // Handle graceful shutdown
@@ -171,7 +171,7 @@ async function startServer() {
       process.exit(0);
     });
   } catch (error) {
-    scraperLogger.error('Failed to start server:', error);
+    apiLogger.error('Failed to start server:', error);
     console.error('Failed to start server:', error);
     process.exit(1);
   }
