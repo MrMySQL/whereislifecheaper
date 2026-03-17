@@ -1,6 +1,7 @@
 import { ProductRepository, ProductMappingRepository, PriceRepository } from '../repositories';
 import { productRepository as defaultProductRepo, productMappingRepository as defaultMappingRepo, priceRepository as defaultPriceRepo } from '../repositories';
 import { ProductData } from '../types/scraper.types';
+import { ProductWithPricesResult, ProductWithCategory, SupermarketProductEntry } from '../types/db.types';
 import { normalizeProductName } from '../utils/normalizer';
 import { scraperLogger } from '../utils/logger';
 
@@ -284,16 +285,16 @@ export class ProductService {
     }
   }
 
-  async getProductById(productId: string): Promise<Record<string, unknown> | null> {
+  async getProductById(productId: string): Promise<ProductWithPricesResult | null> {
     return this.productRepository.findByIdWithPrices(productId);
   }
 
-  async searchProducts(searchTerm: string, limit: number = 50): Promise<Record<string, unknown>[]> {
+  async searchProducts(searchTerm: string, limit: number = 50): Promise<(ProductWithCategory & { similarity_score: number })[]> {
     const normalizedSearch = normalizeProductName(searchTerm);
     return this.productRepository.search(normalizedSearch, limit);
   }
 
-  async getLatestPricesBySupermarket(supermarketId: string): Promise<Record<string, unknown>[]> {
+  async getLatestPricesBySupermarket(supermarketId: string): Promise<SupermarketProductEntry[]> {
     return this.productRepository.getLatestPricesBySupermarket(supermarketId);
   }
 

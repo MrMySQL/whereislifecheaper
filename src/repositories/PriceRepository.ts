@@ -1,6 +1,12 @@
 import { query } from '../config/database';
 import { ProductData } from '../types/scraper.types';
 import { calculatePricePerUnit } from '../utils/normalizer';
+import {
+  LatestPriceEntry,
+  CountryStatsEntry,
+  BasketEntry,
+  PriceCompareEntry,
+} from '../types/db.types';
 
 export class PriceRepository {
   async recordPrice(
@@ -70,7 +76,7 @@ export class PriceRepository {
   async getLatest(
     filters: { countryId?: string; supermarketId?: string },
     pagination: { limit: number; offset: number }
-  ): Promise<Record<string, unknown>[]> {
+  ): Promise<LatestPriceEntry[]> {
     let sql = `
       SELECT DISTINCT ON (pm.product_id, s.id)
         p.id as product_id, p.name as product_name, p.brand, p.unit, p.unit_quantity,
@@ -101,12 +107,12 @@ export class PriceRepository {
     sql += ` LIMIT $${i++} OFFSET $${i++}`;
     params.push(pagination.limit, pagination.offset);
 
-    const result = await query(sql, params as any[]);
+    const result = await query<LatestPriceEntry>(sql, params as any[]);
     return result.rows;
   }
 
-  async getStats(): Promise<Record<string, unknown>[]> {
-    const result = await query(`
+  async getStats(): Promise<CountryStatsEntry[]> {
+    const result = await query<CountryStatsEntry>(`
       WITH active_mappings AS (
         SELECT
           c.id as country_id, c.name as country_name, c.code as country_code,
@@ -130,8 +136,8 @@ export class PriceRepository {
     return result.rows;
   }
 
-  async getBasket(productList: string[]): Promise<Record<string, unknown>[]> {
-    const result = await query(
+  async getBasket(productList: string[]): Promise<BasketEntry[]> {
+    const result = await query<BasketEntry>(
       `SELECT
         c.id as country_id, c.name as country_name, c.code as country_code, c.currency_code,
         p.name as product_name,
@@ -159,7 +165,7 @@ export class PriceRepository {
   async compare(
     filters: { search?: string },
     pagination: { limit: number; offset: number }
-  ): Promise<Record<string, unknown>[]> {
+  ): Promise<PriceCompareEntry[]> {
     let sql = `
       WITH latest_prices AS (
         SELECT DISTINCT ON (pm.product_id, s.id)
@@ -193,7 +199,7 @@ export class PriceRepository {
     `;
     params.push(pagination.limit, pagination.offset);
 
-    const result = await query(sql, params as any[]);
+    const result = await query<PriceCompareEntry>(sql, params as any[]);
     return result.rows;
   }
 }

@@ -105,3 +105,138 @@ export interface ExchangeRateRow {
   source: string;
   fetched_at: Date;
 }
+
+// ── Query result types for API responses ─────────────────────────────────
+
+export interface ProductWithPricesResult extends ProductWithCategory {
+  prices: ProductPriceEntry[];
+}
+
+export interface ProductPriceEntry {
+  supermarket_id: string;
+  supermarket_name: string;
+  country_name: string;
+  country_code: string;
+  currency_code: string;
+  price: number | null;
+  original_price: number | null;
+  is_on_sale: boolean | null;
+  is_available: boolean | null;
+  price_per_unit: number | null;
+  scraped_at: Date | null;
+  product_url: string;
+}
+
+export interface PriceHistoryEntry {
+  id: string;
+  product_mapping_id: string;
+  price: number;
+  currency: string;
+  original_price: number | null;
+  is_on_sale: boolean;
+  price_per_unit: number | null;
+  scraped_at: Date;
+  product_id: string;
+  supermarket_id: string;
+  supermarket_name: string;
+  country_name: string;
+  country_code: string;
+}
+
+export interface CountryComparisonEntry {
+  country_id: string;
+  country_name: string;
+  country_code: string;
+  currency_code: string;
+  supermarket_id: string;
+  supermarket_name: string;
+  product_id: string;
+  product_name: string;
+  brand: string | null;
+  unit: string | null;
+  unit_quantity: number | null;
+  price: number;
+  price_per_unit: number | null;
+  is_on_sale: boolean;
+  scraped_at: Date;
+}
+
+export interface LatestPriceEntry {
+  product_id: string;
+  product_name: string;
+  brand: string | null;
+  unit: string | null;
+  unit_quantity: number | null;
+  supermarket_id: string;
+  supermarket_name: string;
+  country_id: string;
+  country_name: string;
+  country_code: string;
+  price: number;
+  currency: string;
+  original_price: number | null;
+  is_on_sale: boolean;
+  is_available: boolean | null;
+  price_per_unit: number | null;
+  scraped_at: Date;
+}
+
+export interface CountryStatsEntry {
+  country_id: string;
+  country_name: string;
+  country_code: string;
+  currency_code: string;
+  flag_emoji: string | null;
+  product_count: string; // COUNT returns string
+  supermarket_count: string;
+  last_scrape: Date | null;
+}
+
+export interface BasketEntry {
+  country_id: string;
+  country_name: string;
+  country_code: string;
+  currency_code: string;
+  product_name: string;
+  cheapest_price: string; // numeric cast returns string
+  cheapest_supermarket: string;
+}
+
+export interface PriceCompareEntry {
+  product_id: string;
+  product_name: string;
+  normalized_name: string;
+  brand: string | null;
+  unit: string | null;
+  unit_quantity: number | null;
+  supermarket_id: string;
+  supermarket_name: string;
+  country_id: string;
+  country_name: string;
+  country_code: string;
+  currency_code: string;
+  price: number;
+  currency: string;
+  original_price: number | null;
+  is_on_sale: boolean;
+  scraped_at: Date;
+}
+
+export interface SupermarketProductEntry {
+  id: string;
+  name: string;
+  normalized_name: string;
+  brand: string | null;
+  unit: string | null;
+  unit_quantity: number | null;
+  image_url: string | null;
+  category_name: string | null;
+  product_url: string;
+  price: number | null;
+  currency: string | null;
+  original_price: number | null;
+  is_on_sale: boolean | null;
+  is_available: boolean | null;
+  price_per_unit: number | null;
+  scraped_at: Date | null;
+}
