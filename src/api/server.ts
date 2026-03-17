@@ -5,7 +5,7 @@ import path from 'path';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { config } from '../config/env';
-import { scraperLogger } from '../utils/logger';
+import { apiLogger } from '../utils/logger';
 import { checkConnection, closePool } from '../config/database';
 import pool from '../config/database';
 
@@ -26,13 +26,22 @@ const app = express();
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // Disable for development
+  contentSecurityPolicy: config.api.env === 'production' ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+    },
+  } : false,
 }));
 app.use(cors({
   origin: config.api.env === 'development' ? ['http://localhost:5173', 'http://localhost:3000'] : true,
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Session middleware
 const PgSession = connectPgSimple(session);
@@ -63,7 +72,7 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    scraperLogger.debug(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
+    apiLogger.debug(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
   });
   next();
 });
@@ -122,10 +131,10 @@ app.get('*', (_req, res) => {
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  scraperLogger.error('API Error:', err);
+  apiLogger.error('API Error:', err);
   res.status(500).json({
     error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'An error occurred',
+    message: config.api.env === 'development' ? err.message : 'An error occurred',
   });
 });
 
@@ -155,7 +164,7 @@ async function startServer() {
       console.log(`   - POST /api/scraper/trigger (Admin only)`);
       console.log(`   - GET  /api/rates`);
       console.log(`\n❤️  Health check: http://localhost:${PORT}/health`);
-      scraperLogger.info(`Server started on port ${PORT}`);
+      apiLogger.info(`Server started on port ${PORT}`);
     });
 
     // Handle graceful shutdown
@@ -171,7 +180,7 @@ async function startServer() {
       process.exit(0);
     });
   } catch (error) {
-    scraperLogger.error('Failed to start server:', error);
+    apiLogger.error('Failed to start server:', error);
     console.error('Failed to start server:', error);
     process.exit(1);
   }

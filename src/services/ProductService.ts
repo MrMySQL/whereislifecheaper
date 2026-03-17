@@ -1,9 +1,24 @@
-import { productRepository, productMappingRepository, priceRepository } from '../repositories';
+import { ProductRepository, ProductMappingRepository, PriceRepository } from '../repositories';
+import { productRepository as defaultProductRepo, productMappingRepository as defaultMappingRepo, priceRepository as defaultPriceRepo } from '../repositories';
 import { ProductData } from '../types/scraper.types';
+import { ProductWithPricesResult, ProductWithCategory, SupermarketProductEntry } from '../types/db.types';
 import { normalizeProductName } from '../utils/normalizer';
 import { scraperLogger } from '../utils/logger';
 
 export class ProductService {
+  private productRepository: ProductRepository;
+  private productMappingRepository: ProductMappingRepository;
+  private priceRepository: PriceRepository;
+
+  constructor(
+    productRepo?: ProductRepository,
+    mappingRepo?: ProductMappingRepository,
+    priceRepo?: PriceRepository,
+  ) {
+    this.productRepository = productRepo ?? defaultProductRepo;
+    this.productMappingRepository = mappingRepo ?? defaultMappingRepo;
+    this.priceRepository = priceRepo ?? defaultPriceRepo;
+  }
   // ── Private helpers (business logic — not DB queries) ────────────────────
 
   private buildNameBrandKey(normalizedName: string, brand?: string | null): string {
@@ -66,11 +81,11 @@ export class ProductService {
       let existingMappingId: string | null = null;
 
       if (externalId) {
-        const existingMapping = await productMappingRepository.findMappingByExternalId(supermarketId, externalId);
+        const existingMapping = await this.productMappingRepository.findMappingByExternalId(supermarketId, externalId);
         if (existingMapping) {
           productId = existingMapping.product_id;
           existingMappingId = existingMapping.id;
-          await productMappingRepository.updateProduct(productId, {
+          await this.productMappingRepository.updateProduct(productId, {
             name: productData.name,
             normalizedName,
             imageUrl: productData.imageUrl,
@@ -81,12 +96,12 @@ export class ProductService {
       }
 
       if (!productId) {
-        const existingMappingByUrl = await productMappingRepository.findMappingByUrl(supermarketId, productUrl);
+        const existingMappingByUrl = await this.productMappingRepository.findMappingByUrl(supermarketId, productUrl);
         if (existingMappingByUrl) {
           productId = existingMappingByUrl.product_id;
           existingMappingId = existingMappingByUrl.id;
-          await productMappingRepository.updateMappingById(existingMappingId, { productUrl, externalId });
-          await productMappingRepository.updateProduct(productId, {
+          await this.productMappingRepository.updateMappingById(existingMappingId, { productUrl, externalId });
+          await this.productMappingRepository.updateProduct(productId, {
             name: productData.name,
             normalizedName,
             imageUrl: productData.imageUrl,
@@ -97,11 +112,11 @@ export class ProductService {
       }
 
       if (!productId && !externalId) {
-        productId = await productMappingRepository.findProductByNameAndBrand(normalizedName, productData.brand);
+        productId = await this.productMappingRepository.findProductByNameAndBrand(normalizedName, productData.brand);
       }
 
       if (!productId) {
-        productId = await productMappingRepository.createProduct({
+        productId = await this.productMappingRepository.createProduct({
           name: productData.name,
           normalizedName,
           brand: productData.brand,
@@ -115,7 +130,7 @@ export class ProductService {
 
       if (existingMappingId) return existingMappingId;
 
-      return productMappingRepository.createOrUpdateMapping(productId, supermarketId, { externalId, productUrl });
+      return this.productMappingRepository.createOrUpdateMapping(productId, supermarketId, { externalId, productUrl });
     } catch (error) {
       scraperLogger.error('Error in findOrCreateProduct:', error);
       throw error;
@@ -132,7 +147,7 @@ export class ProductService {
       pricePerUnit?: number;
     }
   ): Promise<void> {
-    return priceRepository.recordPrice(productMappingId, priceData);
+    return this.priceRepository.recordPrice(productMappingId, priceData);
   }
 
   async bulkSaveProducts(
@@ -179,8 +194,8 @@ export class ProductService {
       const urls = uniqueProducts.map(p => p.productUrl);
 
       const [byExternalId, byUrl] = await Promise.all([
-        productMappingRepository.batchFindMappingsByExternalIds(supermarketId, externalIds),
-        productMappingRepository.batchFindMappingsByUrls(supermarketId, urls),
+        this.productMappingRepository.batchFindMappingsByExternalIds(supermarketId, externalIds),
+        this.productMappingRepository.batchFindMappingsByUrls(supermarketId, urls),
       ]);
 
       const mappingsByExternalId = new Map(
@@ -213,7 +228,7 @@ export class ProductService {
       }
 
       if (forNameBrandLookup.length > 0) {
-        const byNameBrand = await productMappingRepository.batchFindMappingsByNameAndBrand(
+        const byNameBrand = await this.productMappingRepository.batchFindMappingsByNameAndBrand(
           supermarketId,
           forNameBrandLookup
         );
@@ -238,14 +253,14 @@ export class ProductService {
       // Batch update existing
       const existingMappingIds: string[] = [];
       if (existingProducts.length > 0) {
-        await productMappingRepository.batchUpdateExistingProducts(existingProducts);
+        await this.productMappingRepository.batchUpdateExistingProducts(existingProducts);
         existingMappingIds.push(...existingProducts.map(ep => ep.mapping.id));
       }
 
       // Batch create new
       const newMappingIds: string[] = [];
       if (newProducts.length > 0) {
-        const created = await productMappingRepository.batchCreateProductsAndMappings(newProducts, supermarketId);
+        const created = await this.productMappingRepository.batchCreateProductsAndMappings(newProducts, supermarketId);
         newMappingIds.push(...created);
       }
 
@@ -254,7 +269,7 @@ export class ProductService {
       const allProducts = [...existingProducts.map(ep => ep.product), ...newProducts];
 
       if (allMappingIds.length > 0) {
-        await priceRepository.batchInsertPrices(allMappingIds, allProducts, currency);
+        await this.priceRepository.batchInsertPrices(allMappingIds, allProducts, currency);
       }
 
       const duration = Date.now() - startTime;
@@ -270,21 +285,21 @@ export class ProductService {
     }
   }
 
-  async getProductById(productId: string): Promise<Record<string, unknown> | null> {
-    return productRepository.findByIdWithPrices(productId);
+  async getProductById(productId: string): Promise<ProductWithPricesResult | null> {
+    return this.productRepository.findByIdWithPrices(productId);
   }
 
-  async searchProducts(searchTerm: string, limit: number = 50): Promise<Record<string, unknown>[]> {
+  async searchProducts(searchTerm: string, limit: number = 50): Promise<(ProductWithCategory & { similarity_score: number })[]> {
     const normalizedSearch = normalizeProductName(searchTerm);
-    return productRepository.search(normalizedSearch, limit);
+    return this.productRepository.search(normalizedSearch, limit);
   }
 
-  async getLatestPricesBySupermarket(supermarketId: string): Promise<Record<string, unknown>[]> {
-    return productRepository.getLatestPricesBySupermarket(supermarketId);
+  async getLatestPricesBySupermarket(supermarketId: string): Promise<SupermarketProductEntry[]> {
+    return this.productRepository.getLatestPricesBySupermarket(supermarketId);
   }
 
   async cleanupOldPrices(daysToKeep: number = 90): Promise<number> {
-    const deletedCount = await priceRepository.cleanupOld(daysToKeep);
+    const deletedCount = await this.priceRepository.cleanupOld(daysToKeep);
     scraperLogger.info(`Cleaned up ${deletedCount} old price records`);
     return deletedCount;
   }

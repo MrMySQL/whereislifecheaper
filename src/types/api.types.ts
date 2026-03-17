@@ -38,7 +38,7 @@ export interface Supermarket {
   logo_url: string | null;
   is_active: boolean;
   scraper_class: string;
-  scraper_config: any;
+  scraper_config: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
 }

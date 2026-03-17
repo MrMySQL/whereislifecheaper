@@ -1,52 +1,52 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { productRepository } from '../../repositories';
+import { CountryComparisonEntry } from '../../types/db.types';
+import { validateQuery, paginationSchema } from '../middleware/validate';
 
 const router = Router();
 
-router.get('/', async (req, res, next) => {
+const productListSchema = paginationSchema.extend({
+  search: z.string().optional(),
+  category_id: z.string().uuid().optional(),
+  brand: z.string().optional(),
+});
+
+const compareCountriesSchema = z.object({
+  product_name: z.string().min(1, 'product_name query parameter is required'),
+});
+
+const priceHistoryQuerySchema = z.object({
+  supermarket_id: z.string().uuid().optional(),
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
+
+router.get('/', validateQuery(productListSchema), async (req, res, next) => {
   try {
-    const { search, category_id, brand, limit = '50', offset = '0' } = req.query;
+    const { search, category_id, brand, limit, offset } = req.validatedQuery as z.infer<typeof productListSchema>;
 
     const data = await productRepository.findAll(
-      {
-        search: search as string | undefined,
-        categoryId: category_id as string | undefined,
-        brand: brand as string | undefined,
-      },
-      {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      }
+      { search, categoryId: category_id, brand },
+      { limit, offset }
     );
 
     res.json({
       data,
       count: data.length,
-      pagination: {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      },
+      pagination: { limit, offset },
     });
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/compare/countries', async (req, res, next) => {
+router.get('/compare/countries', validateQuery(compareCountriesSchema), async (req, res, next) => {
   try {
-    const { product_name } = req.query;
+    const { product_name } = req.validatedQuery as z.infer<typeof compareCountriesSchema>;
 
-    if (!product_name) {
-      res.status(400).json({
-        error: 'Bad Request',
-        message: 'product_name query parameter is required',
-      });
-      return;
-    }
+    const rows = await productRepository.compareByCountry(product_name);
 
-    const rows = await productRepository.compareByCountry(product_name as string);
-
-    const byCountry = rows.reduce((acc: Record<string, any>, row: any) => {
+    const byCountry = rows.reduce((acc: Record<string, { country_id: string; country_name: string; country_code: string; currency: string; products: Partial<CountryComparisonEntry>[] }>, row) => {
       const countryKey = row.country_code;
       if (!acc[countryKey]) {
         acc[countryKey] = {
@@ -97,14 +97,14 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.get('/:id/price-history', async (req, res, next) => {
+router.get('/:id/price-history', validateQuery(priceHistoryQuerySchema), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { supermarket_id, days = '30' } = req.query;
+    const { supermarket_id, days } = req.validatedQuery as z.infer<typeof priceHistoryQuerySchema>;
 
     const data = await productRepository.getPriceHistory(id, {
-      supermarketId: supermarket_id as string | undefined,
-      days: parseInt(days as string),
+      supermarketId: supermarket_id,
+      days,
     });
 
     res.json({ data, count: data.length });

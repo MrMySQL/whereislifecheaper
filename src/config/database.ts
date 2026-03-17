@@ -15,14 +15,14 @@ const poolConfig: PoolConfig = {
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
+  maxLifetimeSeconds: 1800,
 };
 
 const pool = new Pool(poolConfig);
 
-// Handle pool errors
+// Handle pool errors — pool automatically removes the failed client
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
-  process.exit(-1);
 });
 
 // Test connection on startup
@@ -33,15 +33,12 @@ pool.on('connect', () => {
 /**
  * Execute a SQL query with parameters
  */
-export async function query<T extends QueryResultRow = any>(
+export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
-  params?: any[]
+  params?: unknown[]
 ): Promise<QueryResult<T>> {
-  // const start = Date.now();
   try {
     const result = await pool.query<T>(text, params);
-    // const duration = Date.now() - start;
-    // console.log('Executed query', { text, duration, rows: result.rowCount });
     return result;
   } catch (error) {
     console.error('Query error', { text, error });
