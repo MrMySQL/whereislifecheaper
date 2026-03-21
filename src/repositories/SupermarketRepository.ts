@@ -54,18 +54,12 @@ export class SupermarketRepository {
       SELECT
         s.*,
         c.name as country_name, c.code as country_code, c.currency_code,
-        (
-          SELECT COUNT(DISTINCT pm.product_id)
-          FROM product_mappings pm
-          WHERE pm.supermarket_id = s.id
-        ) as product_count,
-        (
-          SELECT MAX(sl.completed_at)
-          FROM scrape_logs sl
-          WHERE sl.supermarket_id = s.id AND sl.status = 'success'
-        ) as last_scrape
+        COUNT(DISTINCT pm.product_id) as product_count,
+        MAX(CASE WHEN sl.status = 'success' THEN sl.completed_at END) as last_scrape
       FROM supermarkets s
       INNER JOIN countries c ON s.country_id = c.id
+      LEFT JOIN product_mappings pm ON pm.supermarket_id = s.id
+      LEFT JOIN scrape_logs sl ON sl.supermarket_id = s.id
       WHERE 1=1
     `;
     const params: unknown[] = [];
@@ -79,6 +73,7 @@ export class SupermarketRepository {
       sql += ` AND s.is_active = true`;
     }
 
+    sql += ` GROUP BY s.id, c.name, c.code, c.currency_code`;
     sql += ` ORDER BY c.name, s.name`;
     const result = await query<SupermarketWithProductCountAndScrape>(sql, params);
     return result.rows;

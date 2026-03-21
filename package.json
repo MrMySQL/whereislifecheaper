@@ -7,7 +7,7 @@
     "build": "tsc && npm run build:frontend",
     "build:backend": "tsc",
     "build:frontend": "cd frontend && npm run build",
-    "dev": "ts-node src/index.ts",
+    "dev": "ts-node src/api/server.ts",
     "dev:frontend": "cd frontend && npm run dev",
     "start": "NODE_ENV=production node dist/api/server.js",
     "migrate": "ts-node scripts/migrate.ts",

@@ -83,17 +83,17 @@ export class ScrapeLogRepository {
 
   async getLatestStats(): Promise<ScrapeLogLatestStats[]> {
     const result = await query<ScrapeLogLatestStats>(`
-      SELECT
-        s.name as supermarket_name,
-        c.name as country_name,
-        sl.status, sl.products_scraped, sl.duration_seconds, sl.completed_at
-      FROM scrape_logs sl
-      INNER JOIN supermarkets s ON sl.supermarket_id = s.id
-      INNER JOIN countries c ON s.country_id = c.id
-      WHERE sl.id IN (
-        SELECT MAX(id) FROM scrape_logs GROUP BY supermarket_id
-      )
-      ORDER BY sl.completed_at DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON (sl.supermarket_id)
+          s.name as supermarket_name,
+          c.name as country_name,
+          sl.status, sl.products_scraped, sl.duration_seconds, sl.completed_at
+        FROM scrape_logs sl
+        INNER JOIN supermarkets s ON sl.supermarket_id = s.id
+        INNER JOIN countries c ON s.country_id = c.id
+        ORDER BY sl.supermarket_id, sl.id DESC
+      ) latest
+      ORDER BY completed_at DESC
     `);
     return result.rows;
   }

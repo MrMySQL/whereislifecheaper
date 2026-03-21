@@ -89,8 +89,11 @@ export class ProductRepository {
 
   async getPriceHistory(
     productId: string,
-    options: { supermarketId?: string; days: number }
+    options: { supermarketId?: string; days: number; limit?: number; offset?: number }
   ): Promise<PriceHistoryEntry[]> {
+    const limit = options.limit ?? 500;
+    const offset = options.offset ?? 0;
+
     let sql = `
       SELECT
         pr.id, pr.product_mapping_id, pr.price, pr.currency, pr.original_price,
@@ -112,7 +115,8 @@ export class ProductRepository {
       sql += ` AND pm.supermarket_id = $${i++}`;
       params.push(options.supermarketId);
     }
-    sql += ` ORDER BY pr.scraped_at DESC`;
+    sql += ` ORDER BY pr.scraped_at DESC LIMIT $${i++} OFFSET $${i++}`;
+    params.push(limit, offset);
 
     const result = await query<PriceHistoryEntry>(sql, params);
     return result.rows;
@@ -191,17 +195,26 @@ export class ProductRepository {
     return result.rows;
   }
 
-  async getLatestPricesBySupermarket(supermarketId: string): Promise<SupermarketProductEntry[]> {
+  async getLatestPricesBySupermarket(
+    supermarketId: string,
+    pagination: { limit?: number; offset?: number } = {}
+  ): Promise<SupermarketProductEntry[]> {
+    const limit = pagination.limit ?? 200;
+    const offset = pagination.offset ?? 0;
+
     const result = await query<SupermarketProductEntry>(
-      `SELECT DISTINCT ON (p.id)
-        p.id, p.name, p.brand, p.unit, p.unit_quantity,
-        pr.price, pr.currency, pr.original_price, pr.is_on_sale, pr.is_available, pr.price_per_unit, pr.scraped_at
-       FROM products p
-       INNER JOIN product_mappings pm ON p.id = pm.product_id
-       INNER JOIN prices pr ON pr.product_mapping_id = pm.id
-       WHERE pm.supermarket_id = $1
-       ORDER BY p.id, pr.scraped_at DESC`,
-      [supermarketId]
+      `SELECT * FROM (
+        SELECT DISTINCT ON (p.id)
+          p.id, p.name, p.brand, p.unit, p.unit_quantity,
+          pr.price, pr.currency, pr.original_price, pr.is_on_sale, pr.is_available, pr.price_per_unit, pr.scraped_at
+         FROM products p
+         INNER JOIN product_mappings pm ON p.id = pm.product_id
+         INNER JOIN prices pr ON pr.product_mapping_id = pm.id
+         WHERE pm.supermarket_id = $1
+         ORDER BY p.id, pr.scraped_at DESC
+       ) sub
+       LIMIT $2 OFFSET $3`,
+      [supermarketId, limit, offset]
     );
     return result.rows;
   }

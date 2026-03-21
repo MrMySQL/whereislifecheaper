@@ -58,3 +58,7 @@ temp/
 .vercel
 
 terraform/.terraform
+
+.claude
+.claude-flow
+.swarm

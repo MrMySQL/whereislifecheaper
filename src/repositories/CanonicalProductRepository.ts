@@ -15,20 +15,13 @@ export class CanonicalProductRepository {
         cp.id, cp.name, cp.description, cp.category_id,
         c.name as category_name,
         cp.show_per_unit_price, cp.disabled, cp.created_at,
-        (
-          SELECT COUNT(DISTINCT p.id)
-          FROM products p
-          WHERE p.canonical_product_id = cp.id
-        ) as linked_products_count,
-        (
-          SELECT COUNT(DISTINCT s.country_id)
-          FROM products p
-          JOIN product_mappings pm ON p.id = pm.product_id
-          JOIN supermarkets s ON pm.supermarket_id = s.id
-          WHERE p.canonical_product_id = cp.id
-        ) as countries_count
+        COUNT(DISTINCT p.id) as linked_products_count,
+        COUNT(DISTINCT s.country_id) as countries_count
       FROM canonical_products cp
       LEFT JOIN categories c ON cp.category_id = c.id
+      LEFT JOIN products p ON p.canonical_product_id = cp.id
+      LEFT JOIN product_mappings pm ON pm.product_id = p.id
+      LEFT JOIN supermarkets s ON pm.supermarket_id = s.id
     `;
     const params: unknown[] = [];
 
@@ -37,6 +30,7 @@ export class CanonicalProductRepository {
       params.push(`%${search}%`);
     }
 
+    sql += ` GROUP BY cp.id, cp.name, cp.description, cp.category_id, c.name, cp.show_per_unit_price, cp.disabled, cp.created_at`;
     sql += ` ORDER BY cp.name`;
     const result = await query<CanonicalProductWithCounts>(sql, params);
     return result.rows;
@@ -216,7 +210,11 @@ export class CanonicalProductRepository {
     return result.rows[0] ?? null;
   }
 
-  async getLinkedProducts(canonicalId: string): Promise<LinkedProductEntry[]> {
+  async getLinkedProducts(
+    canonicalId: string,
+    limit: number = 100,
+    offset: number = 0
+  ): Promise<LinkedProductEntry[]> {
     const result = await query<LinkedProductEntry>(
       `SELECT
         p.id, p.name, p.brand, p.unit, p.unit_quantity,
@@ -234,8 +232,9 @@ export class CanonicalProductRepository {
          LIMIT 1
        ) pr ON true
        WHERE p.canonical_product_id = $1
-       ORDER BY c.name, p.name`,
-      [canonicalId]
+       ORDER BY c.name, p.name
+       LIMIT $2 OFFSET $3`,
+      [canonicalId, limit, offset]
     );
     return result.rows;
   }

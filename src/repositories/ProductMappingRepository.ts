@@ -27,16 +27,14 @@ export class ProductMappingRepository {
     supermarketId: string,
     url: string
   ): Promise<MappingLookupResult | null> {
+    const normalizedUrl = url.replace(/\/+$/, '');
     const result = await query<MappingLookupResult>(
       `SELECT product_id, id, external_id, url FROM product_mappings
        WHERE supermarket_id = $1
-       AND (
-         url = $2
-         OR TRIM(TRAILING '/' FROM url) = TRIM(TRAILING '/' FROM $2)
-       )
+       AND (url = $2 OR url = $3)
        ORDER BY id DESC
        LIMIT 1`,
-      [supermarketId, url]
+      [supermarketId, normalizedUrl, normalizedUrl + '/']
     );
     return result.rows[0] ?? null;
   }
@@ -190,17 +188,18 @@ export class ProductMappingRepository {
     urls: string[]
   ): Promise<MappingLookupResult[]> {
     if (urls.length === 0) return [];
+    const normalizedUrls = urls.map(u => u.replace(/\/+$/, ''));
     const result = await query<MappingLookupResult>(
-      `SELECT DISTINCT ON (TRIM(TRAILING '/' FROM pm.url))
+      `SELECT DISTINCT ON (pm.url)
         pm.id,
         pm.product_id,
         pm.external_id,
-        TRIM(TRAILING '/' FROM pm.url) AS url
+        pm.url
        FROM product_mappings pm
        WHERE pm.supermarket_id = $1
-       AND TRIM(TRAILING '/' FROM pm.url) = ANY($2)
-       ORDER BY TRIM(TRAILING '/' FROM pm.url), pm.id DESC`,
-      [supermarketId, urls]
+       AND pm.url = ANY($2)
+       ORDER BY pm.url, pm.id DESC`,
+      [supermarketId, normalizedUrls]
     );
     return result.rows;
   }
