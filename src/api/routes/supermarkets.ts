@@ -6,7 +6,7 @@ import { validateQuery, paginationSchema } from '../middleware/validate';
 const router = Router();
 
 const supermarketListSchema = z.object({
-  country_id: z.string().uuid().optional(),
+  country_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
   active_only: z.enum(['true', 'false']).optional(),
 });
 

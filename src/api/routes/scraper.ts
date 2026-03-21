@@ -10,12 +10,12 @@ const router = Router();
 const scraperService = new ScraperService();
 
 const triggerSchema = z.object({
-  supermarket_id: z.string().uuid().optional(),
+  supermarket_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
   categories: z.array(z.string()).optional(),
 });
 
 const logsSchema = paginationSchema.extend({
-  supermarket_id: z.string().uuid().optional(),
+  supermarket_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
   status: z.string().optional(),
 });
 

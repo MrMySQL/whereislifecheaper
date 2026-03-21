@@ -21,20 +21,20 @@ const comparisonSchema = paginationSchema.extend({
 const productsByCountrySchema = paginationSchema.extend({
   limit: z.coerce.number().int().min(1).max(500).default(100),
   search: z.string().optional(),
-  supermarket_id: z.string().uuid().optional(),
+  supermarket_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
   mapped_only: z.enum(['true', 'false']).optional(),
 });
 
 const createCanonicalSchema = z.object({
   name: z.string().min(1, 'name is required'),
   description: z.string().optional(),
-  category_id: z.string().uuid().optional(),
+  category_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
   show_per_unit_price: z.boolean().optional(),
 });
 
 const linkProductSchema = z.object({
-  product_id: z.string().min(1, 'product_id is required'),
-  canonical_product_id: z.string().nullable().optional(),
+  product_id: z.coerce.string().min(1, 'product_id is required'),
+  canonical_product_id: z.coerce.string().nullable().optional(),
 });
 
 const updateCanonicalSchema = z.object({

@@ -8,8 +8,8 @@ const router = Router();
 
 const latestPricesSchema = paginationSchema.extend({
   limit: z.coerce.number().int().min(1).max(500).default(100),
-  country_id: z.string().uuid().optional(),
-  supermarket_id: z.string().uuid().optional(),
+  country_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
+  supermarket_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
 });
 
 const compareSchema = paginationSchema.extend({

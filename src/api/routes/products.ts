@@ -8,7 +8,7 @@ const router = Router();
 
 const productListSchema = paginationSchema.extend({
   search: z.string().optional(),
-  category_id: z.string().uuid().optional(),
+  category_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
   brand: z.string().optional(),
 });
 
@@ -17,7 +17,7 @@ const compareCountriesSchema = z.object({
 });
 
 const priceHistoryQuerySchema = z.object({
-  supermarket_id: z.string().uuid().optional(),
+  supermarket_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
   days: z.coerce.number().int().min(1).max(365).default(30),
 });
 
