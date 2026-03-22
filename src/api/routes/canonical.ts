@@ -27,6 +27,10 @@ const productsByCountrySchema = paginationSchema.extend({
   unit_quantity: z.coerce.number().positive().optional(),
 });
 
+const unitsQuerySchema = z.object({
+  supermarket_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
+});
+
 const createCanonicalSchema = z.object({
   name: z.string().min(1, 'name is required'),
   description: z.string().optional(),
@@ -276,13 +280,13 @@ router.get('/products-by-country/:countryId', validateQuery(productsByCountrySch
   }
 });
 
-router.get('/products-by-country/:countryId/units', async (req, res, next) => {
+router.get('/products-by-country/:countryId/units', validateQuery(unitsQuerySchema), async (req, res, next) => {
   try {
     const { countryId } = req.params;
-    const { supermarket_id } = req.query;
+    const { supermarket_id } = req.validatedQuery as z.infer<typeof unitsQuerySchema>;
     const data = await canonicalProductRepository.getDistinctUnits(
       countryId,
-      typeof supermarket_id === 'string' ? supermarket_id : undefined
+      supermarket_id
     );
     res.json({ data });
   } catch (error) {

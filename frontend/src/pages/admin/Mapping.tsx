@@ -40,8 +40,6 @@ function parseCanonicalName(name: string): { searchTerm: string; unit: string | 
   const quantity = parseFloat(unitMatch[1]);
   let unit = unitMatch[2].toLowerCase();
   if (unit === 'pieces') unit = 'pcs';
-  if (unit === 'l') unit = 'L';
-  if (unit === 'ml') unit = 'mL';
 
   const searchTerm = name.substring(0, unitMatch.index).trim();
   return { searchTerm, unit, quantity };
