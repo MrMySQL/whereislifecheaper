@@ -143,6 +143,8 @@ export default function Mapping() {
       }
       params.delete('supermarket');
       params.delete('search');
+      params.delete('unit');
+      params.delete('unit_quantity');
       params.delete('page');
     });
     setProductSearchInput('');
@@ -165,7 +167,7 @@ export default function Mapping() {
     setProductSearchInput(search);
   };
 
-  const handleUnitChange = useCallback((unit: string) => {
+  const handleUnitChange = (unit: string) => {
     updateUrlParams((params) => {
       if (unit) {
         params.set('unit', unit);
@@ -175,9 +177,9 @@ export default function Mapping() {
       }
       params.delete('page');
     });
-  }, [updateUrlParams]);
+  };
 
-  const handleUnitQuantityChange = useCallback((qty: string) => {
+  const handleUnitQuantityChange = (qty: string) => {
     updateUrlParams((params) => {
       if (qty) {
         params.set('unit_quantity', qty);
@@ -186,7 +188,7 @@ export default function Mapping() {
       }
       params.delete('page');
     });
-  }, [updateUrlParams]);
+  };
 
   const handleMappedOnlyChange = (checked: boolean) => {
     setMappedOnly(checked);
