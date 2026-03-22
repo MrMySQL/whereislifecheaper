@@ -23,6 +23,8 @@ const productsByCountrySchema = paginationSchema.extend({
   search: z.string().optional(),
   supermarket_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
   mapped_only: z.enum(['true', 'false']).optional(),
+  unit: z.string().optional(),
+  unit_quantity: z.coerce.number().positive().optional(),
 });
 
 const createCanonicalSchema = z.object({
@@ -250,7 +252,7 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
 router.get('/products-by-country/:countryId', validateQuery(productsByCountrySchema), async (req, res, next) => {
   try {
     const { countryId } = req.params;
-    const { search, supermarket_id, mapped_only, limit, offset } = req.validatedQuery as z.infer<typeof productsByCountrySchema>;
+    const { search, supermarket_id, mapped_only, unit, unit_quantity, limit, offset } = req.validatedQuery as z.infer<typeof productsByCountrySchema>;
 
     const { data, total } = await canonicalProductRepository.getProductsByCountry(
       countryId,
@@ -258,6 +260,8 @@ router.get('/products-by-country/:countryId', validateQuery(productsByCountrySch
         search,
         supermarketId: supermarket_id,
         mappedOnly: mapped_only === 'true',
+        unit,
+        unitQuantity: unit_quantity,
       },
       { limit, offset }
     );
