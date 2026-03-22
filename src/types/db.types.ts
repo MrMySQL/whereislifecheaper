@@ -4,6 +4,7 @@ export interface CountryRow {
   code: string;
   currency_code: string;
   flag_emoji: string | null;
+  language_code: string | null;
 }
 
 export interface SupermarketRow {

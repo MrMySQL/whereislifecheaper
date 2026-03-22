@@ -12,6 +12,7 @@ export interface Country {
   code: string;
   currency_code: string;
   flag_emoji: string;
+  language_code: string | null;
   supermarket_count?: number;
 }
 
