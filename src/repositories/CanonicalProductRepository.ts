@@ -320,7 +320,7 @@ export class CanonicalProductRepository {
 
   async getProductsByCountry(
     countryId: string,
-    filters: { search?: string; supermarketId?: string; mappedOnly?: boolean },
+    filters: { search?: string; supermarketId?: string; mappedOnly?: boolean; unit?: string; unitQuantity?: number },
     pagination: { limit: number; offset: number }
   ): Promise<{ data: CountryProductEntry[]; total: number }> {
     let sql = `
@@ -360,6 +360,14 @@ export class CanonicalProductRepository {
     if (filters.mappedOnly) {
       sql += ` AND p.canonical_product_id IS NOT NULL`;
     }
+    if (filters.unit) {
+      sql += ` AND p.unit = $${i++}`;
+      params.push(filters.unit);
+    }
+    if (filters.unitQuantity !== undefined) {
+      sql += ` AND p.unit_quantity = $${i++}`;
+      params.push(filters.unitQuantity);
+    }
 
     sql += ` ORDER BY p.id, p.name`;
     sql = `SELECT * FROM (${sql}) sub ORDER BY name LIMIT $${i++} OFFSET $${i++}`;
@@ -389,6 +397,14 @@ export class CanonicalProductRepository {
     }
     if (filters.mappedOnly) {
       countSql += ` AND p.canonical_product_id IS NOT NULL`;
+    }
+    if (filters.unit) {
+      countSql += ` AND p.unit = $${ci++}`;
+      countParams.push(filters.unit);
+    }
+    if (filters.unitQuantity !== undefined) {
+      countSql += ` AND p.unit_quantity = $${ci++}`;
+      countParams.push(filters.unitQuantity);
     }
 
     const countResult = await query<{ total: string }>(countSql, countParams);
