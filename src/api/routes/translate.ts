@@ -29,7 +29,8 @@ const translateSchema = z.object({
   target: z.string().min(2).max(5),
 });
 
-// In-memory translation cache
+// In-memory translation cache with size limit
+const MAX_CACHE_SIZE = 10000;
 const translationCache = new Map<string, string>();
 
 async function translateText(text: string, targetLang: string): Promise<string> {
@@ -60,8 +61,16 @@ async function translateText(text: string, targetLang: string): Promise<string> 
   }
 
   const data = await response.json();
-  const translated = data.data.translations[0].translatedText;
+  const translations = data?.data?.translations;
+  if (!translations?.length) {
+    throw new Error('No translation returned from API');
+  }
+  const translated = translations[0].translatedText;
 
+  if (translationCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = translationCache.keys().next().value;
+    if (firstKey) translationCache.delete(firstKey);
+  }
   translationCache.set(cacheKey, translated);
   return translated;
 }
