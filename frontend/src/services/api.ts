@@ -82,12 +82,17 @@ export const canonicalApi = {
     const response = await api.patch<{ data: CanonicalProductBasic }>(`/canonical/${id}`, data);
     return response.data.data;
   },
-  getProductsByCountry: async (countryId: number, params?: { search?: string; supermarket_id?: number; mapped_only?: boolean; limit?: number; offset?: number }): Promise<{
+  getProductsByCountry: async (countryId: number, params?: { search?: string; supermarket_id?: number; mapped_only?: boolean; unit?: string; unit_quantity?: number; limit?: number; offset?: number }): Promise<{
     data: Product[];
     count: number;
   }> => {
     const response = await api.get<{ data: Product[]; count: number }>(`/canonical/products-by-country/${countryId}`, { params });
     return response.data;
+  },
+  getDistinctUnits: async (countryId: number, supermarketId?: number): Promise<string[]> => {
+    const params = supermarketId ? { supermarket_id: supermarketId } : {};
+    const response = await api.get<{ data: string[] }>(`/canonical/products-by-country/${countryId}/units`, { params });
+    return response.data.data;
   },
   getMappedProducts: async (params?: {
     search?: string;

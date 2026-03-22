@@ -414,4 +414,24 @@ export class CanonicalProductRepository {
       total: parseInt(countResult.rows[0]?.total || '0'),
     };
   }
+
+  async getDistinctUnits(countryId: string, supermarketId?: string): Promise<string[]> {
+    let sql = `
+      SELECT DISTINCT p.unit
+      FROM products p
+      INNER JOIN product_mappings pm ON p.id = pm.product_id
+      INNER JOIN supermarkets s ON pm.supermarket_id = s.id
+      WHERE s.country_id = $1 AND p.unit IS NOT NULL AND p.unit != ''
+    `;
+    const params: unknown[] = [countryId];
+
+    if (supermarketId) {
+      sql += ` AND s.id = $2`;
+      params.push(parseInt(supermarketId, 10));
+    }
+
+    sql += ` ORDER BY p.unit`;
+    const result = await query<{ unit: string }>(sql, params);
+    return result.rows.map(r => r.unit);
+  }
 }

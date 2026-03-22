@@ -276,6 +276,20 @@ router.get('/products-by-country/:countryId', validateQuery(productsByCountrySch
   }
 });
 
+router.get('/products-by-country/:countryId/units', async (req, res, next) => {
+  try {
+    const { countryId } = req.params;
+    const { supermarket_id } = req.query;
+    const data = await canonicalProductRepository.getDistinctUnits(
+      countryId,
+      typeof supermarket_id === 'string' ? supermarket_id : undefined
+    );
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/', isAdmin, validateBody(createCanonicalSchema), async (req, res, next) => {
   try {
     const { name, description, category_id, show_per_unit_price } = req.validatedBody as z.infer<typeof createCanonicalSchema>;
