@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info, EyeOff, Link } from 'lucide-react';
-import { countriesApi, canonicalApi, supermarketsApi } from '../../services/api';
+import { countriesApi, canonicalApi, supermarketsApi, translateApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
 import { convertToEUR } from '../../utils/currency';
 import { formatFullDate } from '../../utils/dateFormat';
@@ -38,6 +38,7 @@ export default function Mapping() {
   const searchParam = searchParams.get('search') || '';
   const [productSearchInput, setProductSearchInput] = useState(searchParam);
   const [productSearch, setProductSearch] = useState(searchParam);
+  const [translatedSearch, setTranslatedSearch] = useState('');
   const [mappedOnly, setMappedOnly] = useState(false);
   const [showManageSection, setShowManageSection] = useState(false);
   const [canonicalSearch, setCanonicalSearch] = useState('');
@@ -107,13 +108,72 @@ export default function Mapping() {
     enabled: !!selectedCountryId,
   });
 
+  // Fetch all canonical products for dropdowns
+  const { data: canonicalProducts = [] } = useQuery({
+    queryKey: ['canonical'],
+    queryFn: () => canonicalApi.getAll(),
+  });
+
+  // Fetch language map for bilingual search
+  const { data: languageMap = {} } = useQuery({
+    queryKey: ['translate-languages'],
+    queryFn: translateApi.getLanguages,
+    staleTime: Infinity,
+  });
+
+  // Compute target language from selected country
+  const selectedCountryCode = useMemo(() => {
+    if (!selectedCountryId) return null;
+    const country = countries.find((c: Country) => c.id === selectedCountryId);
+    return country?.code || null;
+  }, [selectedCountryId, countries]);
+
+  const targetLanguage = selectedCountryCode ? languageMap[selectedCountryCode] : null;
+
+  // Translate search term when debounced search changes
+  useEffect(() => {
+    if (!productSearch || !targetLanguage) {
+      setTranslatedSearch('');
+      return;
+    }
+
+    // Only translate if the search term looks English (ASCII-only)
+    const isAscii = /^[\x00-\x7F]+$/.test(productSearch);
+    if (!isAscii) {
+      setTranslatedSearch('');
+      return;
+    }
+
+    let cancelled = false;
+    translateApi.translate(productSearch, targetLanguage).then((result) => {
+      if (!cancelled) {
+        setTranslatedSearch(result);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setTranslatedSearch('');
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [productSearch, targetLanguage]);
+
+  // Combine original and translated search terms
+  const combinedSearch = useMemo(() => {
+    if (!productSearch) return undefined;
+    if (translatedSearch && translatedSearch.toLowerCase() !== productSearch.toLowerCase()) {
+      return `${productSearch},${translatedSearch}`;
+    }
+    return productSearch;
+  }, [productSearch, translatedSearch]);
+
   // Fetch products by country with pagination
   const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: ['products', selectedCountryId, selectedSupermarketId, productSearch, productPage, mappedOnly, selectedUnit, selectedUnitQuantity],
+    queryKey: ['products', selectedCountryId, selectedSupermarketId, combinedSearch, productPage, mappedOnly, selectedUnit, selectedUnitQuantity],
     queryFn: () =>
       selectedCountryId
         ? canonicalApi.getProductsByCountry(selectedCountryId, {
-            search: productSearch || undefined,
+            search: combinedSearch,
             supermarket_id: selectedSupermarketId || undefined,
             mapped_only: mappedOnly || undefined,
             unit: selectedUnit || undefined,
@@ -124,12 +184,6 @@ export default function Mapping() {
         : Promise.resolve({ data: [], count: 0 }),
     enabled: !!selectedCountryId,
     placeholderData: undefined,
-  });
-
-  // Fetch all canonical products for dropdowns
-  const { data: canonicalProducts = [] } = useQuery({
-    queryKey: ['canonical'],
-    queryFn: () => canonicalApi.getAll(),
   });
 
   // Reset page when search or country changes

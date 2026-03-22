@@ -111,6 +111,20 @@ export const canonicalApi = {
   },
 };
 
+// Translate API
+export const translateApi = {
+  translate: async (text: string, target: string): Promise<string> => {
+    const response = await api.get<{ translated: string }>('/translate', {
+      params: { text, target },
+    });
+    return response.data.translated;
+  },
+  getLanguages: async (): Promise<Record<string, string>> => {
+    const response = await api.get<Record<string, string>>('/translate/languages');
+    return response.data;
+  },
+};
+
 // Products API
 export const productsApi = {
   getPriceHistory: async (productId: number, days: number = 30): Promise<{

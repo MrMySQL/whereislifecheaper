@@ -353,9 +353,19 @@ export class CanonicalProductRepository {
       params.push(parseInt(filters.supermarketId, 10));
     }
     if (filters.search) {
-      sql += ` AND (p.name ILIKE $${i} OR p.brand ILIKE $${i})`;
-      params.push(`%${filters.search}%`);
-      i++;
+      const terms = filters.search.split(',').map(t => t.trim()).filter(Boolean);
+      if (terms.length === 1) {
+        sql += ` AND (p.name ILIKE $${i} OR p.brand ILIKE $${i})`;
+        params.push(`%${terms[0]}%`);
+        i++;
+      } else {
+        const orClauses = terms.map((term) => {
+          const idx = i++;
+          params.push(`%${term}%`);
+          return `(p.name ILIKE $${idx} OR p.brand ILIKE $${idx})`;
+        });
+        sql += ` AND (${orClauses.join(' OR ')})`;
+      }
     }
     if (filters.mappedOnly) {
       sql += ` AND p.canonical_product_id IS NOT NULL`;
@@ -391,9 +401,19 @@ export class CanonicalProductRepository {
       countParams.push(parseInt(filters.supermarketId, 10));
     }
     if (filters.search) {
-      countSql += ` AND (p.name ILIKE $${ci} OR p.brand ILIKE $${ci})`;
-      countParams.push(`%${filters.search}%`);
-      ci++;
+      const terms = filters.search.split(',').map(t => t.trim()).filter(Boolean);
+      if (terms.length === 1) {
+        countSql += ` AND (p.name ILIKE $${ci} OR p.brand ILIKE $${ci})`;
+        countParams.push(`%${terms[0]}%`);
+        ci++;
+      } else {
+        const orClauses = terms.map((term) => {
+          const idx = ci++;
+          countParams.push(`%${term}%`);
+          return `(p.name ILIKE $${idx} OR p.brand ILIKE $${idx})`;
+        });
+        countSql += ` AND (${orClauses.join(' OR ')})`;
+      }
     }
     if (filters.mappedOnly) {
       countSql += ` AND p.canonical_product_id IS NOT NULL`;
