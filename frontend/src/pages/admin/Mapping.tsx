@@ -45,6 +45,8 @@ export default function Mapping() {
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
   const selectedCountryId = parsePositiveIntParam(searchParams.get('country'));
   const selectedSupermarketId = parsePositiveIntParam(searchParams.get('supermarket'));
+  const selectedUnit = searchParams.get('unit') || '';
+  const selectedUnitQuantity = searchParams.get('unit_quantity') || '';
   const pageParam = parsePositiveIntParam(searchParams.get('page'));
   const productPage = pageParam ? pageParam - 1 : 0;
 
@@ -107,13 +109,15 @@ export default function Mapping() {
 
   // Fetch products by country with pagination
   const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: ['products', selectedCountryId, selectedSupermarketId, productSearch, productPage, mappedOnly],
+    queryKey: ['products', selectedCountryId, selectedSupermarketId, productSearch, productPage, mappedOnly, selectedUnit, selectedUnitQuantity],
     queryFn: () =>
       selectedCountryId
         ? canonicalApi.getProductsByCountry(selectedCountryId, {
             search: productSearch || undefined,
             supermarket_id: selectedSupermarketId || undefined,
             mapped_only: mappedOnly || undefined,
+            unit: selectedUnit || undefined,
+            unit_quantity: selectedUnitQuantity ? Number(selectedUnitQuantity) : undefined,
             limit: PRODUCTS_PER_PAGE,
             offset: productPage * PRODUCTS_PER_PAGE,
           })
@@ -160,6 +164,29 @@ export default function Mapping() {
   const handleProductSearch = (search: string) => {
     setProductSearchInput(search);
   };
+
+  const handleUnitChange = useCallback((unit: string) => {
+    updateUrlParams((params) => {
+      if (unit) {
+        params.set('unit', unit);
+      } else {
+        params.delete('unit');
+        params.delete('unit_quantity');
+      }
+      params.delete('page');
+    });
+  }, [updateUrlParams]);
+
+  const handleUnitQuantityChange = useCallback((qty: string) => {
+    updateUrlParams((params) => {
+      if (qty) {
+        params.set('unit_quantity', qty);
+      } else {
+        params.delete('unit_quantity');
+      }
+      params.delete('page');
+    });
+  }, [updateUrlParams]);
 
   const handleMappedOnlyChange = (checked: boolean) => {
     setMappedOnly(checked);
@@ -480,6 +507,39 @@ export default function Mapping() {
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {/* Unit filter */}
+          {selectedCountryId && (
+            <div className="sm:w-36">
+              <select
+                value={selectedUnit}
+                onChange={(e) => handleUnitChange(e.target.value)}
+                className="input h-12 py-0"
+              >
+                <option value="">Unit</option>
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="l">L</option>
+                <option value="ml">ml</option>
+                <option value="pcs">pcs</option>
+              </select>
+            </div>
+          )}
+
+          {/* Quantity filter */}
+          {selectedCountryId && selectedUnit && (
+            <div className="sm:w-28">
+              <input
+                type="number"
+                placeholder="Qty"
+                value={selectedUnitQuantity}
+                onChange={(e) => handleUnitQuantityChange(e.target.value)}
+                className="input h-12 py-0"
+                min="0"
+                step="0.1"
+              />
             </div>
           )}
 
