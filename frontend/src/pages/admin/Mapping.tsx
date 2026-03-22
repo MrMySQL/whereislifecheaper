@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info, EyeOff, Link } from 'lucide-react';
-import { countriesApi, canonicalApi, supermarketsApi } from '../../services/api';
+import { Search, Plus, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, Trash2, Settings, Info, EyeOff, Link, Wand2 } from 'lucide-react';
+import { countriesApi, canonicalApi, supermarketsApi, translateApi } from '../../services/api';
 import Loading from '../../components/common/Loading';
 import { convertToEUR } from '../../utils/currency';
 import { formatFullDate } from '../../utils/dateFormat';
@@ -31,6 +31,22 @@ function getLastSeenTextClass(lastSeenAt: string | null): string {
   return 'text-green-600';
 }
 
+function parseCanonicalName(name: string): { searchTerm: string; unit: string | null; quantity: number | null } {
+  const unitMatch = name.match(/(\d+(?:\.\d+)?)\s*(kg|g|l|ml|pcs|pieces|pack)/i);
+  if (!unitMatch) {
+    return { searchTerm: name.trim(), unit: null, quantity: null };
+  }
+
+  const quantity = parseFloat(unitMatch[1]);
+  let unit = unitMatch[2].toLowerCase();
+  if (unit === 'pieces') unit = 'pcs';
+  if (unit === 'l') unit = 'L';
+  if (unit === 'ml') unit = 'mL';
+
+  const searchTerm = name.substring(0, unitMatch.index).trim();
+  return { searchTerm, unit, quantity };
+}
+
 export default function Mapping() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -45,6 +61,9 @@ export default function Mapping() {
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
   const [unitFilter, setUnitFilter] = useState('');
   const [unitQuantityFilter, setUnitQuantityFilter] = useState('');
+  const [suggestingFor, setSuggestingFor] = useState<CanonicalProductBasic | null>(null);
+  const [suggestSearchTerm, setSuggestSearchTerm] = useState('');
+  const [isTranslating, setIsTranslating] = useState(false);
   const selectedCountryId = parsePositiveIntParam(searchParams.get('country'));
   const selectedSupermarketId = parsePositiveIntParam(searchParams.get('supermarket'));
   const pageParam = parsePositiveIntParam(searchParams.get('page'));
@@ -177,6 +196,59 @@ export default function Mapping() {
   const handleMappedOnlyChange = (checked: boolean) => {
     setMappedOnly(checked);
     setPageInUrl(0);
+  };
+
+  const selectedCountry = countries.find((c: Country) => c.id === selectedCountryId);
+
+  const handleSmartSuggest = async (cp: CanonicalProductBasic) => {
+    if (!selectedCountryId || !selectedCountry?.language_code) return;
+
+    const { searchTerm, unit, quantity } = parseCanonicalName(cp.name);
+
+    setSuggestingFor(cp);
+    setIsTranslating(true);
+
+    try {
+      const { translated } = await translateApi.translate(searchTerm, selectedCountry.language_code);
+      setSuggestSearchTerm(translated);
+
+      setProductSearchInput(translated);
+      setProductSearch(translated);
+      if (unit) setUnitFilter(unit);
+      if (quantity) setUnitQuantityFilter(String(quantity));
+      setMappedOnly(false);
+      setPageInUrl(0);
+
+      updateUrlParams((params) => {
+        params.set('search', translated);
+        params.delete('page');
+      });
+    } catch {
+      setSuggestSearchTerm(searchTerm);
+      setProductSearchInput(searchTerm);
+      setProductSearch(searchTerm);
+      updateUrlParams((params) => {
+        params.set('search', searchTerm);
+        params.delete('page');
+      });
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const clearSuggestion = () => {
+    setSuggestingFor(null);
+    setSuggestSearchTerm('');
+    setProductSearchInput('');
+    setProductSearch('');
+    setUnitFilter('');
+    setUnitQuantityFilter('');
+    setMappedOnly(false);
+    setPageInUrl(0);
+    updateUrlParams((params) => {
+      params.delete('search');
+      params.delete('page');
+    });
   };
 
   useEffect(() => {
@@ -386,6 +458,17 @@ export default function Mapping() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* Find matches button */}
+                      {selectedCountryId && selectedCountry?.language_code && (
+                        <button
+                          onClick={() => handleSmartSuggest(cp)}
+                          disabled={isTranslating}
+                          className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                          title={t('mapping.findMatches')}
+                        >
+                          <Wand2 className="h-4 w-4" />
+                        </button>
+                      )}
                       {/* Disabled toggle */}
                       <div className="flex items-center gap-1.5">
                         <div className="relative group">
@@ -561,6 +644,25 @@ export default function Mapping() {
             </label>
           )}
         </div>
+
+        {/* Smart Suggest Banner */}
+        {suggestingFor && (
+          <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="text-sm text-blue-800">
+              <span>{t('mapping.suggestingFor')} </span>
+              <strong>{suggestingFor.name}</strong>
+              {suggestSearchTerm && (
+                <span className="text-blue-600"> ({t('mapping.searched')}: &ldquo;{suggestSearchTerm}&rdquo;)</span>
+              )}
+            </div>
+            <button
+              onClick={clearSuggestion}
+              className="flex-shrink-0 p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-100 rounded transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         {/* Products Table */}
         <div>
