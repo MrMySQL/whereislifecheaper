@@ -43,6 +43,8 @@ export default function Mapping() {
   const [canonicalSearch, setCanonicalSearch] = useState('');
   const [dropdownSearch, setDropdownSearch] = useState<{ [key: number]: string }>({});
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
+  const [unitFilter, setUnitFilter] = useState('');
+  const [unitQuantityFilter, setUnitQuantityFilter] = useState('');
   const selectedCountryId = parsePositiveIntParam(searchParams.get('country'));
   const selectedSupermarketId = parsePositiveIntParam(searchParams.get('supermarket'));
   const pageParam = parsePositiveIntParam(searchParams.get('page'));
@@ -105,15 +107,24 @@ export default function Mapping() {
     enabled: !!selectedCountryId,
   });
 
+  // Fetch distinct units for selected country
+  const { data: distinctUnits = [] } = useQuery({
+    queryKey: ['distinctUnits', selectedCountryId, selectedSupermarketId],
+    queryFn: () => canonicalApi.getDistinctUnits(selectedCountryId!, selectedSupermarketId || undefined),
+    enabled: !!selectedCountryId,
+  });
+
   // Fetch products by country with pagination
   const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: ['products', selectedCountryId, selectedSupermarketId, productSearch, productPage, mappedOnly],
+    queryKey: ['products', selectedCountryId, selectedSupermarketId, productSearch, productPage, mappedOnly, unitFilter, unitQuantityFilter],
     queryFn: () =>
       selectedCountryId
         ? canonicalApi.getProductsByCountry(selectedCountryId, {
             search: productSearch || undefined,
             supermarket_id: selectedSupermarketId || undefined,
             mapped_only: mappedOnly || undefined,
+            unit: unitFilter || undefined,
+            unit_quantity: unitQuantityFilter ? Number(unitQuantityFilter) : undefined,
             limit: PRODUCTS_PER_PAGE,
             offset: productPage * PRODUCTS_PER_PAGE,
           })
@@ -143,6 +154,8 @@ export default function Mapping() {
     });
     setProductSearchInput('');
     setProductSearch('');
+    setUnitFilter('');
+    setUnitQuantityFilter('');
     setOpenDropdown(null);
   };
 
@@ -480,6 +493,43 @@ export default function Mapping() {
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {/* Unit filter */}
+          {selectedCountryId && distinctUnits.length > 0 && (
+            <div className="sm:w-32">
+              <select
+                value={unitFilter}
+                onChange={(e) => {
+                  setUnitFilter(e.target.value);
+                  setPageInUrl(0);
+                }}
+                className="input h-12 py-0"
+              >
+                <option value="">{t('mapping.allUnits')}</option>
+                {distinctUnits.map((unit: string) => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Unit quantity filter */}
+          {selectedCountryId && unitFilter && (
+            <div className="sm:w-24">
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder={t('mapping.qty')}
+                value={unitQuantityFilter}
+                onChange={(e) => {
+                  setUnitQuantityFilter(e.target.value);
+                  setPageInUrl(0);
+                }}
+                className="input h-12 py-0"
+              />
             </div>
           )}
 

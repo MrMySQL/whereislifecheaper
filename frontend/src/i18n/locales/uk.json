@@ -153,7 +153,12 @@
     "noMatchingProducts": "Немає відповідних товарів",
     "mappedOnly": "Лише зіставлені",
     "createdAt": "Створено:",
-    "lastSeenAt": "Бачили востаннє:"
+    "lastSeenAt": "Бачили востаннє:",
+    "allUnits": "Всі одиниці",
+    "qty": "К-ть",
+    "findMatches": "Знайти відповідності",
+    "suggestingFor": "Пропозиції для",
+    "searched": "пошук"
   },
   "canonicalFreshness": {
     "title": "Актуальність",
