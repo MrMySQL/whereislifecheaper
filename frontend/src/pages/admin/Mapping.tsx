@@ -132,15 +132,15 @@ export default function Mapping() {
 
   // Translate search term when debounced search changes
   useEffect(() => {
+    setTranslatedSearch('');
+
     if (!productSearch || !targetLanguage) {
-      setTranslatedSearch('');
       return;
     }
 
     // Only translate if the search term looks English (ASCII-only)
     const isAscii = /^[\x00-\x7F]+$/.test(productSearch);
     if (!isAscii) {
-      setTranslatedSearch('');
       return;
     }
 
@@ -150,9 +150,7 @@ export default function Mapping() {
         setTranslatedSearch(result);
       }
     }).catch(() => {
-      if (!cancelled) {
-        setTranslatedSearch('');
-      }
+      // translation failed, search continues with original term only
     });
 
     return () => { cancelled = true; };
