@@ -28,6 +28,8 @@ const envSchema = z.object({
   // Proxy configuration - JSON mapping supermarket names to proxy URLs
   // Format: {"migros":"http://proxy1:8080","rewe":"http://proxy2:8080"}
   SCRAPER_PROXY_CONFIG: z.string().optional(),
+  // Google Translate API
+  GOOGLE_TRANSLATE_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -88,5 +90,8 @@ export const config = {
   },
   auth: {
     adminEmails: envVars.ADMIN_EMAILS.split(',').map(e => e.trim()).filter(Boolean),
+  },
+  translate: {
+    apiKey: envVars.GOOGLE_TRANSLATE_API_KEY,
   },
 };

@@ -19,6 +19,7 @@ import productsRouter from './routes/products';
 import pricesRouter from './routes/prices';
 import scraperRouter from './routes/scraper';
 import canonicalRouter from './routes/canonical';
+import translateRouter from './routes/translate';
 import ratesRouter from './routes/rates';
 import sitemapRouter from './routes/sitemap';
 
@@ -103,6 +104,7 @@ app.use('/api/products', productsRouter);
 app.use('/api/prices', pricesRouter);
 app.use('/api/scraper', scraperRouter);
 app.use('/api/canonical', canonicalRouter);
+app.use('/api/translate', translateRouter);
 app.use('/api/rates', ratesRouter);
 
 // 404 handler for API routes
