@@ -140,9 +140,12 @@ export class CarrefourItScraper extends BaseScraper {
         `Category ${category.name}: ${totalProducts} products, ${totalPages} pages to fetch`
       );
 
+      // Fetch image URLs from the HTML page (JSON API returns images:[])
+      const firstPageImages = await this.fetchPageImages(category.url, 0, this.PAGE_SIZE);
+
       // Process first page
       const firstPageProducts = firstPage.productIds
-        .map((item) => this.transformProduct(item))
+        .map((item) => this.transformProduct(item, firstPageImages))
         .filter((p): p is ProductData => p !== null);
 
       if (this.onPageScraped && firstPageProducts.length > 0) {
@@ -171,8 +174,10 @@ export class CarrefourItScraper extends BaseScraper {
             continue;
           }
 
+          const pageImages = await this.fetchPageImages(category.url, start, this.PAGE_SIZE);
+
           const products = pageData.productIds
-            .map((item) => this.transformProduct(item))
+            .map((item) => this.transformProduct(item, pageImages))
             .filter((p): p is ProductData => p !== null);
 
           if (products.length > 0) {
@@ -287,9 +292,74 @@ export class CarrefourItScraper extends BaseScraper {
   }
 
   /**
+   * Fetch product image URLs from the HTML category page.
+   * The JSON API returns images:[], but the rendered HTML tiles contain image URLs.
+   */
+  private async fetchPageImages(
+    categoryUrl: string,
+    start: number,
+    sz: number
+  ): Promise<Map<string, string>> {
+    const imageMap = new Map<string, string>();
+
+    try {
+      const html = await new Promise<string>((resolve, reject) => {
+        const path = `${categoryUrl}?start=${start}&sz=${sz}`;
+        const options = {
+          hostname: 'www.carrefour.it',
+          port: 443,
+          path,
+          method: 'GET',
+          headers: {
+            'Accept': 'text/html',
+            'User-Agent': this.config.userAgents?.[0] || 'Mozilla/5.0',
+            'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+            'Referer': 'https://www.carrefour.it/spesa-online/',
+          },
+        };
+
+        const req = https.request(options, (res) => {
+          let body = '';
+          res.on('data', (chunk) => (body += chunk));
+          res.on('end', () => resolve(body));
+        });
+        req.on('error', reject);
+        req.setTimeout(30000, () => {
+          req.destroy();
+          reject(new Error('Request timeout'));
+        });
+        req.end();
+      });
+
+      // Parse HTML tiles: each product tile has data-pid="xxx" and a master-catalog image
+      const tileBlocks = html.split('data-pid="').slice(1);
+      for (const block of tileBlocks) {
+        const pidMatch = block.match(/^(\d+)"/);
+        if (!pidMatch) continue;
+
+        const pid = pidMatch[1];
+        // Find the first master-catalog image URL within this tile (before next tile)
+        const nextTileIdx = block.indexOf('data-pid="', 100);
+        const tileContent = nextTileIdx > 0 ? block.substring(0, nextTileIdx) : block.substring(0, 5000);
+        const imgMatch = tileContent.match(
+          /(\/on\/demandware\.static\/-\/Sites-carrefour-master-catalog-IT\/[^"]+\.(?:jpg|png|webp))/
+        );
+
+        if (imgMatch) {
+          imageMap.set(pid, `https://www.carrefour.it${imgMatch[1]}`);
+        }
+      }
+    } catch (error) {
+      this.logger.debug('Failed to fetch page images:', (error as Error).message);
+    }
+
+    return imageMap;
+  }
+
+  /**
    * Transform a Demandware product to ProductData
    */
-  private transformProduct(item: DemandwareProduct): ProductData | null {
+  private transformProduct(item: DemandwareProduct, imageMap?: Map<string, string>): ProductData | null {
     try {
       const price = item.price.sales?.value ?? item.price.list?.value;
 
@@ -328,6 +398,7 @@ export class CarrefourItScraper extends BaseScraper {
       }
 
       const productUrl = `https://www.carrefour.it/p/${item.id}.html`;
+      const imageUrl = imageMap?.get(item.id);
 
       return {
         name: item.productName,
@@ -335,6 +406,7 @@ export class CarrefourItScraper extends BaseScraper {
         currency: 'EUR',
         originalPrice,
         isOnSale,
+        imageUrl,
         productUrl,
         externalId: item.id,
         brand: item.brand || undefined,
