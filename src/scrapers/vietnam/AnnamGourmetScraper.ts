@@ -3,17 +3,73 @@ import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.
 import { extractQuantity } from '../../utils/normalizer';
 
 /**
- * Annam Gourmet root categories - grocery store in Hanoi (Xuan Dieu location)
- * Uses root categories for broad coverage; subcategory info comes from each product's DOM.
+ * Annam Gourmet subcategories - grocery store in Hanoi (Xuan Dieu location)
+ * Uses explicit subcategories because Magento's AJAX endpoint doesn't cascade
+ * products from child categories into root category listings.
  */
 export const annamGourmetCategories: CategoryConfig[] = [
-  { id: 'fresh-food', name: 'Fresh Food', url: 'fresh-food' },
+  // Fresh Food subcategories (root category doesn't cascade via Magento AJAX)
+  { id: 'fresh-butter', name: 'Butter', url: 'fresh-food/butter' },
+  { id: 'fresh-cheese', name: 'Cheese', url: 'fresh-food/cheese' },
+  { id: 'fresh-delicatessen', name: 'Delicatessen', url: 'fresh-food/delicatessen' },
+  { id: 'fresh-desserts', name: 'Desserts', url: 'fresh-food/desserts' },
   { id: 'fresh-eggs', name: 'Eggs', url: 'fresh-food/eggs' },
-  { id: 'salty-grocery', name: 'Salty Grocery', url: 'salty-grocery' },
-  { id: 'sweet-grocery', name: 'Sweet Grocery', url: 'sweet-grocery' },
-  { id: 'frozen-food', name: 'Frozen Food', url: 'frozen-food' },
-  { id: 'pastry-and-bakery', name: 'Pastry & Bakery', url: 'pastry-and-bakery' },
-  { id: 'beverages', name: 'Beverages', url: 'beverages' },
+  { id: 'fresh-fish-and-seafood', name: 'Fish & Seafood', url: 'fresh-food/fish-and-seafood' },
+  { id: 'fresh-milk', name: 'Fresh Milk', url: 'fresh-food/fresh-milk' },
+  { id: 'fresh-fruits', name: 'Fruits', url: 'fresh-food/fruits' },
+  { id: 'fresh-meat', name: 'Meat', url: 'fresh-food/meat' },
+  { id: 'fresh-processed-meat', name: 'Processed Meat', url: 'fresh-food/processed-meat' },
+  { id: 'fresh-vegetables', name: 'Vegetables', url: 'fresh-food/vegetables' },
+  { id: 'fresh-yogurt-and-cream', name: 'Yogurt & Cream', url: 'fresh-food/yogurt-and-cream' },
+  // Salty Grocery subcategories
+  { id: 'salty-baking-essentials', name: 'Baking Essentials', url: 'salty-grocery/baking-essentials' },
+  { id: 'salty-canned-food', name: 'Canned Food', url: 'salty-grocery/canned-food' },
+  { id: 'salty-dried-beans', name: 'Dried Beans', url: 'salty-grocery/dried-beans' },
+  { id: 'salty-dried-vegetables', name: 'Dried Vegetables', url: 'salty-grocery/dried-vegetables' },
+  { id: 'salty-flavors-of-the-world', name: 'Flavors of the World', url: 'salty-grocery/flavors-of-the-world' },
+  { id: 'salty-oil-and-vinegar', name: 'Oil & Vinegar', url: 'salty-grocery/oil-and-vinegar' },
+  { id: 'salty-pasta-and-noodles', name: 'Pasta & Noodles', url: 'salty-grocery/pasta-and-noodles' },
+  { id: 'salty-ready-to-cook', name: 'Ready to Cook', url: 'salty-grocery/ready-to-cook' },
+  { id: 'salty-rice', name: 'Rice', url: 'salty-grocery/rice' },
+  { id: 'salty-sauce-and-condiments', name: 'Sauce & Condiments', url: 'salty-grocery/sauce-and-condiments' },
+  { id: 'salty-seasoning', name: 'Seasoning', url: 'salty-grocery/seasoning' },
+  { id: 'salty-soup-vermicelli', name: 'Soup Vermicelli', url: 'salty-grocery/soup-vermicelli' },
+  // Sweet Grocery subcategories
+  { id: 'sweet-biscuits-and-cakes', name: 'Biscuits & Cakes', url: 'sweet-grocery/biscuits-and-cakes' },
+  { id: 'sweet-breakfast', name: 'Breakfast', url: 'sweet-grocery/breakfast' },
+  { id: 'sweet-canned-fruits', name: 'Canned Fruits', url: 'sweet-grocery/canned-fruits' },
+  { id: 'sweet-chocolate-and-confectionery', name: 'Chocolate & Confectionery', url: 'sweet-grocery/chocolate-and-confectionery' },
+  { id: 'sweet-hot-and-cold-brews', name: 'Hot & Cold Brews', url: 'sweet-grocery/hot-and-cold-brews' },
+  { id: 'sweet-processed-dairy', name: 'Processed Dairy Products', url: 'sweet-grocery/processed-dairy-products' },
+  { id: 'sweet-snacks-nuts-dried-fruits', name: 'Snacks, Nuts & Dried Fruits', url: 'sweet-grocery/snacks-nuts-and-dried-fruits' },
+  // Frozen Food subcategories
+  { id: 'frozen-fish-and-seafood', name: 'Frozen Fish & Seafood', url: 'frozen-food/frozen-fish-and-seafood' },
+  { id: 'frozen-fruits', name: 'Frozen Fruits', url: 'frozen-food/frozen-fruits' },
+  { id: 'frozen-meat', name: 'Frozen Meat', url: 'frozen-food/frozen-meat' },
+  { id: 'frozen-pastry-and-bakery', name: 'Frozen Pastry & Bakery', url: 'frozen-food/frozen-pastry-and-bakery' },
+  { id: 'frozen-ready-to-cook', name: 'Frozen Ready to Cook', url: 'frozen-food/frozen-ready-to-cook' },
+  { id: 'frozen-vegetables', name: 'Frozen Vegetables', url: 'frozen-food/frozen-vegetables' },
+  { id: 'frozen-ice-cream', name: 'Ice Cream', url: 'frozen-food/ice-cream' },
+  { id: 'frozen-other', name: 'Other Frozen Goods', url: 'frozen-food/other-frozen-goods' },
+  // Pastry & Bakery subcategories
+  { id: 'pastry-bakery', name: 'Bakery', url: 'pastry-and-bakery/bakery' },
+  { id: 'pastry-salted', name: 'Salted Pastry', url: 'pastry-and-bakery/salted-pastry' },
+  { id: 'pastry-sweet', name: 'Sweet Pastry', url: 'pastry-and-bakery/sweet-pastry' },
+  { id: 'pastry-viennoiserie', name: 'Viennoiserie', url: 'pastry-and-bakery/viennoiserie' },
+  // Beverages subcategories
+  { id: 'bev-beer', name: 'Beer', url: 'beverages/beer' },
+  { id: 'bev-champagne', name: 'Champagne', url: 'beverages/champagne' },
+  { id: 'bev-cider', name: 'Cider', url: 'beverages/cider' },
+  { id: 'bev-juices', name: 'Juices', url: 'beverages/juices' },
+  { id: 'bev-orange-wine', name: 'Orange Wine', url: 'beverages/orange-wine' },
+  { id: 'bev-red-wine', name: 'Red Wine', url: 'beverages/red-wine' },
+  { id: 'bev-rose-wine', name: 'Rosé Wine', url: 'beverages/rose-wine' },
+  { id: 'bev-soft-drinks', name: 'Soft Drinks', url: 'beverages/soft-drinks' },
+  { id: 'bev-sparkling-wine', name: 'Sparkling Wine', url: 'beverages/sparkling-wine' },
+  { id: 'bev-spirits', name: 'Spirits', url: 'beverages/spirits' },
+  { id: 'bev-syrup', name: 'Syrup', url: 'beverages/syrup' },
+  { id: 'bev-water', name: 'Water', url: 'beverages/water' },
+  { id: 'bev-white-wine', name: 'White Wine', url: 'beverages/white-wine' },
 ];
 
 /**
