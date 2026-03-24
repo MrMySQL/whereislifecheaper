@@ -608,6 +608,11 @@ export default function Mapping() {
                 onChange={(e) => handleProductSearch(e.target.value)}
                 className="input h-12 py-0 pl-10"
               />
+              {translatedSearch && translatedSearch.toLowerCase() !== productSearch.toLowerCase() && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                  + {translatedSearch}
+                </span>
+              )}
             </div>
           )}
 
