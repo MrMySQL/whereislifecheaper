@@ -15,8 +15,11 @@ export const woltBelaFrutaCategories: CategoryConfig[] = [
   { id: 'produkte-8', name: 'PRODUKTE', url: '/items/produkte-8' },
   { id: 'pije-9', name: 'PIJE', url: '/items/pije-9' },
   { id: 'snacks-10', name: 'SNACKS', url: '/items/snacks-10' },
-  // { id: 'alkolike-12', name: 'ALKOLIKE', url: '/items/alkolike-12' },
-  { id: 'fruta-te-prera-13', name: 'FRUTA TE PRERA', url: '/items/fruta-te-prera-13' },
+  // { id: 'alkolike-11', name: 'ALKOLIKE', url: '/items/alkolike-11' },
+  { id: 'fruta-te-prera-12', name: 'FRUTA TE PRERA', url: '/items/fruta-te-prera-12' },
+  { id: 'seeds-13', name: 'SEEDS', url: '/items/seeds-13' },
+  { id: 'ereza-14', name: 'ERËZA', url: '/items/ereza-14' },
+  { id: 'perime-te-prera-15', name: 'PERIME TE PRERA', url: '/items/perime-te-prera-15' },
 ];
 
 export const woltBelaFrutaConfig: Partial<ScraperConfig> = {
