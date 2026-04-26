@@ -21,6 +21,7 @@ import { AnnamGourmetScraper, annamGourmetConfig, annamGourmetCategories } from 
 import { WinMartScraper, winMartConfig, winMartCategories } from './vietnam/WinMartScraper';
 import { SezamoScraper, sezamoConfig, sezamoCategories } from './romania/SezamoScraper';
 import { CarrefourItScraper, carrefourItConfig, carrefourItCategories } from './italy/CarrefourItScraper';
+import { WoolworthsScraper, woolworthsConfig, woolworthsCategories } from './australia/WoolworthsScraper';
 
 /**
  * Scraper registration entry containing all metadata for a scraper
@@ -233,6 +234,15 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: CarrefourItScraper,
       defaultConfig: carrefourItConfig,
       categories: carrefourItCategories,
+    },
+  ],
+  [
+    'WoolworthsScraper',
+    {
+      className: 'WoolworthsScraper',
+      scraperClass: WoolworthsScraper,
+      defaultConfig: woolworthsConfig,
+      categories: woolworthsCategories,
     },
   ],
 ]);

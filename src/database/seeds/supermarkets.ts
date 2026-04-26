@@ -227,6 +227,15 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'CarrefourItScraper',
     is_active: true,
   },
+  // Australia
+  // NOTE: Woolworths uses Akamai Bot Manager - run headed (PLAYWRIGHT_HEADLESS=false / xvfb) to bypass.
+  {
+    country_code: 'AU',
+    name: 'Woolworths',
+    website_url: 'https://www.woolworths.com.au',
+    scraper_class: 'WoolworthsScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {
