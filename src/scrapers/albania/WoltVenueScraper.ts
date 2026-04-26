@@ -228,45 +228,86 @@ export abstract class WoltVenueScraper extends BaseScraper {
           );
           if (!dehydratedScript?.textContent) return { items: [], subSlugs: [] };
 
+          // Wolt now emits the dehydrated state as plain JSON; older deploys URL-encoded it.
           let parsed: any;
           try {
-            parsed = JSON.parse(decodeURIComponent(dehydratedScript.textContent));
+            parsed = JSON.parse(dehydratedScript.textContent);
           } catch {
-            return { items: [], subSlugs: [] };
+            try {
+              parsed = JSON.parse(decodeURIComponent(dehydratedScript.textContent));
+            } catch {
+              return { items: [], subSlugs: [] };
+            }
           }
 
           const queries: any[] = parsed.queries || [];
 
-          // Find the category query for this venue
+          // Strategy 1 (legacy): per-category "category" query, still served at some leaf URLs.
           const catQuery = queries.find(
             (q: any) =>
               Array.isArray(q.queryKey) &&
               q.queryKey[1] === 'category' &&
               q.queryKey[2] === venueSlug
           );
-          if (!catQuery?.state?.data?.pages) return { items: [], subSlugs: [] };
+          if (catQuery?.state?.data?.pages) {
+            const pageParams: Array<{ slug: string }> = catQuery.state.data.pageParams || [];
+            const firstParamSlug = pageParams[0]?.slug;
 
-          const pageParams: Array<{ slug: string }> = catQuery.state.data.pageParams || [];
-          const firstParamSlug = pageParams[0]?.slug;
-
-          // If the first pageParam slug matches this category, it's a leaf — extract items
-          if (firstParamSlug === categorySlug) {
-            const allItems: any[] = [];
-            for (const page of catQuery.state.data.pages) {
-              if (Array.isArray(page.items)) allItems.push(...page.items);
+            if (firstParamSlug === categorySlug) {
+              const allItems: any[] = [];
+              for (const page of catQuery.state.data.pages) {
+                if (Array.isArray(page.items)) allItems.push(...page.items);
+              }
+              if (allItems.length > 0) return { items: allItems, subSlugs: [] };
             }
-            return { items: allItems, subSlugs: [] };
+
+            // Legacy parent-format: sub-slugs encoded in the query key tail.
+            // Key: ["venue-assortment", "category", venueSlug, sub1, sub2, ..., null, null, "en", "no-user"]
+            const key: any[] = catQuery.queryKey;
+            const keySubSlugs: string[] = key.slice(3).filter((s: any) => typeof s === 'string');
+            if (keySubSlugs.length > 0) {
+              return { items: [], subSlugs: keySubSlugs };
+            }
           }
 
-          // Otherwise this is a parent category: extract sub-slugs from the query key.
-          // Key format: ["venue-assortment", "category", venueSlug, sub1, sub2, ..., null, null, "en", "no-user"]
-          // Take all strings starting from position 3; stop at the first non-string (null sentinel).
-          const key: any[] = catQuery.queryKey;
-          const subSlugs: string[] = key
-            .slice(3)
-            .filter((s: any) => typeof s === 'string');
+          // Strategy 2 (current): consolidated "category-listing" query containing the full
+          // category tree and (for some venues) a flat items[] array. Items per category are
+          // derived by joining `categories[].item_ids` against the flat items list.
+          const listing = queries.find(
+            (q: any) =>
+              Array.isArray(q.queryKey) &&
+              q.queryKey[1] === 'category-listing' &&
+              q.queryKey[2] === venueSlug
+          );
+          const data = listing?.state?.data;
+          if (data && Array.isArray(data.categories)) {
+            const findCat = (cats: any[]): any | null => {
+              for (const c of cats) {
+                if (c?.slug === categorySlug) return c;
+                if (Array.isArray(c?.subcategories) && c.subcategories.length > 0) {
+                  const sub = findCat(c.subcategories);
+                  if (sub) return sub;
+                }
+              }
+              return null;
+            };
+            const cat = findCat(data.categories);
+            if (cat) {
+              if (Array.isArray(cat.subcategories) && cat.subcategories.length > 0) {
+                const subSlugs = cat.subcategories
+                  .map((s: any) => s?.slug)
+                  .filter((s: any): s is string => typeof s === 'string');
+                if (subSlugs.length > 0) return { items: [], subSlugs };
+              }
+              if (Array.isArray(cat.item_ids) && cat.item_ids.length > 0 && Array.isArray(data.items)) {
+                const idSet = new Set<string>(cat.item_ids);
+                const items = data.items.filter((it: any) => idSet.has(it.id));
+                return { items, subSlugs: [] };
+              }
+            }
+          }
 
-          return { items: [], subSlugs };
+          return { items: [], subSlugs: [] };
         },
         { venueSlug, categorySlug }
       );

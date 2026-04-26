@@ -58,3 +58,5 @@ temp/
 .vercel
 
 terraform/.terraform
+
+.playwright-mcp
