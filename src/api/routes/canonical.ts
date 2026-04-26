@@ -4,6 +4,7 @@ import { canonicalProductRepository } from '../../repositories';
 import { CanonicalComparisonRow } from '../../types/db.types';
 import { isAdmin } from '../../auth';
 import { validateQuery, validateBody, paginationSchema } from '../middleware/validate';
+import { calculatePricePerUnit } from '../../utils/normalizer';
 
 const router = Router();
 
@@ -192,10 +193,18 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
           const totalPrice = products.reduce((sum, p) => sum + p.price, 0);
           const avgPrice = totalPrice / productCount;
 
-          const productsWithPpu = products.filter(p => p.price_per_unit != null);
+          // Derive per-unit price for products missing it (e.g. unit=kg with no quantity,
+          // where the raw price IS the per-kg price).
+          const pricesPerUnit = products
+            .map(p =>
+              p.price_per_unit ??
+              calculatePricePerUnit(p.price, p.unit_quantity ?? undefined, p.unit ?? undefined) ??
+              null
+            )
+            .filter((v): v is number => v != null);
           const avgPricePerUnit =
-            productsWithPpu.length > 0
-              ? productsWithPpu.reduce((sum, p) => sum + p.price_per_unit!, 0) / productsWithPpu.length
+            pricesPerUnit.length > 0
+              ? pricesPerUnit.reduce((sum, v) => sum + v, 0) / pricesPerUnit.length
               : null;
 
           const firstProduct = products[0];
