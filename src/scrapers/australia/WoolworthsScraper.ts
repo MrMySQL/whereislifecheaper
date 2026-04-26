@@ -184,8 +184,17 @@ export class WoolworthsScraper extends BaseScraper {
 
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
     const products: ProductData[] = [];
+    const seenStockcodes = new Set<string>();
     let pageNumber = 1;
     let totalRecordCount = Infinity;
+    // Some Woolworths categories (notably non-grocery like Home & Lifestyle)
+    // return a wildly inflated TotalRecordCount and then keep echoing back the
+    // same featured/sponsored products on every subsequent page, so neither
+    // the count-based loop bound nor a `length === 0` check ever terminates.
+    // Track seen Stockcodes and stop once two consecutive pages contribute
+    // nothing new — that is the real end of the catalog.
+    let consecutivePagesWithoutNewProducts = 0;
+    const STOP_AFTER_DUPE_PAGES = 2;
 
     while ((pageNumber - 1) * this.PAGE_SIZE < totalRecordCount) {
       const response = await this.fetchCategoryPage(category, pageNumber);
@@ -200,15 +209,25 @@ export class WoolworthsScraper extends BaseScraper {
       totalRecordCount = response.TotalRecordCount ?? 0;
 
       const pageProducts: ProductData[] = [];
+      let newApiProducts = 0;
+      let duplicateApiProducts = 0;
       for (const bundle of response.Bundles || []) {
         for (const apiProduct of bundle.Products || []) {
+          const stockcode = apiProduct.Stockcode?.toString();
+          if (!stockcode) continue;
+          if (seenStockcodes.has(stockcode)) {
+            duplicateApiProducts++;
+            continue;
+          }
+          seenStockcodes.add(stockcode);
+          newApiProducts++;
           const product = this.convertApiProduct(apiProduct, category.name);
           if (product) pageProducts.push(product);
         }
       }
 
       this.logger.info(
-        `${category.name}: page ${pageNumber} → ${pageProducts.length} products (total ${totalRecordCount})`
+        `${category.name}: page ${pageNumber} → ${pageProducts.length} new products (${duplicateApiProducts} duplicates, total ${totalRecordCount})`
       );
 
       if (this.onPageScraped && pageProducts.length > 0) {
@@ -226,7 +245,17 @@ export class WoolworthsScraper extends BaseScraper {
       products.push(...pageProducts);
       this.productsScraped += pageProducts.length;
 
-      if (pageProducts.length === 0) break;
+      if (newApiProducts === 0) {
+        consecutivePagesWithoutNewProducts++;
+        if (consecutivePagesWithoutNewProducts >= STOP_AFTER_DUPE_PAGES) {
+          this.logger.info(
+            `${category.name}: stopping at page ${pageNumber} after ${consecutivePagesWithoutNewProducts} consecutive pages with no new products (end of real catalog)`
+          );
+          break;
+        }
+      } else {
+        consecutivePagesWithoutNewProducts = 0;
+      }
 
       pageNumber++;
       await this.page?.waitForTimeout(this.config.waitTimes.betweenPages || 400);
