@@ -140,14 +140,23 @@ export function calculatePricePerUnit(
   unitQuantity?: number,
   unit?: string
 ): number | undefined {
-  if (!unitQuantity || !unit || unitQuantity === 0) return undefined;
+  if (!unit) return undefined;
+
+  const normalizedUnit = unit.toLowerCase();
+  const isBaseUnit = normalizedUnit === 'kg' || normalizedUnit === 'l';
+
+  // For base units (kg/l) sold by-the-unit (no explicit quantity),
+  // the price already IS the price per standard unit.
+  if (!unitQuantity || unitQuantity === 0) {
+    return isBaseUnit ? price : undefined;
+  }
 
   let standardQuantity = unitQuantity;
 
   // Convert to standard units (kg or l)
-  if (unit === 'g') {
+  if (normalizedUnit === 'g') {
     standardQuantity = unitQuantity / 1000; // Convert to kg
-  } else if (unit === 'ml') {
+  } else if (normalizedUnit === 'ml') {
     standardQuantity = unitQuantity / 1000; // Convert to l
   }
 
