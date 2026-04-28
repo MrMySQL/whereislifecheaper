@@ -12,6 +12,7 @@ export const FALLBACK_EXCHANGE_RATES: Record<string, number> = {
   RUB: 0.00952381, // ~105 RUB per EUR
   VND: 0.0000362,  // ~27,600 VND per EUR
   RON: 0.20080000, // ~4.98 RON per EUR
+  AUD: 0.60240000, // ~1.66 AUD per EUR
 };
 
 // Currencies tracked by the application (derived from fallback rates, excluding EUR)
