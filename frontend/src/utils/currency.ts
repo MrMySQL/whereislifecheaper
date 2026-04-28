@@ -1,18 +1,7 @@
 // Fallback exchange rates to EUR (used if API fetch fails)
-// NOTE: Keep in sync with src/constants/exchangeRates.ts
-const FALLBACK_RATES: Record<string, number> = {
-  EUR: 1,
-  TRY: 0.01992512,
-  UZS: 0.00007202,
-  UAH: 0.01983600,
-  KZT: 0.00168442,
-  USD: 0.86169064,
-  MYR: 0.19865000,
-  ALL: 0.01034616,
-  RUB: 0.00952381, // ~105 RUB per EUR
-  VND: 0.0000362,  // ~27,600 VND per EUR
-  RON: 0.20080000, // ~4.98 RON per EUR
-};
+// Single source of truth: src/constants/exchangeRates.json
+import fallbackRates from '../../../src/constants/exchangeRates.json';
+const FALLBACK_RATES: Record<string, number> = fallbackRates;
 
 // Current exchange rates (mutable, updated via loadExchangeRates)
 let exchangeRates: Record<string, number> = { ...FALLBACK_RATES };
