@@ -183,8 +183,6 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
 
     const comparison = Array.from(canonicalMap.values()).map(canonical => {
       const pricesByCountry: Record<string, CountryPriceSummary> = {};
-      const usePerUnitPrice = canonical.show_per_unit_price;
-
       Object.entries(canonical.products_by_country).forEach(
         ([countryCode, products]) => {
           if (products.length === 0) return;
@@ -193,18 +191,12 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
           const totalPrice = products.reduce((sum, p) => sum + p.price, 0);
           const avgPrice = totalPrice / productCount;
 
-          // Derive per-unit price from the live product fields. The stored
-          // prices.price_per_unit can be stale: e.g. a product first scraped
-          // without unit_quantity has price_per_unit==price (treated as
-          // already-per-kg), but if unit_quantity is later filled in, the
-          // stored value is wrong (Mercadona's "Pepino Pieza": €1.40 per
-          // 0.2 kg piece was stored as €1.40/kg, masking the real €7.00/kg).
-          // Recompute when unit + unit_quantity allow it; fall back to the
-          // stored value only when we can't compute one.
+          // Derive per-unit price for products missing it (e.g. unit=kg with no quantity,
+          // where the raw price IS the per-kg price).
           const pricesPerUnit = products
             .map(p =>
-              calculatePricePerUnit(p.price, p.unit_quantity ?? undefined, p.unit ?? undefined) ??
               p.price_per_unit ??
+              calculatePricePerUnit(p.price, p.unit_quantity ?? undefined, p.unit ?? undefined) ??
               null
             )
             .filter((v): v is number => v != null);
@@ -222,7 +214,12 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
             unit_quantity: firstProduct.unit_quantity,
             image_url: firstProduct.image_url,
             product_url: firstProduct.product_url,
-            price: usePerUnitPrice && avgPricePerUnit != null ? avgPricePerUnit : avgPrice,
+            // Always expose the actual purchase price as `price`. The
+            // frontend uses `price_per_unit` for per-kg/per-l comparisons
+            // when `show_per_unit_price` is true, so overwriting `price`
+            // with the per-unit average corrupts the displayed local price
+            // (e.g. €1.40 shown for a €0.28/0.2kg cucumber).
+            price: avgPrice,
             price_per_unit: avgPricePerUnit,
             currency: firstProduct.currency,
             original_price: firstProduct.original_price,
