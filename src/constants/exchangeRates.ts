@@ -1,6 +1,8 @@
-// Single source of truth: src/constants/exchangeRates.json
+// Single source of truth: src/constants/exchangeRates.data.json
 // Add a new currency by editing the JSON file only — backend and frontend both consume it.
-import rates from './exchangeRates.json';
+// Note: filename is `.data.json` (not `.json`) to avoid Node basename collision with this `.ts` file,
+// which would cause `import { ... } from './exchangeRates'` to resolve to the JSON instead.
+import rates from './exchangeRates.data.json';
 
 export const FALLBACK_EXCHANGE_RATES: Record<string, number> = rates;
 
