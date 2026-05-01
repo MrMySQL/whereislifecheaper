@@ -232,7 +232,13 @@ function PriceCell({ priceData, isCheapest, rowIndex, showPerUnitPrice }: { pric
   const displayPrice = hasNormalizedPrice ? priceData.price_per_unit! : priceData.price;
   const eurPrice = convertToEUR(displayPrice, priceData.currency);
   const unitLabel = getUnitLabel(priceData.unit);
-  const packageSize = formatPackageSize(priceData.unit_quantity, priceData.unit);
+  // For aggregate rows (multiple products with differing package sizes), the
+  // package size belongs to a single representative product and pairing it with
+  // the aggregate price would be misleading (e.g. "€2.85 for 170g" when €2.85
+  // is the per-kg average across 11 products). Only show package size for
+  // single-product rows.
+  const isAggregate = priceData.product_count > 1;
+  const packageSize = isAggregate ? null : formatPackageSize(priceData.unit_quantity, priceData.unit);
 
   return (
     <td className={`text-center py-2.5 px-3 ${isCheapest ? 'bg-olive-50/60' : ''}`}>
