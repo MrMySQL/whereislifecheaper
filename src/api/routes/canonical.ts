@@ -183,8 +183,6 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
 
     const comparison = Array.from(canonicalMap.values()).map(canonical => {
       const pricesByCountry: Record<string, CountryPriceSummary> = {};
-      const usePerUnitPrice = canonical.show_per_unit_price;
-
       Object.entries(canonical.products_by_country).forEach(
         ([countryCode, products]) => {
           if (products.length === 0) return;
@@ -216,7 +214,12 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
             unit_quantity: firstProduct.unit_quantity,
             image_url: firstProduct.image_url,
             product_url: firstProduct.product_url,
-            price: usePerUnitPrice && avgPricePerUnit != null ? avgPricePerUnit : avgPrice,
+            // Always expose the actual purchase price as `price`. The
+            // frontend uses `price_per_unit` for per-kg/per-l comparisons
+            // when `show_per_unit_price` is true, so overwriting `price`
+            // with the per-unit average corrupts the displayed local price
+            // (e.g. €1.40 shown for a €0.28/0.2kg cucumber).
+            price: avgPrice,
             price_per_unit: avgPricePerUnit,
             currency: firstProduct.currency,
             original_price: firstProduct.original_price,
