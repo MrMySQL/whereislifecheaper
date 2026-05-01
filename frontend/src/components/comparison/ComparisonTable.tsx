@@ -131,9 +131,6 @@ function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
         <p className="font-semibold text-charcoal-900 text-sm">
           {t('comparison.averageProducts', { count: priceData.product_count })}
         </p>
-        <p className="text-xs text-charcoal-500">
-          {t('comparison.avg')}: {formatPrice(priceData.price, priceData.currency)}
-        </p>
       </div>
 
       {/* Product list */}
