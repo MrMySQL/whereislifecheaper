@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhereIsLifeCheaper — Rent comparison mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            terracotta: { 50:'#fef7f4',100:'#fdeee7',200:'#fad9c9',300:'#f5bda0',400:'#ed9670',500:'#e4714a',600:'#c45d35',700:'#a3492b',800:'#873d28',900:'#6f3526' },
+            olive: { 50:'#f6f7f4',100:'#e8ebe2',200:'#d2d8c7',300:'#b3bea3',400:'#939f7e',500:'#778462',600:'#5d694c',700:'#4a5d3a',800:'#3d4332',900:'#343a2c' },
+            saffron: { 50:'#fefbf3',100:'#fdf5df',200:'#fae7ba',300:'#f5d48b',400:'#eebb5a',500:'#d4a84b',600:'#c48b2a',700:'#a36b22',800:'#855522',900:'#6d461f' },
+            cream: { 50:'#fdfcfb',100:'#faf7f0',200:'#f5efe3',300:'#ece2cf',400:'#dfd0b5',500:'#d0bc9a',600:'#bca07a',700:'#a38562',800:'#866d51',900:'#6d5a44' },
+            charcoal: { 50:'#f6f6f6',100:'#e7e7e7',200:'#d1d1d1',300:'#b0b0b0',400:'#888888',500:'#6d6d6d',600:'#5d5d5d',700:'#4f4f4f',800:'#2d2d2d',900:'#1a1a1a' },
+          },
+          fontFamily: {
+            display: ['"Playfair Display"','Georgia','serif'],
+            body: ['"DM Sans"','system-ui','sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #faf7f0;
+      color: #2d2d2d;
+      font-family: "DM Sans", system-ui, sans-serif;
+      background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(212,168,75,0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 100%, rgba(196,93,53,0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 0% 50%, rgba(74,93,58,0.05) 0%, transparent 40%);
+      background-attachment: fixed;
+    }
+    h1,h2,h3,h4,h5,h6 { font-family: "Playfair Display", Georgia, serif; }
+
+    .card {
+      background: rgba(255,255,255,0.8);
+      backdrop-filter: blur(4px);
+      border-radius: 1rem;
+      border: 1px solid rgba(236,226,207,0.5);
+      padding: 1.5rem;
+      box-shadow: 0 4px 24px -4px rgba(45,45,45,0.08), 0 0 0 1px rgba(255,255,255,0.5) inset;
+    }
+    .badge { display:inline-flex; align-items:center; padding:0.25rem 0.625rem; border-radius:9999px; font-size:0.75rem; font-weight:500; }
+    .badge-terracotta { background:#fdeee7; color:#a3492b; }
+    .badge-olive { background:#e8ebe2; color:#4a5d3a; }
+    .badge-saffron { background:#fdf5df; color:#a36b22; }
+    .btn { padding:0.625rem 1.25rem; border-radius:0.75rem; font-weight:500; transition:all .2s; display:inline-flex; align-items:center; justify-content:center; gap:0.5rem; }
+    .btn-secondary { background:rgba(255,255,255,0.9); color:#4f4f4f; border:1px solid #ece2cf; }
+    .btn-secondary:hover { background:#fdfcfb; border-color:#dfd0b5; }
+    .text-gradient-warm {
+      background: linear-gradient(135deg, #e4714a 0%, #c48b2a 100%);
+      -webkit-background-clip: text; background-clip:text; -webkit-text-fill-color: transparent;
+    }
+    .country-pill {
+      padding:0.4rem 0.85rem; border-radius:9999px; border:2px solid #ece2cf; background:rgba(255,255,255,0.8);
+      cursor:pointer; transition:all .2s; display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; font-weight:500;
+    }
+    .country-pill.active { border-color:#ed9670; background:#fef7f4; color:#873d28; box-shadow:0 4px 12px -2px rgba(196,93,53,0.2); }
+    .seam { height:1px; background:linear-gradient(90deg, transparent, #ece2cf 20%, #ece2cf 80%, transparent); }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- ============ HEADER (reproduced from real app) ============ -->
+  <header class="bg-white/80 backdrop-blur-md border-b border-cream-200/60 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-12">
+        <a href="#" class="flex items-center gap-2 group">
+          <svg width="28" height="28" viewBox="0 0 32 32" aria-label="logo">
+            <defs><linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#c25a3c"/><stop offset="100%" stop-color="#a84832"/></linearGradient></defs>
+            <rect width="32" height="32" rx="6" fill="url(#lg)"/>
+            <path d="M16 5c-3.5 0-6.5 2.8-6.5 6.3 0 2.2 1.2 4.2 3 5.7l3.5 4.5 3.5-4.5c1.8-1.5 3-3.5 3-5.7C22.5 7.8 19.5 5 16 5z" fill="white"/>
+            <circle cx="16" cy="11" r="2.5" fill="url(#lg)"/>
+            <polygon points="16,27 11,22 13.5,22 13.5,20 18.5,20 18.5,22 21,22" fill="white"/>
+          </svg>
+          <span class="text-sm font-display font-bold text-charcoal-900">WhereIsLife<span class="text-gradient-warm">Cheaper</span></span>
+        </a>
+        <nav class="hidden md:flex items-center gap-1">
+          <a href="#" class="px-3 py-1.5 rounded-lg text-sm font-medium text-terracotta-700 bg-terracotta-50">Compare</a>
+        </nav>
+        <div class="flex items-center gap-2">
+          <span class="text-xs px-2 py-1 rounded-lg bg-cream-50 border border-cream-200 text-charcoal-600 font-medium">EN</span>
+          <div class="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg bg-cream-50 border border-cream-200 text-xs">
+            <div class="h-5 w-5 rounded bg-saffron-400 flex items-center justify-center text-white text-[10px]">R</div>
+            <span class="font-medium text-charcoal-700">rieshat</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="space-y-5">
+
+      <!-- ============ HERO (reproduced) ============ -->
+      <section class="rounded-2xl bg-saffron-50 px-5 py-5">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/80 border border-cream-200 mb-3 text-xs">
+              <svg class="w-3 h-3 text-saffron-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+              <span class="font-medium text-charcoal-700">Live from 6 countries</span>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-display font-bold text-charcoal-900 leading-tight">Find where life is <span class="text-gradient-warm">cheaper</span></h1>
+            <p class="mt-1.5 text-sm text-charcoal-600 max-w-lg">Compare daily grocery prices — and now monthly rent — across countries.</p>
+          </div>
+          <div class="flex gap-4">
+            <div class="flex items-center gap-2">
+              <div class="w-9 h-9 rounded-xl bg-white/80 border border-cream-200 flex items-center justify-center">
+                <svg class="w-4 h-4 text-terracotta-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg>
+              </div>
+              <div><p class="text-lg font-display font-bold text-charcoal-900 leading-none">6</p><p class="text-xs text-charcoal-500">Countries</p></div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="w-9 h-9 rounded-xl bg-white/80 border border-cream-200 flex items-center justify-center">
+                <svg class="w-4 h-4 text-olive-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 17l5-5-5-5M3 12h18"/></svg>
+              </div>
+              <div><p class="text-lg font-display font-bold text-charcoal-900 leading-none">8,420</p><p class="text-xs text-charcoal-500">Products</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ COUNTRY SELECTOR (reproduced) ============ -->
+      <section class="card !p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-display font-semibold text-charcoal-900">Select countries to compare</h2>
+          <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cream-100 border border-cream-200 text-xs">
+            <span class="text-charcoal-600">Comparing</span>
+            <span class="w-5 h-5 rounded-full bg-terracotta-500 text-white flex items-center justify-center text-xs font-bold">6</span>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <span class="country-pill active">🇺🇦 Ukraine</span>
+          <span class="country-pill active">🇹🇷 Turkey</span>
+          <span class="country-pill active">🇪🇸 Spain</span>
+          <span class="country-pill active">🇲🇪 Montenegro</span>
+          <span class="country-pill active">🇰🇿 Kazakhstan</span>
+          <span class="country-pill active">🇺🇿 Uzbekistan</span>
+        </div>
+      </section>
+
+      <!-- ============ GROCERY COMPARISON (abbreviated, for context) ============ -->
+      <section class="space-y-3">
+        <h2 class="text-lg font-display font-bold text-charcoal-900">Price comparison</h2>
+        <div class="card !p-0 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-cream-50 border-b border-cream-200">
+                  <th class="text-left py-2.5 px-4 font-display font-semibold text-charcoal-700">Product</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">UA</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">TR</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">ES</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">ME</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">KZ</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">UZ</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[70px]">🏆 Best</th>
+                </tr>
+              </thead>
+              <tbody class="text-charcoal-800">
+                <tr class="border-b border-cream-100">
+                  <td class="py-2.5 px-4"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-cream-100 flex items-center justify-center text-base">🥛</div><div><p class="font-medium text-charcoal-900">Milk 1L</p><p class="text-[10px] text-charcoal-400">Dairy</p></div></div></td>
+                  <td class="text-center py-2.5 px-3"><p class="font-bold">€0.92</p><p class="text-[10px] text-charcoal-400">₴41.5</p></td>
+                  <td class="text-center py-2.5 px-3 bg-olive-50/60"><p class="font-bold text-olive-700">€0.71</p><p class="text-[10px] text-charcoal-400">₺25.6</p></td>
+                  <td class="text-center py-2.5 px-3"><p class="font-bold">€1.05</p><p class="text-[10px] text-charcoal-400">€1.05</p></td>
+                  <td class="text-center py-2.5 px-3"><p class="font-bold">€0.98</p><p class="text-[10px] text-charcoal-400">€0.98</p></td>
+                  <td class="text-center py-2.5 px-3"><p class="font-bold">€0.84</p><p class="text-[10px] text-charcoal-400">₸445</p></td>
+                  <td class="text-center py-2.5 px-3"><p class="font-bold">€0.79</p><p class="text-[10px] text-charcoal-400">10,700</p></td>
+                  <td class="text-center py-2.5 px-3"><span class="font-bold text-saffron-700">TR</span><br><span class="text-[10px] text-olive-600 font-medium">▾ 23%</span></td>
+                </tr>
+                <tr class="border-b border-cream-100">
+                  <td class="py-2.5 px-4"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-cream-100 flex items-center justify-center text-base">🥚</div><div><p class="font-medium text-charcoal-900">Eggs (10)</p><p class="text-[10px] text-charcoal-400">Dairy</p></div></div></td>
+                  <td class="text-center py-2.5 px-3"><p class="font-bold">€1.48</p><p class="text-[10px] text-charcoal-400">₴66.6</p></td>
+                  <td class="text-center py-2.5 px-3"><p class="font-bold">€1.36</p><p class="text-[10px] text-charcoal-400">₺49.0</p></td>
+                  <td class="text-center py-2.5 px-3"><p class="font-bold">€2.10</p><p class="text-[10px] text-charcoal-400">€2.10</p></td>
+                  <td class="text-center py-2.5 px-3"><p class="font-bold">€1.79</p><p class="text-[10px] text-charcoal-400">€1.79</p></td>
+                  <td class="text-center py-2.5 px-3 bg-olive-50/60"><p class="font-bold text-olive-700">€1.21</p><p class="text-[10px] text-charcoal-400">₸641</p></td>
+                  <td class="text-center py-2.5 px-3"><p class="font-bold">€1.33</p><p class="text-[10px] text-charcoal-400">17,900</p></td>
+                  <td class="text-center py-2.5 px-3"><span class="font-bold text-saffron-700">KZ</span><br><span class="text-[10px] text-olive-600 font-medium">▾ 27%</span></td>
+                </tr>
+                <tr class="border-b border-cream-100 opacity-60">
+                  <td class="py-2.5 px-4 text-charcoal-400 italic text-xs" colspan="8">… 98 more grocery products</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SECTION DIVIDER ============ -->
+      <div class="flex items-center gap-3 pt-4 pb-1">
+        <div class="seam flex-1"></div>
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-charcoal-500 uppercase tracking-wider">
+          <svg class="w-3.5 h-3.5 text-terracotta-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3"/></svg>
+          Cost of living · Housing
+        </span>
+        <div class="seam flex-1"></div>
+      </div>
+
+      <!-- ============ NEW: MONTHLY RENT COMPARISON TABLE ============ -->
+      <section class="space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+          <div>
+            <h2 class="text-lg font-display font-bold text-charcoal-900">Monthly rent</h2>
+            <p class="text-xs text-charcoal-500 mt-0.5">Median long-term rental by apartment size, capital city</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="badge-saffron">illustrative mock data</span>
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-cream-100 border border-cream-200 text-[11px] text-charcoal-500">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/></svg>
+              OLX · DOM.RIA · flatfy
+            </span>
+          </div>
+        </div>
+
+        <div class="card !p-0 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-cream-50 border-b border-cream-200">
+                  <th class="text-left py-2.5 px-4 font-display font-semibold text-charcoal-700">Apartment size</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">🇺🇦 UA</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">🇹🇷 TR</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">🇪🇸 ES</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">🇲🇪 ME</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">🇰🇿 KZ</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[100px]">🇺🇿 UZ</th>
+                  <th class="text-center py-2.5 px-3 font-display font-semibold text-charcoal-700 min-w-[72px]"><span class="inline-flex items-center gap-1"><span class="text-saffron-500">🏆</span> Best</span></th>
+                </tr>
+              </thead>
+              <tbody class="text-charcoal-800">
+
+                <!-- STUDIO -->
+                <tr class="border-b border-cream-100 hover:bg-cream-50/50 transition-colors">
+                  <td class="py-3 px-4">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-lg bg-cream-100 flex items-center justify-center text-charcoal-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/></svg>
+                      </div>
+                      <div><p class="font-medium text-charcoal-900">Studio</p><p class="text-[10px] text-charcoal-400">0 bedrooms</p></div>
+                    </div>
+                  </td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€330</p><p class="text-[10px] text-charcoal-400">₴14,800</p><p class="text-[10px] text-charcoal-300">N=812</p></td>
+                  <td class="text-center py-3 px-3 bg-olive-50/60"><p class="font-bold text-olive-700">€240</p><p class="text-[10px] text-charcoal-400">₺8,640</p><p class="text-[10px] text-charcoal-300">N=1,240</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€690</p><p class="text-[10px] text-charcoal-400">€690</p><p class="text-[10px] text-charcoal-300">N=940</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€420</p><p class="text-[10px] text-charcoal-400">€420</p><p class="text-[10px] text-charcoal-300">N=510</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€300</p><p class="text-[10px] text-charcoal-400">₸159,000</p><p class="text-[10px] text-charcoal-300">N=600</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€260</p><p class="text-[10px] text-charcoal-400">3,510,000</p><p class="text-[10px] text-charcoal-300">N=430</p></td>
+                  <td class="text-center py-3 px-3"><span class="font-bold text-saffron-700">TR</span><br><span class="inline-flex items-center gap-0.5 text-[10px] text-olive-600 font-medium">▾ 38%</span></td>
+                </tr>
+
+                <!-- 1 BEDROOM -->
+                <tr class="border-b border-cream-100 hover:bg-cream-50/50 transition-colors">
+                  <td class="py-3 px-4">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-lg bg-cream-100 flex items-center justify-center text-charcoal-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M12 4v16"/></svg>
+                      </div>
+                      <div><p class="font-medium text-charcoal-900">1-bedroom</p><p class="text-[10px] text-charcoal-400">1 bedroom</p></div>
+                    </div>
+                  </td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€470</p><p class="text-[10px] text-charcoal-400">₴21,150</p><p class="text-[10px] text-charcoal-300">N=964</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€390</p><p class="text-[10px] text-charcoal-400">₺14,040</p><p class="text-[10px] text-charcoal-300">N=1,180</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€910</p><p class="text-[10px] text-charcoal-400">€910</p><p class="text-[10px] text-charcoal-300">N=1,020</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€560</p><p class="text-[10px] text-charcoal-400">€560</p><p class="text-[10px] text-charcoal-300">N=640</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€430</p><p class="text-[10px] text-charcoal-400">₸227,900</p><p class="text-[10px] text-charcoal-300">N=720</p></td>
+                  <td class="text-center py-3 px-3 bg-olive-50/60"><p class="font-bold text-olive-700">€350</p><p class="text-[10px] text-charcoal-400">4,725,000</p><p class="text-[10px] text-charcoal-300">N=505</p></td>
+                  <td class="text-center py-3 px-3"><span class="font-bold text-saffron-700">UZ</span><br><span class="inline-flex items-center gap-0.5 text-[10px] text-olive-600 font-medium">▾ 41%</span></td>
+                </tr>
+
+                <!-- 2 BEDROOM -->
+                <tr class="border-b border-cream-100 hover:bg-cream-50/50 transition-colors">
+                  <td class="py-3 px-4">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-lg bg-cream-100 flex items-center justify-center text-charcoal-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16M15 12H3"/></svg>
+                      </div>
+                      <div><p class="font-medium text-charcoal-900">2-bedroom</p><p class="text-[10px] text-charcoal-400">2 bedrooms</p></div>
+                    </div>
+                  </td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€720</p><p class="text-[10px] text-charcoal-400">₴32,400</p><p class="text-[10px] text-charcoal-300">N=611</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€620</p><p class="text-[10px] text-charcoal-400">₺22,320</p><p class="text-[10px] text-charcoal-300">N=890</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€1,280</p><p class="text-[10px] text-charcoal-400">€1,280</p><p class="text-[10px] text-charcoal-300">N=760</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€820</p><p class="text-[10px] text-charcoal-400">€820</p><p class="text-[10px] text-charcoal-300">N=430</p></td>
+                  <td class="text-center py-3 px-3 bg-olive-50/60"><p class="font-bold text-olive-700">€590</p><p class="text-[10px] text-charcoal-400">₸312,700</p><p class="text-[10px] text-charcoal-300">N=540</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€640</p><p class="text-[10px] text-charcoal-400">8,640,000</p><p class="text-[10px] text-charcoal-300">N=295</p></td>
+                  <td class="text-center py-3 px-3"><span class="font-bold text-saffron-700">KZ</span><br><span class="inline-flex items-center gap-0.5 text-[10px] text-olive-600 font-medium">▾ 35%</span></td>
+                </tr>
+
+                <!-- 3 BEDROOM -->
+                <tr class="border-b border-cream-100 hover:bg-cream-50/50 transition-colors">
+                  <td class="py-3 px-4">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-lg bg-cream-100 flex items-center justify-center text-charcoal-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16M15 4v16M21 12H3"/></svg>
+                      </div>
+                      <div><p class="font-medium text-charcoal-900">3-bedroom</p><p class="text-[10px] text-charcoal-400">3 bedrooms · low sample</p></div>
+                    </div>
+                  </td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€1,150</p><p class="text-[10px] text-charcoal-400">₴51,750</p><p class="text-[10px] text-charcoal-300">N=60</p></td>
+                  <td class="text-center py-3 px-3 bg-olive-50/60"><p class="font-bold text-olive-700">€910</p><p class="text-[10px] text-charcoal-400">₺32,760</p><p class="text-[10px] text-charcoal-300">N=210</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€1,920</p><p class="text-[10px] text-charcoal-400">€1,920</p><p class="text-[10px] text-charcoal-300">N=180</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€1,280</p><p class="text-[10px] text-charcoal-400">€1,280</p><p class="text-[10px] text-charcoal-300">N=95</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€960</p><p class="text-[10px] text-charcoal-400">₸508,800</p><p class="text-[10px] text-charcoal-300">N=130</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold">€930</p><p class="text-[10px] text-charcoal-400">12,555,000</p><p class="text-[10px] text-charcoal-300">N=75</p></td>
+                  <td class="text-center py-3 px-3"><span class="font-bold text-saffron-700">TR</span><br><span class="inline-flex items-center gap-0.5 text-[10px] text-olive-600 font-medium">▾ 29%</span></td>
+                </tr>
+
+              </tbody>
+              <tfoot>
+                <tr class="bg-cream-100 border-t-2 border-cream-300">
+                  <td class="py-3 px-4">
+                    <div class="flex items-center gap-2">
+                      <svg class="w-4 h-4 text-charcoal-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                      <span class="font-display font-semibold text-charcoal-700">Typical 1-bedroom</span>
+                      <span class="text-xs text-charcoal-400">(headline metric)</span>
+                    </div>
+                  </td>
+                  <td class="text-center py-3 px-3"><p class="font-bold text-base">€470</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold text-base">€390</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold text-base">€910</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold text-base">€560</p></td>
+                  <td class="text-center py-3 px-3"><p class="font-bold text-base">€430</p></td>
+                  <td class="text-center py-3 px-3 bg-olive-100"><p class="font-bold text-base text-olive-700">€350</p><p class="text-lg mt-0.5">🇺🇿</p></td>
+                  <td class="text-center py-3 px-3"><span class="font-bold text-saffron-700">UZ</span><br><span class="inline-flex items-center gap-0.5 text-[10px] text-olive-600 font-medium">▾ 41%</span><br><span class="text-lg">🇺🇿</span></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <p class="text-xs text-charcoal-500 text-center">
+          Showing median <span class="font-semibold">monthly rent</span> across 4 apartment sizes · figures in € (converted from local currency) · <span class="italic">mock data for layout preview only</span>
+        </p>
+      </section>
+
+    </div>
+  </main>
+</body>
+</html>
