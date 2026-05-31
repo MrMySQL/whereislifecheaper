@@ -1,19 +1,33 @@
 import { Currency, ListingRaw, ListingNormalized } from './types';
 import { ExchangeRateRepository } from '../../src/repositories/ExchangeRateRepository';
 
+const UA_WORD_TO_ROOMS: Array<[RegExp, number]> = [
+  [/одно\s*кімн|однокімн/i, 1],
+  [/дво[хуї]?\s*кімн|двокімн/i, 2],
+  [/тр[иьох]+\s*кімн|трикімн/i, 3],
+  [/чотир[иьох]+\s*кімн|чотирикімн/i, 4],
+];
+
 export function roomsTextToBedrooms(text: string): number | null {
   if (!text) return null;
   const lower = text.toLowerCase().trim();
 
   if (/студ|studio/i.test(lower)) return 0;
 
-  const match = lower.match(/(\d+)\s*[-\s]*(?:кімн|комн|room)/);
-  if (!match) return null;
+  // Digit + room indicator: "2-кімнатна", "2 кімн.", "2х кімнатної", "1к ".
+  // The negative lookahead (?![в]) prevents "70кв" / "2хв" from matching.
+  const digitMatch = lower.match(/(\d+)\s*[-\sх]*к(?:імн|омн|imn|омнат)?(?![в])/);
+  if (digitMatch) {
+    const rooms = parseInt(digitMatch[1], 10);
+    if (!Number.isNaN(rooms) && rooms >= 1) return rooms - 1;
+  }
 
-  const rooms = parseInt(match[1], 10);
-  if (Number.isNaN(rooms) || rooms < 1) return null;
+  // Ukrainian word forms: "однокімнатної", "двохкімнатна".
+  for (const [pattern, rooms] of UA_WORD_TO_ROOMS) {
+    if (pattern.test(lower)) return rooms - 1;
+  }
 
-  return rooms - 1;
+  return null;
 }
 
 export function parsePriceText(text: string): { amount: number; currency: Currency } | null {

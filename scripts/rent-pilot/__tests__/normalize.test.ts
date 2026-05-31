@@ -40,6 +40,21 @@ describe('roomsTextToBedrooms', () => {
     expect(roomsTextToBedrooms('хата')).toBeNull();
     expect(roomsTextToBedrooms('')).toBeNull();
   });
+
+  test('Ukrainian word forms (однокімнатної, двохкімнатна)', () => {
+    expect(roomsTextToBedrooms('Оренда однокімнатної')).toBe(0);
+    expect(roomsTextToBedrooms('двохкімнатна квартира')).toBe(1);
+    expect(roomsTextToBedrooms('трикімнатна')).toBe(2);
+    expect(roomsTextToBedrooms('чотирикімнатна')).toBe(3);
+  });
+
+  test('handles OLX abbreviations like "1к" and "2х кімн" and rejects "2хв" / "70кв"', () => {
+    expect(roomsTextToBedrooms('Оренда 1к квартири')).toBe(0);
+    expect(roomsTextToBedrooms('Оренда 2х кімнатної')).toBe(1);
+    expect(roomsTextToBedrooms('Оренда 3 к кв 95 м2')).toBe(2);
+    expect(roomsTextToBedrooms('70кв.м ЖК Діброва')).toBeNull();
+    expect(roomsTextToBedrooms('метро 2хв пішки')).toBeNull();
+  });
 });
 
 describe('parsePriceText', () => {
