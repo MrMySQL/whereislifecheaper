@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { scrapeOlx } from './scrape-olx';
 import { scrapeDomria } from './scrape-domria';
+import { scrapeFlatfy } from './scrape-flatfy';
 import { loadRatesToEur, buildUsdConverter, normalizeListing } from './normalize';
 import { aggregate } from './aggregate';
 import { renderReport } from './report';
@@ -117,20 +118,27 @@ async function main() {
   writeJson('domria-listings-raw.json', domriaRaw);
   console.log(`DOM.RIA: collected ${domriaRaw.length} raw listings`);
 
+  console.log('\n=== Scraping flatfy.ua ===');
+  const flatfyRaw: ListingRaw[] = await scrapeFlatfy();
+  writeJson('flatfy-listings-raw.json', flatfyRaw);
+  console.log(`flatfy: collected ${flatfyRaw.length} raw listings`);
+
+  const allRaw = [...olxRaw, ...domriaRaw, ...flatfyRaw];
+
   console.log('\n=== Normalizing ===');
   const all: ListingNormalized[] = [];
-  for (const raw of [...olxRaw, ...domriaRaw]) {
+  for (const raw of allRaw) {
     const norm = normalizeListing(raw, toUsd);
     if (norm) all.push(norm);
   }
   writeJson('listings-normalized.json', all);
-  console.log(`Normalized: ${all.length} / ${olxRaw.length + domriaRaw.length} listings`);
+  console.log(`Normalized: ${all.length} / ${allRaw.length} listings`);
 
   const rawByUrl = new Map<string, ListingRaw>();
-  for (const r of [...olxRaw, ...domriaRaw]) rawByUrl.set(r.url, r);
+  for (const r of allRaw) rawByUrl.set(r.url, r);
   writeListingsCsv('listings.csv', all, rawByUrl);
-  writeRawCsv('listings-raw.csv', [...olxRaw, ...domriaRaw]);
-  console.log(`Wrote listings.csv (${all.length} rows) and listings-raw.csv (${olxRaw.length + domriaRaw.length} rows)`);
+  writeRawCsv('listings-raw.csv', allRaw);
+  console.log(`Wrote listings.csv (${all.length} rows) and listings-raw.csv (${allRaw.length} rows)`);
 
   console.log('\n=== Aggregating ===');
   const buckets = aggregate(all);

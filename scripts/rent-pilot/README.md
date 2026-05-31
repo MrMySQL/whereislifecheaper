@@ -1,6 +1,6 @@
 # Rent Pilot — Kyiv (Throwaway Validation)
 
-Validates whether scraping classifieds (OLX.ua + DOM.RIA) produces a representative median rent figure for Kyiv apartments. Output decides whether to build the production rent feature described in `docs/superpowers/specs/2026-05-31-real-estate-rent-design.md`.
+Validates whether scraping classifieds (OLX.ua + DOM.RIA, plus flatfy.ua — see below, currently blocked by DataDome) produces a representative median rent figure for Kyiv apartments. Output decides whether to build the production rent feature described in `docs/superpowers/specs/2026-05-31-real-estate-rent-design.md`.
 
 This pilot is intentionally **outside** the production scraper registry, DB schema, and API.
 
@@ -50,3 +50,11 @@ See spec section 2 — pass requires both:
 
 - OLX vs DOM.RIA medians within ~15% for each bucket with ≥30 listings.
 - Both sources within ~20% of Numbeo's blended (centre+outside) figure for 1BR and 3BR.
+
+## flatfy.ua source (⚠️ blocked by DataDome)
+
+`scrape-flatfy.ts` + `parse-flatfy.ts` add a third source: flatfy.ua Kyiv long-term rent (`geo_id=10009580&section_id=2`). It is wired into `run.ts` exactly like OLX/DOM.RIA (returns `ListingRaw[]`, normalized/aggregated/CSV'd through the shared pipeline).
+
+**flatfy.ua sits behind DataDome.** Both the page and its `/api/realties` JSON endpoint return a `geo.captcha-delivery.com` CAPTCHA wall to headless Chromium — confirmed even with fingerprint hardening and an in-context fetch carrying the DataDome cookie. `scrape-flatfy.ts` detects this wall (`isDataDomeWall`), logs a clear "blocked by DataDome" warning, and returns 0 listings rather than pretending the page was empty.
+
+To actually collect flatfy data you need a CAPTCHA-cleared session — e.g. a residential-proxy + CAPTCHA-solver service supplying a valid `datadome` cookie to the Playwright context. Once you can reach a real list page, capture a fixture with `capture-fixture.ts` and tighten the selectors in `parse-flatfy.ts`, which are currently **provisional** (validated only against a synthetic fixture, `__tests__/fixtures/flatfy-list-page.html`, never real flatfy HTML).

@@ -1,4 +1,4 @@
-export type Source = 'olx' | 'domria';
+export type Source = 'olx' | 'domria' | 'flatfy';
 
 export interface ListingRaw {
   source: Source;
