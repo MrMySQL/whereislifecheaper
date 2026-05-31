@@ -1,0 +1,12 @@
+      76 |       expect((l.district as string).length).toBeLessThan(40);
+      77 |     }
+      78 |   });
+
+      at Object.<anonymous> (scripts/rent-pilot/__tests__/parse-flatfy.test.ts:75:30)
+
+Test Suites: 1 failed, 5 passed, 6 total
+Tests:       1 failed, 58 passed, 59 total
+Snapshots:   0 total
+Time:        3.364 s
+Ran all test suites matching /scripts\/rent-pilot/i.
+exit=1
