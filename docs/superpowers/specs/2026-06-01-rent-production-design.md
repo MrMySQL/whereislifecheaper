@@ -21,11 +21,13 @@ A new section on the Home page, below the grocery comparison, shaped like the gr
 
 - **Rows = countries** (just Ukraine in v1).
 - **Columns = apartment sizes**: Studio (1-room), 1BR (2-room), 2BR (3-room), 3BR (4-room).
-- **One cell per size**, showing a single **pooled median** monthly rent in USD (headline) with UAH as a secondary/hover value, plus the listing count `N`.
+- **One cell per size**, showing a single **pooled median** monthly rent **converted to EUR on the frontend** (the site's common comparison currency), plus the listing count `N`.
 - Section label, per the original spec's accuracy framing: **"Median asking rent, past 30 days."**
 - 3BR is shown but flagged low-confidence (small sample, luxury skew — confirmed in the pilot).
 
 The headline number is the median across **all** scraped Kyiv apartments of that size, regardless of which site listed them — not an average of per-site medians.
+
+**Currency handling:** the site is cross-country, so the API stays currency-agnostic — it returns each country's median **in that country's own currency** plus the currency code. The frontend converts to EUR with the existing `convertToEUR(price, currency)` util (`frontend/src/utils/currency.ts`), the same path the grocery comparison already uses. No USD/EUR is baked into the API or DB.
 
 ## 3. Architecture
 
@@ -55,10 +57,9 @@ weekly CI  →  rent scrape (OLX, DOM.RIA, flatfy)  →  rental_listings
 | `source_listing_id` | text | site's own listing id (parsed from URL/DOM) |
 | `bedrooms` | int | normalized: rooms − 1 (studio = 0) |
 | `sqm` | numeric | |
-| `price_local` | numeric | as listed |
-| `currency` | text | listed currency (UAH/USD) |
-| `price_usd` | numeric | normalized at ingest via `ExchangeRateRepository` |
-| `price_uah` | numeric | normalized at ingest (USD-native flatfy → UAH) |
+| `price_original` | numeric | as listed |
+| `currency_original` | text | listed currency (UAH/USD) |
+| `price_local` | numeric | normalized to the **country's** currency at ingest via `ExchangeRateRepository` (UAH for Ukraine; e.g. USD-native flatfy → UAH) |
 | `district` | text | free-text, no geocoding |
 | `listed_at` | timestamptz | nullable |
 | `scraped_at` | timestamptz | run timestamp |
@@ -76,8 +77,8 @@ Unique index on `(source, source_listing_id, (scraped_at::date))` — re-running
 | `bedrooms` | int | |
 | `period_start` | date | window start (period_end − 30d) |
 | `period_end` | date | window end (scrape date) |
-| `median_usd` | numeric | pooled median over `price_usd` |
-| `median_uah` | numeric | pooled median over `price_uah` |
+| `median` | numeric | pooled median over `price_local` (the country's currency) |
+| `currency` | text | the country's currency code (e.g. `'UAH'`) |
 | `n_listings` | int | deduped listings in the pooled bucket |
 | `computed_at` | timestamptz | |
 
@@ -87,9 +88,9 @@ Unique on `(country_id, city, bedrooms, period_end)`.
 
 **Deliberate deviation from the original spec:** the original said rent scrapers extend `BaseScraper`. `BaseScraper`'s contract (`scrapeProductList` / `scrapeProductDetails`) is product-shaped and does not fit listings, so we do **not** force it. Instead:
 
-- **Port the pilot's already-TDD'd pure functions** out of `scripts/rent-pilot/` into `src/scrapers/rent/`: `parse-olx`, `parse-domria`, `parse-flatfy` (cheerio HTML → `ListingRaw`), `normalize` (rooms→bedrooms, currency→USD+UAH, sqm), and the median/trim logic. **Bring their fixture-based Jest tests with them** so the risky parsing stays covered.
+- **Port the pilot's already-TDD'd pure functions** out of `scripts/rent-pilot/` into `src/scrapers/rent/`: `parse-olx`, `parse-domria`, `parse-flatfy` (cheerio HTML → `ListingRaw`), `normalize` (rooms→bedrooms, currency→the country's currency, sqm), and the median/trim logic. **Bring their fixture-based Jest tests with them** so the risky parsing stays covered.
 - A thin **`RentScraperService`** drives each source: Playwright paginate → parse → normalize → `RentalListingRepository.insertMany`. Scraper wrappers stay thin; the tested pure functions do the work.
-- **flatfy specifics** carry over from the pilot: headed Chromium with the automation flag masked (DataDome), resumable pagination, ~page-100 / ~2,200-listing ceiling treated as a sample. flatfy is USD-native (no source-side FX noise).
+- **flatfy specifics** carry over from the pilot: headed Chromium with the automation flag masked (DataDome), resumable pagination, ~page-100 / ~2,200-listing ceiling treated as a sample. flatfy is USD-native, so its prices convert USD → the country's currency at ingest like any other source.
 - The pilot's **OLX pagination fix** (canonical `kvartiry/dolgosrochnaya-arenda-kvartir/kiev/?page=N` path + per-run URL dedup) carries over — without it OLX returns the same 52 listings every page.
 
 ### 3.3 Aggregation job (`scripts/aggregate-rent.ts`, `npm run rent:aggregate`)
@@ -99,8 +100,8 @@ Runs after each scrape. Per `(country, city, bedrooms)` over the trailing 30 day
 1. **Dedup** by `source_listing_id`, keeping the latest `scraped_at` — kills listings repeated across weekly runs.
 2. **Pool** all listings across OLX + DOM.RIA + flatfy.
 3. **Filter** sqm to 15–300 m².
-4. **Trim** the bottom/top 5% of the pooled bucket (by `price_usd`).
-5. **Median** over `price_usd` and over `price_uah` independently; count = remaining listings.
+4. **Trim** the bottom/top 5% of the pooled bucket (by `price_local`).
+5. **Median** over `price_local` (the country's currency); count = remaining listings.
 
 Upserts one `rental_stats` row per bucket keyed on `(country_id, city, bedrooms, period_end)`.
 
@@ -115,15 +116,18 @@ The 30-day rolling window smooths weekly noise without blurring real price shift
   {
     "country": { "code": "UA", "name": "Ukraine" },
     "city": "Kyiv",
+    "currency": "UAH",            // country's own currency; frontend converts to EUR
     "period_start": "2026-05-02",
     "period_end": "2026-06-01",
     "buckets": [
-      { "bedrooms": 0, "median_usd": 372, "median_uah": 16468, "n_listings": 1100 },
-      { "bedrooms": 1, "median_usd": 518, "median_uah": 22931, "n_listings": 800 }
+      { "bedrooms": 0, "median": 16468, "n_listings": 1100 },
+      { "bedrooms": 1, "median": 22931, "n_listings": 800 }
     ]
   }
 ]
 ```
+
+`currency` sits at the country level (one currency per country); buckets carry only `median` + `n_listings`. The frontend renders `convertToEUR(median, currency)`.
 
 There is intentionally **no** `GET /api/rent/:country` endpoint — the Home page is cross-country, so only the all-countries endpoint exists.
 
@@ -131,7 +135,7 @@ There is intentionally **no** `GET /api/rent/:country` endpoint — the Home pag
 
 - A new `RentComparison` component rendered on `Home.tsx` below the grocery comparison.
 - Fetches `GET /api/rent` via the existing `services/api.ts` + React Query pattern.
-- Table: rows = countries, columns = sizes (Studio/1BR/2BR/3BR), one cell = pooled `median_usd` (headline) + `median_uah` (secondary) + `N`.
+- Table: rows = countries, columns = sizes (Studio/1BR/2BR/3BR), one cell = pooled `median` **converted to EUR** via `convertToEUR(median, currency)` + `N`. Same currency-conversion path the grocery comparison already uses, so EUR rates load once via `loadExchangeRates()`.
 - i18n keys added to `en.json` / `uk.json` / `ru.json`.
 - The section label and `N` are always visible so users can judge confidence (original spec's accuracy framing). 3BR carries a low-confidence marker.
 
