@@ -15,6 +15,87 @@ function writeJson(filename: string, value: unknown) {
   writeFileSync(join(DATA_DIR, filename), JSON.stringify(value, null, 2), 'utf-8');
 }
 
+function csvEscape(v: string | number | null | undefined): string {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function writeListingsCsv(
+  filename: string,
+  normalized: ListingNormalized[],
+  rawByUrl: Map<string, ListingRaw>,
+) {
+  const header = [
+    'source',
+    'url',
+    'price_local',
+    'currency',
+    'price_usd',
+    'bedrooms',
+    'sqm',
+    'price_per_sqm_usd',
+    'district',
+    'rooms_text_raw',
+    'sqm_text_raw',
+    'price_text_raw',
+  ];
+  const rows = [header.join(',')];
+  for (const n of normalized) {
+    const raw = rawByUrl.get(n.url);
+    const pricePerSqm = n.sqm && n.sqm > 0 ? (n.priceUsd / n.sqm).toFixed(2) : '';
+    rows.push(
+      [
+        n.source,
+        n.url,
+        n.priceLocal,
+        n.currency,
+        n.priceUsd.toFixed(2),
+        n.bedrooms,
+        n.sqm ?? '',
+        pricePerSqm,
+        n.district ?? '',
+        raw?.roomsText ?? '',
+        raw?.sqmText ?? '',
+        raw?.priceText ?? '',
+      ]
+        .map(csvEscape)
+        .join(','),
+    );
+  }
+  writeFileSync(join(DATA_DIR, filename), rows.join('\n') + '\n', 'utf-8');
+}
+
+function writeRawCsv(filename: string, raw: ListingRaw[]) {
+  const header = [
+    'source',
+    'url',
+    'price_text',
+    'rooms_text',
+    'sqm_text',
+    'district',
+    'listed_at_text',
+  ];
+  const rows = [header.join(',')];
+  for (const r of raw) {
+    rows.push(
+      [
+        r.source,
+        r.url,
+        r.priceText,
+        r.roomsText,
+        r.sqmText ?? '',
+        r.district ?? '',
+        r.listedAtText ?? '',
+      ]
+        .map(csvEscape)
+        .join(','),
+    );
+  }
+  writeFileSync(join(DATA_DIR, filename), rows.join('\n') + '\n', 'utf-8');
+}
+
 async function main() {
   mkdirSync(DATA_DIR, { recursive: true });
 
@@ -44,6 +125,12 @@ async function main() {
   }
   writeJson('listings-normalized.json', all);
   console.log(`Normalized: ${all.length} / ${olxRaw.length + domriaRaw.length} listings`);
+
+  const rawByUrl = new Map<string, ListingRaw>();
+  for (const r of [...olxRaw, ...domriaRaw]) rawByUrl.set(r.url, r);
+  writeListingsCsv('listings.csv', all, rawByUrl);
+  writeRawCsv('listings-raw.csv', [...olxRaw, ...domriaRaw]);
+  console.log(`Wrote listings.csv (${all.length} rows) and listings-raw.csv (${olxRaw.length + domriaRaw.length} rows)`);
 
   console.log('\n=== Aggregating ===');
   const buckets = aggregate(all);
