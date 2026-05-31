@@ -3,8 +3,8 @@ import { parseDomriaListPage } from './parse-domria';
 import { ListingRaw } from './types';
 
 const BASE_URL = 'https://dom.ria.com/uk/arenda-kvartir/kiev/?page=';
-const MAX_PAGES = 25;
-const TARGET_LISTINGS = 500;
+const MAX_PAGES = 50;
+const TARGET_LISTINGS = 1500;
 const POLITE_DELAY_MS = 2500;
 
 function sleep(ms: number) {
