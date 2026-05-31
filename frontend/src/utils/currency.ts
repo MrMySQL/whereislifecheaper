@@ -1,6 +1,6 @@
 // Fallback exchange rates to EUR (used if API fetch fails)
-// Single source of truth: src/constants/exchangeRates.fallback.json
-import fallbackRates from '../../../src/constants/exchangeRates.fallback.json';
+// Single source of truth: src/constants/exchangeRates.data.json
+import fallbackRates from '../../../src/constants/exchangeRates.data.json';
 const FALLBACK_RATES: Record<string, number> = fallbackRates;
 
 // Current exchange rates (mutable, updated via loadExchangeRates)
