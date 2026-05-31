@@ -38,7 +38,19 @@ export async function scrapeDomria(): Promise<ListingRaw[]> {
         console.log('[domria] empty page, stopping pagination');
         break;
       }
-      collected.push(...pageListings);
+      const seen = new Set(collected.map((l) => l.url));
+      let newCount = 0;
+      for (const l of pageListings) {
+        if (!seen.has(l.url)) {
+          collected.push(l);
+          newCount++;
+        }
+      }
+      console.log(`[domria] page ${pageNum}: ${newCount} new (deduped)`);
+      if (newCount === 0) {
+        console.log('[domria] entire page was duplicates, stopping');
+        break;
+      }
 
       if (collected.length >= TARGET_LISTINGS) {
         console.log(`[domria] reached target of ${TARGET_LISTINGS}, stopping`);
