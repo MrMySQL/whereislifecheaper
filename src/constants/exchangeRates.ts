@@ -1,6 +1,6 @@
 // Single source of truth: src/constants/exchangeRates.json
 // Add a new currency by editing the JSON file only — backend and frontend both consume it.
-import rates from './exchangeRates.json';
+import rates from './exchangeRates.fallback.json';
 
 export const FALLBACK_EXCHANGE_RATES: Record<string, number> = rates;
 
