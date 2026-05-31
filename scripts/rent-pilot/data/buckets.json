@@ -1,0 +1,82 @@
+[
+  {
+    "source": "domria",
+    "bedrooms": 0,
+    "nListings": 435,
+    "nDropped": 48,
+    "medianUsd": 451.79845779829003,
+    "medianLocal": 20000,
+    "p25Usd": 316.258920458803,
+    "p75Usd": 655.1077638075205
+  },
+  {
+    "source": "domria",
+    "bedrooms": 1,
+    "nListings": 302,
+    "nDropped": 32,
+    "medianUsd": 564.7480722478625,
+    "medianLocal": 25000,
+    "p25Usd": 406.618612018461,
+    "p75Usd": 903.099937293002
+  },
+  {
+    "source": "domria",
+    "bedrooms": 2,
+    "nListings": 129,
+    "nDropped": 14,
+    "medianUsd": 677.6976866974351,
+    "medianLocal": 30000,
+    "p25Usd": 451.79845779829003,
+    "p75Usd": 1204.1332497240026
+  },
+  {
+    "source": "domria",
+    "bedrooms": 3,
+    "nListings": 30,
+    "nDropped": 2,
+    "medianUsd": 1379.736015308753,
+    "medianLocal": 61077.5,
+    "p25Usd": 729.6545093442384,
+    "p75Usd": 1906.544312063004
+  },
+  {
+    "source": "olx",
+    "bedrooms": 0,
+    "nListings": 369,
+    "nDropped": 40,
+    "medianUsd": 361.438766238632,
+    "medianLocal": 16000,
+    "p25Usd": 271.079074678974,
+    "p75Usd": 496.97830357811904
+  },
+  {
+    "source": "olx",
+    "bedrooms": 1,
+    "nListings": 240,
+    "nDropped": 26,
+    "medianUsd": 496.97830357811904,
+    "medianLocal": 22000,
+    "p25Usd": 361.438766238632,
+    "p75Usd": 835.8271469268366
+  },
+  {
+    "source": "olx",
+    "bedrooms": 2,
+    "nListings": 163,
+    "nDropped": 16,
+    "medianUsd": 858.4170698167511,
+    "medianLocal": 38000,
+    "p25Usd": 598.6329565827343,
+    "p75Usd": 1500.8518868830295
+  },
+  {
+    "source": "olx",
+    "bedrooms": 3,
+    "nListings": 43,
+    "nDropped": 4,
+    "medianUsd": 2301.32580448715,
+    "medianLocal": 101874,
+    "p25Usd": 1200.6769915218456,
+    "p75Usd": 3597.061191529756
+  }
+]
