@@ -41,7 +41,11 @@ export class RentalListingRepository {
    * Deduped listings for the trailing `days`: one row per (source, listing),
    * keeping the most recent scrape, so weekly repeats are not double-counted.
    */
-  async getDedupedForWindow(countryId: number, days: number): Promise<RentAggRow[]> {
+  async getDedupedForWindow(countryId: number, days: number, city?: string): Promise<RentAggRow[]> {
+    const params: unknown[] = [countryId, days];
+    const cityClause = city ? 'AND city = $3' : '';
+    if (city) params.push(city);
+
     const result = await query<RentAggRow>(
       `SELECT bedrooms, sqm, price_local
        FROM (
@@ -50,9 +54,10 @@ export class RentalListingRepository {
          FROM rental_listings
          WHERE country_id = $1
            AND scraped_at >= NOW() - ($2 || ' days')::interval
+           ${cityClause}
          ORDER BY source, source_listing_id, scraped_at DESC
        ) deduped`,
-      [countryId, days],
+      params,
     );
     return result.rows;
   }
