@@ -780,7 +780,18 @@ function ProductRow({
 
       {/* Product Info */}
       <td className="py-2 px-2">
-        <p className="font-medium text-slate-900 text-sm">{product.name}</p>
+        {product.product_url ? (
+          <a
+            href={product.product_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-slate-900 text-sm hover:text-blue-600 hover:underline transition-colors"
+          >
+            {product.name}
+          </a>
+        ) : (
+          <p className="font-medium text-slate-900 text-sm">{product.name}</p>
+        )}
         <p className="text-xs text-slate-500">
           {product.brand || t('mapping.noBrand')} • {product.supermarket_name}
           {product.unit && (
