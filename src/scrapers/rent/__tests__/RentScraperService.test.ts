@@ -2,6 +2,8 @@ import { scrapeRent } from '../RentScraperService';
 import { scrapeOlx } from '../scrape-olx';
 import { scrapeDomria } from '../scrape-domria';
 import { scrapeFlatfy } from '../scrape-flatfy';
+import { scrapeRealestateAu } from '../scrape-realestate-au';
+import { scrapeDomainAu } from '../scrape-domain-au';
 import { query } from '../../../config/database';
 import { normalizeListing, loadRatesToEur } from '../normalize';
 
@@ -10,6 +12,8 @@ const insertManyMock = jest.fn();
 jest.mock('../scrape-olx', () => ({ scrapeOlx: jest.fn() }));
 jest.mock('../scrape-domria', () => ({ scrapeDomria: jest.fn() }));
 jest.mock('../scrape-flatfy', () => ({ scrapeFlatfy: jest.fn() }));
+jest.mock('../scrape-realestate-au', () => ({ scrapeRealestateAu: jest.fn() }));
+jest.mock('../scrape-domain-au', () => ({ scrapeDomainAu: jest.fn() }));
 jest.mock('../../../config/database', () => ({ query: jest.fn() }));
 jest.mock('../../../repositories/RentalListingRepository', () => ({
   RentalListingRepository: jest.fn().mockImplementation(() => ({
@@ -40,10 +44,12 @@ beforeEach(() => {
   (query as jest.Mock).mockResolvedValue({
     rows: [{ id: 7, currency_code: 'UAH' }],
   });
-  (loadRatesToEur as jest.Mock).mockResolvedValue(new Map([['UAH', 1]]));
+  (loadRatesToEur as jest.Mock).mockResolvedValue(new Map([['UAH', 1], ['AUD', 0.6]]));
   (scrapeOlx as jest.Mock).mockResolvedValue([rawListing]);
   (scrapeDomria as jest.Mock).mockResolvedValue([]);
   (scrapeFlatfy as jest.Mock).mockResolvedValue([]);
+  (scrapeRealestateAu as jest.Mock).mockResolvedValue([]);
+  (scrapeDomainAu as jest.Mock).mockResolvedValue([]);
   insertManyMock.mockResolvedValue(0);
 });
 

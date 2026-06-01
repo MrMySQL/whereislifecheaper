@@ -14,6 +14,9 @@ describe('roomsTextToBedrooms', () => {
   test('"2-кімнатна" = 1 bedroom (room - 1)', () => {
     expect(roomsTextToBedrooms('2-кімнатна квартира')).toBe(1);
   });
+  test('"2 Beds" = 2 bedrooms', () => {
+    expect(roomsTextToBedrooms('2 Beds')).toBe(2);
+  });
   test('unparseable returns null', () => {
     expect(roomsTextToBedrooms('продається')).toBeNull();
   });
@@ -25,6 +28,9 @@ describe('parsePriceText', () => {
   });
   test('USD amount', () => {
     expect(parsePriceText('$ 541')).toEqual({ amount: 541, currency: 'USD' });
+  });
+  test('AUD amount when dollar default is AUD', () => {
+    expect(parsePriceText('$880 per week', 'AUD')).toEqual({ amount: 880, currency: 'AUD' });
   });
   test('no currency token returns null', () => {
     expect(parsePriceText('25000')).toBeNull();
@@ -57,6 +63,20 @@ describe('extractSourceListingId', () => {
   });
   test('flatfy pulls the redirect id', () => {
     expect(extractSourceListingId('flatfy', 'https://flatfy.ua/redirect/98765')).toBe('98765');
+  });
+  test('Australian portals pull trailing numeric ids', () => {
+    expect(
+      extractSourceListingId(
+        'realestateau',
+        'https://www.realestate.com.au/property-apartment-nsw-sydney-444313808',
+      ),
+    ).toBe('444313808');
+    expect(
+      extractSourceListingId(
+        'domainau',
+        'https://www.domain.com.au/703-29-commonwealth-street-sydney-nsw-2000-18145629',
+      ),
+    ).toBe('18145629');
   });
   test('falls back to the full url when no pattern matches', () => {
     expect(extractSourceListingId('domria', 'https://dom.ria.com/uk/weird-url')).toBe(
@@ -94,5 +114,28 @@ describe('normalizeListing', () => {
 
   test('returns null when rooms unparseable', () => {
     expect(normalizeListing({ ...raw, roomsText: 'оренда' }, toUah, 'UAH')).toBeNull();
+  });
+
+  test('normalizes Australian dollar prices for Australian sources', () => {
+    const rates = new Map<string, number>([['AUD', 0.6], ['USD', 0.9], ['EUR', 1]]);
+    const toAud = buildLocalConverter(rates, 'AUD');
+    const n = normalizeListing(
+      {
+        source: 'realestateau',
+        url: 'https://www.realestate.com.au/property-apartment-nsw-sydney-444313808',
+        priceText: '$880 per week',
+        roomsText: '1 Bed',
+        sqmText: null,
+        district: 'Sydney',
+        listedAtText: null,
+      },
+      toAud,
+      'AUD',
+    )!;
+
+    expect(n.currencyOriginal).toBe('AUD');
+    expect(n.priceLocal).toBe(880);
+    expect(n.bedrooms).toBe(1);
+    expect(n.sourceListingId).toBe('444313808');
   });
 });

@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS rental_listings (
     id SERIAL PRIMARY KEY,
     country_id INTEGER NOT NULL REFERENCES countries(id),
     city VARCHAR(100) NOT NULL,
-    source VARCHAR(20) NOT NULL,                 -- 'olx' | 'domria' | 'flatfy'
+    source VARCHAR(20) NOT NULL,                 -- e.g. 'olx', 'domria', 'flatfy', 'realestateau', 'domainau'
     source_listing_id TEXT NOT NULL,             -- site's own id (parsed from URL)
     bedrooms INTEGER NOT NULL,                   -- rooms - 1 (studio = 0)
     sqm NUMERIC(10, 2),

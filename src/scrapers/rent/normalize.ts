@@ -14,6 +14,12 @@ export function roomsTextToBedrooms(text: string): number | null {
 
   if (/студ|studio/i.test(lower)) return 0;
 
+  const bedroomMatch = lower.match(/(\d+)\s*beds?\b/);
+  if (bedroomMatch) {
+    const bedrooms = parseInt(bedroomMatch[1], 10);
+    if (!Number.isNaN(bedrooms) && bedrooms >= 0) return bedrooms;
+  }
+
   const digitMatch = lower.match(/(\d+)\s*[-\sх]*к(?:імн|омн|imn|омнат)?(?![в])/);
   if (digitMatch) {
     const rooms = parseInt(digitMatch[1], 10);
@@ -27,14 +33,19 @@ export function roomsTextToBedrooms(text: string): number | null {
   return null;
 }
 
-export function parsePriceText(text: string): { amount: number; currency: Currency } | null {
+export function parsePriceText(
+  text: string,
+  defaultDollarCurrency: Currency = 'USD',
+): { amount: number; currency: Currency } | null {
   if (!text) return null;
 
   const stripped = text.replace(/[\s  ]/g, '');
 
   let currency: Currency | null = null;
   if (/грн|uah|₴/i.test(stripped)) currency = 'UAH';
-  else if (/usd|\$/i.test(stripped)) currency = 'USD';
+  else if (/aud|a\$/i.test(stripped)) currency = 'AUD';
+  else if (/usd|us\$/i.test(stripped)) currency = 'USD';
+  else if (/\$/i.test(stripped)) currency = defaultDollarCurrency;
   else if (/eur|€/i.test(stripped)) currency = 'EUR';
   if (!currency) return null;
 
@@ -88,6 +99,12 @@ export function extractSourceListingId(source: Source, url: string): string {
   } else if (source === 'flatfy') {
     const m = url.match(/\/redirect\/([A-Za-z0-9-]+)/);
     if (m) return m[1];
+  } else if (source === 'realestateau') {
+    const m = url.match(/-(\d+)(?:[/?#]|$)/);
+    if (m) return m[1];
+  } else if (source === 'domainau') {
+    const m = url.match(/-(\d+)(?:[/?#]|$)/);
+    if (m) return m[1];
   }
   return url;
 }
@@ -99,7 +116,8 @@ export function normalizeListing(
 ): RentListingNormalized | null {
   void targetCurrency;
 
-  const price = parsePriceText(raw.priceText);
+  const defaultDollarCurrency = raw.source === 'realestateau' || raw.source === 'domainau' ? 'AUD' : 'USD';
+  const price = parsePriceText(raw.priceText, defaultDollarCurrency);
   if (!price) return null;
 
   const bedrooms = roomsTextToBedrooms(raw.roomsText);

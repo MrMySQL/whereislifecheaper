@@ -1,13 +1,13 @@
-export type Source = 'olx' | 'domria' | 'flatfy';
+export type Source = 'olx' | 'domria' | 'flatfy' | 'realestateau' | 'domainau';
 
-export type Currency = 'UAH' | 'USD' | 'EUR';
+export type Currency = 'UAH' | 'USD' | 'EUR' | 'AUD';
 
 /** Raw listing as scraped from a list page (pre-normalization). */
 export interface ListingRaw {
   source: Source;
   url: string;
   priceText: string;
-  roomsText: string;
+  roomsText: string;       // either rooms text ("2 кімнати") or bedroom text ("2 Beds")
   sqmText: string | null;
   district: string | null;
   listedAtText: string | null;
@@ -21,7 +21,7 @@ export interface RentListingNormalized {
   priceOriginal: number;
   currencyOriginal: Currency;
   priceLocal: number;     // converted to the country's currency
-  bedrooms: number;       // rooms - 1 (studio = 0)
+  bedrooms: number;       // normalized bedroom count (studio = 0)
   sqm: number | null;
   district: string | null;
 }
