@@ -33,6 +33,22 @@ describe('groupRentRowsByCountry', () => {
     expect(out.map((c) => c.country.code).sort()).toEqual(['TR', 'UA']);
   });
 
+  test('keeps separate entries for multiple cities in the same country', () => {
+    const out = groupRentRowsByCountry([
+      r({ code: 'UA', name: 'Ukraine', city: 'Kyiv', bedrooms: 0 }),
+      r({ code: 'UA', name: 'Ukraine', city: 'Lviv', bedrooms: 1 }),
+    ]);
+
+    expect(out).toHaveLength(2);
+    expect(out.map((c) => c.city).sort()).toEqual(['Kyiv', 'Lviv']);
+    expect(out.find((c) => c.city === 'Kyiv')!.buckets).toEqual([
+      { bedrooms: 0, median: 16468, n_listings: 1100 },
+    ]);
+    expect(out.find((c) => c.city === 'Lviv')!.buckets).toEqual([
+      { bedrooms: 1, median: 16468, n_listings: 1100 },
+    ]);
+  });
+
   test('returns [] for no rows', () => {
     expect(groupRentRowsByCountry([])).toEqual([]);
   });

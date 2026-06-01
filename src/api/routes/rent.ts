@@ -19,9 +19,10 @@ export interface CountryRentDto {
 
 /** Pure: flatten the joined stat rows into one nested entry per country. */
 export function groupRentRowsByCountry(rows: RentStatCountryRow[]): CountryRentDto[] {
-  const byCountry = new Map<string, CountryRentDto>();
+  const byCountryCity = new Map<string, CountryRentDto>();
   for (const row of rows) {
-    let entry = byCountry.get(row.code);
+    const key = `${row.code}:${row.city}`;
+    let entry = byCountryCity.get(key);
     if (!entry) {
       entry = {
         country: { code: row.code, name: row.name },
@@ -31,7 +32,7 @@ export function groupRentRowsByCountry(rows: RentStatCountryRow[]): CountryRentD
         period_end: row.period_end,
         buckets: [],
       };
-      byCountry.set(row.code, entry);
+      byCountryCity.set(key, entry);
     }
     entry.buckets.push({
       bedrooms: row.bedrooms,
@@ -39,7 +40,7 @@ export function groupRentRowsByCountry(rows: RentStatCountryRow[]): CountryRentD
       n_listings: row.n_listings,
     });
   }
-  return Array.from(byCountry.values());
+  return Array.from(byCountryCity.values());
 }
 
 const router = Router();
