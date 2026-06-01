@@ -207,6 +207,14 @@
     "daysAgo": "{{count}}d ago",
     "never": "Never"
   },
+  "rent": {
+    "title": "Median rent in capitals",
+    "subtitle": "Median asking rent, past 30 days",
+    "studio": "Studio",
+    "nBr": "{{count}}BR",
+    "listings": "{{count}} listings",
+    "lowConfidence": "* 3BR is a small, luxury-skewed sample - treat as indicative only."
+  },
   "seo": {
     "homeDescription": "Compare grocery prices across Turkey, Spain, Montenegro, Ukraine, Kazakhstan, and Uzbekistan. Track daily supermarket prices and find where life is cheaper.",
     "homeTitle": "Compare Grocery Prices Across Countries",

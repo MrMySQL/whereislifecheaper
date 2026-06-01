@@ -158,3 +158,18 @@ export interface PriceHistoryEntry {
   country_name: string;
   country_code: string;
 }
+
+export interface RentBucket {
+  bedrooms: number;
+  median: number;
+  n_listings: number;
+}
+
+export interface CountryRent {
+  country: { code: string; name: string };
+  city: string;
+  currency: string;
+  period_start: string;
+  period_end: string;
+  buckets: RentBucket[];
+}
