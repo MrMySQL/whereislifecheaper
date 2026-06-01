@@ -21,6 +21,7 @@ import scraperRouter from './routes/scraper';
 import canonicalRouter from './routes/canonical';
 import translateRouter from './routes/translate';
 import ratesRouter from './routes/rates';
+import rentRouter from './routes/rent';
 import sitemapRouter from './routes/sitemap';
 
 const app = express();
@@ -106,6 +107,7 @@ app.use('/api/scraper', scraperRouter);
 app.use('/api/canonical', canonicalRouter);
 app.use('/api/translate', translateRouter);
 app.use('/api/rates', ratesRouter);
+app.use('/api/rent', rentRouter);
 
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {

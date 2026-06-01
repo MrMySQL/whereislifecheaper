@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { User, Country, CanonicalProduct, CanonicalProductBasic, CanonicalMappedProduct, PriceStats, Product, AuthStatus, Supermarket, PriceHistoryEntry } from '../types';
+import type { User, Country, CanonicalProduct, CanonicalProductBasic, CanonicalMappedProduct, PriceStats, Product, AuthStatus, Supermarket, PriceHistoryEntry, CountryRent } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -149,6 +149,14 @@ export const ratesApi = {
   getRates: async (): Promise<ExchangeRatesResponse> => {
     const response = await api.get<ExchangeRatesResponse>('/rates');
     return response.data;
+  },
+};
+
+// Rent API
+export const rentApi = {
+  getAll: async (): Promise<CountryRent[]> => {
+    const response = await api.get<{ data: CountryRent[] }>('/rent');
+    return response.data.data;
   },
 };
 

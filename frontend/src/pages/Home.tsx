@@ -7,6 +7,7 @@ import CountrySelector from '../components/comparison/CountrySelector';
 import CountryCard from '../components/comparison/CountryCard';
 import ComparisonTable from '../components/comparison/ComparisonTable';
 import CurrencyRatesTable from '../components/comparison/CurrencyRatesTable';
+import RentComparison from '../components/comparison/RentComparison';
 import Loading from '../components/common/Loading';
 import { useSEO, generateWebsiteSchema, generateFAQSchema } from '../hooks/useSEO';
 
@@ -254,6 +255,8 @@ export default function Home() {
         {/* Currency Rates Table */}
         <CurrencyRatesTable />
       </section>
+
+      <RentComparison />
 
       {/* Country Stats - Compact Cards */}
       {statsLoading ? (
