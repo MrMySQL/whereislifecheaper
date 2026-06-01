@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS rental_listings (
     source_listing_id TEXT NOT NULL,             -- site's own id (parsed from URL)
     bedrooms INTEGER NOT NULL,                   -- rooms - 1 (studio = 0)
     sqm NUMERIC(10, 2),
-    price_original NUMERIC(14, 2) NOT NULL,      -- as listed
+    price_original NUMERIC(14, 2) NOT NULL,      -- monthly rent in the listed currency
     currency_original VARCHAR(3) NOT NULL,       -- listed currency (UAH/USD/EUR)
-    price_local NUMERIC(14, 2) NOT NULL,         -- normalized to the country's currency
+    price_local NUMERIC(14, 2) NOT NULL,         -- monthly rent normalized to the country's currency
     district TEXT,
     listed_at TIMESTAMP WITH TIME ZONE,
     scraped_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

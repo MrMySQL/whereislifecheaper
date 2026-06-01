@@ -23,4 +23,22 @@ describe('parseDomainAuListPage', () => {
       sqmText: '55 m²',
     });
   });
+
+  test('extracts listings when Domain nests the search payload under componentProps', () => {
+    const nestedFixture = fixture('domain-au-list-page.html').replace(
+      '"componentProps": {\n              "listingSearchResultIds"',
+      '"componentProps": {\n              "componentProps": {\n              "listingSearchResultIds"',
+    ).replace(
+      '            }\n          }\n        }',
+      '              }\n            }\n          }\n        }',
+    );
+
+    const listings = parseDomainAuListPage(nestedFixture);
+
+    expect(listings).toHaveLength(2);
+    expect(listings[0]).toMatchObject({
+      source: 'domainau',
+      url: 'https://www.domain.com.au/703-29-commonwealth-street-sydney-nsw-2000-18145629',
+    });
+  });
 });

@@ -18,9 +18,9 @@ export interface RentListingNormalized {
   source: Source;
   url: string;
   sourceListingId: string;
-  priceOriginal: number;
+  priceOriginal: number;  // monthly rent in the listed currency
   currencyOriginal: Currency;
-  priceLocal: number;     // converted to the country's currency
+  priceLocal: number;     // monthly rent converted to the country's currency
   bedrooms: number;       // normalized bedroom count (studio = 0)
   sqm: number | null;
   district: string | null;

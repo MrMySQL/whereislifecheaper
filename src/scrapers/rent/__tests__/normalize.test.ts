@@ -116,14 +116,14 @@ describe('normalizeListing', () => {
     expect(normalizeListing({ ...raw, roomsText: 'оренда' }, toUah, 'UAH')).toBeNull();
   });
 
-  test('normalizes Australian dollar prices for Australian sources', () => {
+  test('normalizes Australian weekly prices to monthly rent', () => {
     const rates = new Map<string, number>([['AUD', 0.6], ['USD', 0.9], ['EUR', 1]]);
     const toAud = buildLocalConverter(rates, 'AUD');
     const n = normalizeListing(
       {
         source: 'realestateau',
         url: 'https://www.realestate.com.au/property-apartment-nsw-sydney-444313808',
-        priceText: '$880 per week',
+        priceText: '$900 per week',
         roomsText: '1 Bed',
         sqmText: null,
         district: 'Sydney',
@@ -134,7 +134,8 @@ describe('normalizeListing', () => {
     )!;
 
     expect(n.currencyOriginal).toBe('AUD');
-    expect(n.priceLocal).toBe(880);
+    expect(n.priceOriginal).toBe(3900);
+    expect(n.priceLocal).toBe(3900);
     expect(n.bedrooms).toBe(1);
     expect(n.sourceListingId).toBe('444313808');
   });

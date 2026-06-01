@@ -8,6 +8,9 @@ const UA_WORD_TO_ROOMS: Array<[RegExp, number]> = [
   [/чотир[иьох]+\s*кімн|чотирикімн/i, 4],
 ];
 
+const WEEKS_PER_MONTH = 52 / 12;
+const AUSTRALIAN_SOURCES: Source[] = ['realestateau', 'domainau'];
+
 export function roomsTextToBedrooms(text: string): number | null {
   if (!text) return null;
   const lower = text.toLowerCase().trim();
@@ -64,6 +67,10 @@ function parseSqm(text: string | null): number | null {
   if (!m) return null;
   const v = parseFloat(m[1]);
   return Number.isFinite(v) ? v : null;
+}
+
+function monthlyRentAmount(amount: number, source: Source): number {
+  return AUSTRALIAN_SOURCES.includes(source) ? Math.round(amount * WEEKS_PER_MONTH) : amount;
 }
 
 /**
@@ -123,13 +130,15 @@ export function normalizeListing(
   const bedrooms = roomsTextToBedrooms(raw.roomsText);
   if (bedrooms === null) return null;
 
+  const monthlyAmount = monthlyRentAmount(price.amount, raw.source);
+
   return {
     source: raw.source,
     url: raw.url,
     sourceListingId: extractSourceListingId(raw.source, raw.url),
-    priceOriginal: price.amount,
+    priceOriginal: monthlyAmount,
     currencyOriginal: price.currency,
-    priceLocal: Math.round(toLocal(price.amount, price.currency)),
+    priceLocal: Math.round(toLocal(monthlyAmount, price.currency)),
     bedrooms,
     sqm: parseSqm(raw.sqmText),
     district: raw.district,

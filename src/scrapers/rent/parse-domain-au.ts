@@ -25,9 +25,13 @@ function absoluteUrl(url: string): string {
 }
 
 function getListingMap(data: unknown): DomainListing[] {
-  const componentProps =
-    (data as any)?.props?.pageProps?.componentProps ??
-    (data as any)?.props?.pageProps?.componentProps?.componentProps;
+  const pageProps = (data as any)?.props?.pageProps;
+  const componentProps = [pageProps?.componentProps?.componentProps, pageProps?.componentProps].find(
+    (candidate) =>
+      Array.isArray(candidate?.listingSearchResultIds) &&
+      candidate?.listingsMap &&
+      typeof candidate.listingsMap === 'object',
+  );
   const ids = componentProps?.listingSearchResultIds;
   const listingsMap = componentProps?.listingsMap;
   if (!Array.isArray(ids) || !listingsMap || typeof listingsMap !== 'object') return [];
