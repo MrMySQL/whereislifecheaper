@@ -3,6 +3,7 @@ import {
   ScraperDeadlineError,
   resolveDeadlineMs,
   FALLBACK_SCRAPER_DEADLINE_MS,
+  REAP_INTERVAL_MS,
 } from '../ScraperService';
 import { ScraperFactory } from '../../scrapers/base/ScraperFactory';
 
@@ -177,13 +178,49 @@ describe('ScraperService per-scraper deadline', () => {
     expect(reapStaleRuns).toHaveBeenCalledTimes(1);
   });
 
-  it('reaps once per service instance, not once per scraper', async () => {
+  it('reaps once per run, not once per scraper', async () => {
     const { service, reapStaleRuns } = harness(fakeScraper(async () => []));
 
     await service.runScraper('1', { deadlineMs: 10_000 });
     await service.runScraper('1', { deadlineMs: 10_000 });
 
     expect(reapStaleRuns).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps reaping on a long-lived service instead of only once ever', async () => {
+    // The API's ScraperService is module-level and lives as long as the
+    // server, so a permanent memo would reap on the first trigger after boot
+    // and never again.
+    const { service, reapStaleRuns } = harness(fakeScraper(async () => []));
+    const realNow = Date.now();
+
+    await service.runScraper('1', { deadlineMs: 10_000 });
+    expect(reapStaleRuns).toHaveBeenCalledTimes(1);
+
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(realNow + REAP_INTERVAL_MS + 1);
+    try {
+      await service.runScraper('1', { deadlineMs: 10_000 });
+      expect(reapStaleRuns).toHaveBeenCalledTimes(2);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('retries a reap that failed once the interval has passed', async () => {
+    const { service, reapStaleRuns } = harness(fakeScraper(async () => []));
+    reapStaleRuns.mockRejectedValueOnce(new Error('deadlock'));
+    const realNow = Date.now();
+
+    await service.runScraper('1', { deadlineMs: 10_000 });
+
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(realNow + REAP_INTERVAL_MS + 1);
+    try {
+      await service.runScraper('1', { deadlineMs: 10_000 });
+      // A transient failure must not disable reaping for the process lifetime.
+      expect(reapStaleRuns).toHaveBeenCalledTimes(2);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('runs the scrape even if reaping fails', async () => {

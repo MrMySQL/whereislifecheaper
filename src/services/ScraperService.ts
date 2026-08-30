@@ -47,6 +47,13 @@ export function resolveDeadlineMs(raw = process.env.SCRAPER_DEADLINE_MS): number
 
 export const DEFAULT_SCRAPER_DEADLINE_MS = resolveDeadlineMs();
 
+/**
+ * How often a single ScraperService will reap stale scrape_logs rows.
+ * Long enough that one run costs one query, short enough that a long-lived
+ * API process keeps reaping.
+ */
+export const REAP_INTERVAL_MS = 5 * 60 * 1000;
+
 /** Thrown when a scraper exceeds its wall-clock budget. */
 export class ScraperDeadlineError extends Error {
   constructor(public readonly deadlineMs: number) {
@@ -61,31 +68,47 @@ export class ScraperService {
   private scrapeLogRepository: ScrapeLogRepository;
 
   /**
-   * One reap per service instance, shared by every entry point.
+   * Reap stale rows, at most once per REAP_INTERVAL_MS.
    *
    * Reaping used to live only in runAllScrapers, so the three paths that call
    * runScraper directly — `scraper:run -- <name>`, and both API triggers —
-   * never closed rows a previous killed run had stranded. Memoised as a
-   * promise so concurrent callers share the one query rather than racing.
+   * never closed rows a previous killed run had stranded.
+   *
+   * The interval, rather than a permanent memo: the API's ScraperService is
+   * module-level and lives as long as the server, so a once-ever memo would
+   * reap on the first trigger after boot and never again. Rows stranded later,
+   * or a transient failure on that first query, would sit on 'running'
+   * forever. The interval still keeps a full 19-scraper run to one query, and
+   * an in-flight promise is shared so concurrent triggers never double up.
    */
   private reaping: Promise<number> | null = null;
+  private lastReapAt = 0;
 
   private ensureStaleRunsReaped(): Promise<number> {
-    if (!this.reaping) {
-      this.reaping = this.scrapeLogRepository
-        .reapStaleRuns()
-        .then(reaped => {
-          if (reaped > 0) {
-            scraperLogger.warn(`Reaped ${reaped} stale 'running' scrape_logs row(s) from previous runs`);
-          }
-          return reaped;
-        })
-        // Best effort: a failed reap must not stop a scrape from running.
-        .catch(error => {
-          scraperLogger.error('Could not reap stale scrape_logs rows:', error);
-          return 0;
-        });
+    if (this.reaping) return this.reaping;
+    if (this.lastReapAt > 0 && Date.now() - this.lastReapAt < REAP_INTERVAL_MS) {
+      return Promise.resolve(0);
     }
+
+    this.reaping = this.scrapeLogRepository
+      .reapStaleRuns()
+      .then(reaped => {
+        if (reaped > 0) {
+          scraperLogger.warn(`Reaped ${reaped} stale 'running' scrape_logs row(s) from previous runs`);
+        }
+        return reaped;
+      })
+      // Best effort: a failed reap must not stop a scrape from running. The
+      // next call past the interval retries it.
+      .catch(error => {
+        scraperLogger.error('Could not reap stale scrape_logs rows:', error);
+        return 0;
+      })
+      .finally(() => {
+        this.lastReapAt = Date.now();
+        this.reaping = null;
+      });
+
     return this.reaping;
   }
 
