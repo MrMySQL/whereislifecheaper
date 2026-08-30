@@ -214,7 +214,7 @@ describe('ScraperService per-scraper deadline', () => {
     // Signal arrives mid-insert. Shutdown must still be waiting: if it
     // returns here the caller exits the process and the row is stranded.
     let settled = false;
-    const shutdown = service.markInFlightFailed('SIGTERM').then(n => { settled = true; return n; });
+    const shutdown = service.markInFlightFailed('SIGTERM', 2000).then(n => { settled = true; return n; });
     await new Promise(r => setImmediate(r));
     await new Promise(r => setImmediate(r));
     expect(settled).toBe(false);
@@ -224,6 +224,52 @@ describe('ScraperService per-scraper deadline', () => {
 
     expect(settled).toBe(true);
     expect(failIfRunning).toHaveBeenCalledWith('log-mid', expect.any(String));
+    void run;
+  });
+
+  it('closes known rows even when another insert never lands', async () => {
+    // With concurrent scrapers, one wedged insert must not hold every other
+    // scraper's row on 'running' until the forced exit fires.
+    const scraper = fakeScraper(() => new Promise<unknown[]>(() => {}));
+    const { service, failIfRunning, create } = harness(scraper);
+
+    // First run registers log-known; second run's insert never settles.
+    create.mockResolvedValueOnce('log-known');
+    const runA = service.runScraper('1', { deadlineMs: 10_000 });
+    await new Promise(r => setImmediate(r));
+
+    let finishB: ((id: string) => void) | undefined;
+    create.mockImplementationOnce(() => new Promise<string>(res => { finishB = res; }));
+    const runB = service.runScraper('2', { deadlineMs: 10_000 });
+    await new Promise(r => setImmediate(r));
+
+    // Generous grace: the point is that log-known does not wait for it.
+    const shutdown = service.markInFlightFailed('SIGTERM', 5000);
+    await new Promise(r => setImmediate(r));
+    await new Promise(r => setImmediate(r));
+
+    expect(failIfRunning).toHaveBeenCalledWith('log-known', 'SIGTERM');
+
+    finishB!('log-b');
+    await shutdown;
+    void runA; void runB;
+  });
+
+  it('records the signal on a row created after shutdown began', async () => {
+    let finishCreate: ((id: string) => void) | undefined;
+    const scraper = fakeScraper(async () => []);
+    const { service, failIfRunning, create } = harness(scraper);
+    create.mockImplementation(() => new Promise<string>(resolve => { finishCreate = resolve; }));
+
+    const run = service.runScraper('1', { deadlineMs: 10_000 });
+    await new Promise(r => setImmediate(r));
+
+    const shutdown = service.markInFlightFailed('Process received SIGTERM', 2000);
+    finishCreate!('log-late');
+    await shutdown;
+
+    // The row's error_message is the only record of why it stopped.
+    expect(failIfRunning).toHaveBeenCalledWith('log-late', 'Process received SIGTERM');
     void run;
   });
 

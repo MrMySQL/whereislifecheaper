@@ -47,6 +47,13 @@ export function resolveDeadlineMs(raw = process.env.SCRAPER_DEADLINE_MS): number
 
 export const DEFAULT_SCRAPER_DEADLINE_MS = resolveDeadlineMs();
 
+/**
+ * How long shutdown waits for a scrape_logs insert that has not landed yet.
+ * Short, because the caller is already on its way to process.exit and
+ * reapStaleRuns closes anything this misses.
+ */
+export const PENDING_CREATE_GRACE_MS = 2000;
+
 /** Thrown when a scraper exceeds its wall-clock budget. */
 export class ScraperDeadlineError extends Error {
   constructor(public readonly deadlineMs: number) {
@@ -65,6 +72,8 @@ export class ScraperService {
   private shuttingDown = false;
   /** scrape_logs inserts still in flight — their rows exist but have no id yet. */
   private readonly pendingCreates = new Set<Promise<void>>();
+  /** Why shutdown began, so a row closed later still names the signal. */
+  private shutdownReason: string | null = null;
 
   constructor(
     productService?: ProductService,
@@ -130,7 +139,11 @@ export class ScraperService {
           // Abandoned by the deadline, or by a signal that arrived while the
           // insert was still in flight. Awaited inside `tracked` so that
           // markInFlightFailed can wait for the close, not just the insert.
-          if (!owned || this.shuttingDown) {
+          if (this.shuttingDown) {
+            // Name the signal rather than a generic message — this row's
+            // error_message is the only record of why it stopped.
+            await this.closeInFlight(id, this.shutdownReason ?? 'Shutting down');
+          } else if (!owned) {
             await this.closeInFlight(id, 'scrape_logs row created after its run was abandoned');
           }
         },
@@ -355,23 +368,42 @@ export class ScraperService {
    * 8 hours, so without this a Ctrl-C or a cancelled CI job leaves the admin
    * status endpoint claiming a scrape is still in progress.
    */
-  async markInFlightFailed(reason: string): Promise<number> {
+  async markInFlightFailed(reason: string, graceMs = PENDING_CREATE_GRACE_MS): Promise<number> {
     // Stops runScraper opening or reopening rows once shutdown has begun.
     this.shuttingDown = true;
+    this.shutdownReason = reason;
 
-    // An insert still in flight has already created its row, but its id does
-    // not exist here yet — returning now would strand it on 'running'. The
-    // flag above means each one closes itself as it lands; this just waits.
-    // Bounded because that same flag stops any new insert being started.
-    for (let pass = 0; this.pendingCreates.size > 0 && pass < 10; pass++) {
-      await Promise.all([...this.pendingCreates]).catch(() => undefined);
-    }
-
+    // Rows we already know about go first and unconditionally. Waiting on a
+    // pending insert before touching them means one wedged insert takes every
+    // other concurrent scraper's row down with it when the forced exit fires.
     let closed = 0;
     for (const logId of [...this.inFlightLogs.keys()]) {
       closed += await this.closeInFlight(logId, reason);
     }
+
+    // Only then give inserts still in flight a bounded chance to land. Their
+    // rows exist in the database but have no id here yet; the flag above means
+    // each closes itself on arrival, so this only has to wait — and must not
+    // wait forever, since the caller is on its way to process.exit.
+    if (this.pendingCreates.size > 0) {
+      await this.raceGrace(Promise.all([...this.pendingCreates]), graceMs);
+      for (const logId of [...this.inFlightLogs.keys()]) {
+        closed += await this.closeInFlight(logId, reason);
+      }
+    }
+
     return closed;
+  }
+
+  /** Resolve when `work` settles or `graceMs` elapses, whichever comes first. */
+  private raceGrace(work: Promise<unknown>, graceMs: number): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    return Promise.race([
+      work.then(() => undefined, () => undefined),
+      new Promise<void>(resolve => { timer = setTimeout(resolve, graceMs); }),
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
   }
 
   /**
