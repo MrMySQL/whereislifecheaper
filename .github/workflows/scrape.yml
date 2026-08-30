@@ -54,6 +54,10 @@ jobs:
         run: npm run rates:sync
 
       - name: Run scrapers (headed with xvfb)
+        # Below the job's 360, so the step fails and the job carries on to the
+        # upload as a normal failure. always() does run on cancellation, but
+        # not reaching cancellation at all is one less thing to depend on.
+        timeout-minutes: 330
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PLAYWRIGHT_HEADLESS: 'false'

@@ -37,17 +37,32 @@ async function main(): Promise<void> {
     return;
   }
 
+  // One index lookup per mapping rather than an aggregate over every price
+  // row ever recorded. The naive `LEFT JOIN prices ... GROUP BY` version grew
+  // with price history, so the check would get slower every day it ran and
+  // eventually blow the workflow's timeout — a monitor that dies of its own
+  // success is worse than no monitor. idx_prices_mapping_scraped
+  // (product_mapping_id, scraped_at DESC) serves the inner LIMIT 1 directly.
   const result = await query<StalenessRow>(
     `SELECT c.code AS country_code,
             s.name AS supermarket,
-            MAX(p.scraped_at) AS last_scraped,
-            EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MAX(p.scraped_at))) / 3600 AS hours_stale
+            latest.last_scraped,
+            EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - latest.last_scraped)) / 3600 AS hours_stale
      FROM supermarkets s
      JOIN countries c ON c.id = s.country_id
-     LEFT JOIN product_mappings pm ON pm.supermarket_id = s.id
-     LEFT JOIN prices p ON p.product_mapping_id = pm.id
+     LEFT JOIN LATERAL (
+       SELECT MAX(newest.scraped_at) AS last_scraped
+       FROM product_mappings pm
+       CROSS JOIN LATERAL (
+         SELECT pr.scraped_at
+         FROM prices pr
+         WHERE pr.product_mapping_id = pm.id
+         ORDER BY pr.scraped_at DESC
+         LIMIT 1
+       ) newest
+       WHERE pm.supermarket_id = s.id
+     ) latest ON true
      WHERE s.is_active
-     GROUP BY c.code, s.name
      ORDER BY hours_stale DESC NULLS FIRST`
   );
 

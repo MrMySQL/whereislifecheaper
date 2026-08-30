@@ -243,6 +243,10 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
               supermarket: p.supermarket,
               image_url: p.image_url,
               product_url: p.product_url,
+              // Each constituent carries its own date. The country-level
+              // scraped_at is only the first product's, which says nothing
+              // about the rest of an average.
+              scraped_at: p.scraped_at,
             })),
           };
         }

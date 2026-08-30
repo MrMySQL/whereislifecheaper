@@ -117,7 +117,9 @@ export default function Home() {
   // last night or stopped four months ago.
   const freshness = comparisonData?.freshness;
   const staleDays = freshness?.newest_age_days ?? null;
-  const showStaleNotice = staleDays !== null && staleDays > STALE_AFTER_DAYS;
+  // >=, not >: newest_age_days is a floor, so 7 already means a full week has
+  // passed. `>` held the notice back until day 8.
+  const showStaleNotice = staleDays !== null && staleDays >= STALE_AFTER_DAYS;
 
   return (
     <div className="space-y-5">
