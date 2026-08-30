@@ -63,6 +63,8 @@ export class ScraperService {
   private readonly inFlightLogs = new Map<string, string>();
   /** Set once a signal handler has closed the in-flight rows; see markInFlightFailed. */
   private shuttingDown = false;
+  /** scrape_logs inserts still in flight — their rows exist but have no id yet. */
+  private readonly pendingCreates = new Set<Promise<void>>();
 
   constructor(
     productService?: ProductService,
@@ -122,17 +124,23 @@ export class ScraperService {
       // reapStaleRuns finds it eight hours later.
       const creating = this.scrapeLogRepository.create(supermarketId, 'running');
       let owned = true;
-      void creating.then(
-        id => {
+      const tracked = creating.then(
+        async id => {
           this.inFlightLogs.set(id, supermarket.name);
           // Abandoned by the deadline, or by a signal that arrived while the
-          // insert was still in flight.
+          // insert was still in flight. Awaited inside `tracked` so that
+          // markInFlightFailed can wait for the close, not just the insert.
           if (!owned || this.shuttingDown) {
-            void this.closeInFlight(id, 'scrape_logs row created after its run was abandoned');
+            await this.closeInFlight(id, 'scrape_logs row created after its run was abandoned');
           }
         },
         () => undefined,
       );
+
+      // Registered before the await below, so a signal landing mid-insert
+      // finds something to wait on rather than an empty map.
+      this.pendingCreates.add(tracked);
+      void tracked.finally(() => this.pendingCreates.delete(tracked));
 
       try {
         scrapeLogId = await this.withDeadline(creating, remaining(), budgetMs);
@@ -350,6 +358,14 @@ export class ScraperService {
   async markInFlightFailed(reason: string): Promise<number> {
     // Stops runScraper opening or reopening rows once shutdown has begun.
     this.shuttingDown = true;
+
+    // An insert still in flight has already created its row, but its id does
+    // not exist here yet — returning now would strand it on 'running'. The
+    // flag above means each one closes itself as it lands; this just waits.
+    // Bounded because that same flag stops any new insert being started.
+    for (let pass = 0; this.pendingCreates.size > 0 && pass < 10; pass++) {
+      await Promise.all([...this.pendingCreates]).catch(() => undefined);
+    }
 
     let closed = 0;
     for (const logId of [...this.inFlightLogs.keys()]) {

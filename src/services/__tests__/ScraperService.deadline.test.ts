@@ -198,6 +198,35 @@ describe('ScraperService per-scraper deadline', () => {
     expect(failIfRunning).toHaveBeenCalledWith('log-late', expect.stringMatching(/abandoned/i));
   });
 
+  it('waits for an insert still in flight before shutdown returns', async () => {
+    // The row exists in the database but its id has not reached inFlightLogs
+    // yet, so an unguarded markInFlightFailed would return and let the
+    // process exit with the row stranded on 'running'.
+    let finishCreate: ((id: string) => void) | undefined;
+    const scraper = fakeScraper(async () => []);
+    const { service, failIfRunning, create } = harness(scraper);
+    create.mockImplementation(() => new Promise<string>(resolve => { finishCreate = resolve; }));
+
+    const run = service.runScraper('1', { deadlineMs: 10_000 });
+    await new Promise(r => setImmediate(r));
+    expect(finishCreate).toBeDefined();
+
+    // Signal arrives mid-insert. Shutdown must still be waiting: if it
+    // returns here the caller exits the process and the row is stranded.
+    let settled = false;
+    const shutdown = service.markInFlightFailed('SIGTERM').then(n => { settled = true; return n; });
+    await new Promise(r => setImmediate(r));
+    await new Promise(r => setImmediate(r));
+    expect(settled).toBe(false);
+
+    finishCreate!('log-mid');
+    await shutdown;
+
+    expect(settled).toBe(true);
+    expect(failIfRunning).toHaveBeenCalledWith('log-mid', expect.any(String));
+    void run;
+  });
+
   it('does not open a new scrape log once shutdown has begun', async () => {
     const scraper = fakeScraper(async () => []);
     const { service, create } = harness(scraper);

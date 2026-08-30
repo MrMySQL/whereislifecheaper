@@ -281,6 +281,10 @@ export class CanonicalProductRepository {
           AND EXISTS (
             SELECT 1 FROM prices pr_exists
             WHERE pr_exists.product_mapping_id = pm.id
+              -- Must match the laterals below, which skip NULL-dated rows.
+              -- Counting one here that they then discard would inflate the
+              -- total and the country count past what the page can show.
+              AND pr_exists.scraped_at IS NOT NULL
               ${freshnessSql.replace('scraped_at', 'pr_exists.scraped_at')}
           )
         GROUP BY cp.id, cp.name
