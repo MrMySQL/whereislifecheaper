@@ -46,7 +46,8 @@ function harness(scraper: ReturnType<typeof fakeScraper>) {
     return 1;
   });
   const create = jest.fn().mockResolvedValue('log-1');
-  const scrapeLogRepo = { create, update };
+  const reapStaleRuns = jest.fn().mockResolvedValue(0);
+  const scrapeLogRepo = { create, update, reapStaleRuns };
 
   mockedFactory.createFromSupermarket = jest.fn().mockReturnValue(scraper) as never;
 
@@ -56,7 +57,7 @@ function harness(scraper: ReturnType<typeof fakeScraper>) {
     supermarketRepo as never,
     scrapeLogRepo as never,
   );
-  return { service, update, scraper, status, create };
+  return { service, update, scraper, status, create, reapStaleRuns };
 }
 
 describe('ScraperService per-scraper deadline', () => {
@@ -164,6 +165,35 @@ describe('ScraperService per-scraper deadline', () => {
 
     expect(result.errors[0].message).toMatch(/deadline/i);
     expect(scraper.initialize).not.toHaveBeenCalled();
+  });
+
+  it('reaps stale rows on the single-scraper path too', async () => {
+    // Reaping used to live only in runAllScrapers, so `scraper:run -- voli`
+    // and both API triggers left previously-stranded rows on 'running'.
+    const { service, reapStaleRuns } = harness(fakeScraper(async () => []));
+
+    await service.runScraper('1', { deadlineMs: 10_000 });
+
+    expect(reapStaleRuns).toHaveBeenCalledTimes(1);
+  });
+
+  it('reaps once per service instance, not once per scraper', async () => {
+    const { service, reapStaleRuns } = harness(fakeScraper(async () => []));
+
+    await service.runScraper('1', { deadlineMs: 10_000 });
+    await service.runScraper('1', { deadlineMs: 10_000 });
+
+    expect(reapStaleRuns).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs the scrape even if reaping fails', async () => {
+    const { service, reapStaleRuns, scraper } = harness(fakeScraper(async () => []));
+    reapStaleRuns.mockRejectedValueOnce(new Error('deadlock'));
+
+    const result = await service.runScraper('1', { deadlineMs: 10_000 });
+
+    expect(scraper.scrapeProductList).toHaveBeenCalled();
+    expect(result.errors).toHaveLength(0);
   });
 
   it('ScraperDeadlineError reports the budget it blew', () => {

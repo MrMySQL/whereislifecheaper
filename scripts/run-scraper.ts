@@ -187,6 +187,9 @@ async function main() {
   }
 }
 
+/** How long to wait for the pool to drain before exiting regardless. */
+const SHUTDOWN_GRACE_MS = 5000;
+
 // A run killed here leaves its scrape_logs row on 'running'; reapStaleRuns
 // closes it at the start of the next run. In-process cleanup was tried and
 // removed — see the note on reapStaleRuns.
@@ -194,7 +197,19 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     scraperLogger.warn(`Received ${signal} — shutting down; in-flight scrapes will be reaped on the next run.`);
     process.exitCode = 1;
-    closePool().catch(() => undefined).finally(() => process.exit(1));
+
+    // pool.end() waits for checked-out clients to come back, and a page
+    // callback mid-write holds one. Referenced on purpose: this timer is what
+    // guarantees the process both waits briefly and cannot wait forever.
+    const forced = setTimeout(() => {
+      scraperLogger.error(`Pool did not close within ${SHUTDOWN_GRACE_MS}ms — exiting anyway.`);
+      process.exit(1);
+    }, SHUTDOWN_GRACE_MS);
+
+    closePool().catch(() => undefined).finally(() => {
+      clearTimeout(forced);
+      process.exit(1);
+    });
   });
 }
 

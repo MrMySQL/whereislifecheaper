@@ -60,6 +60,36 @@ export class ScraperService {
   private supermarketRepository: SupermarketRepository;
   private scrapeLogRepository: ScrapeLogRepository;
 
+  /**
+   * One reap per service instance, shared by every entry point.
+   *
+   * Reaping used to live only in runAllScrapers, so the three paths that call
+   * runScraper directly — `scraper:run -- <name>`, and both API triggers —
+   * never closed rows a previous killed run had stranded. Memoised as a
+   * promise so concurrent callers share the one query rather than racing.
+   */
+  private reaping: Promise<number> | null = null;
+
+  private ensureStaleRunsReaped(): Promise<number> {
+    if (!this.reaping) {
+      this.reaping = this.scrapeLogRepository
+        .reapStaleRuns()
+        .then(reaped => {
+          if (reaped > 0) {
+            scraperLogger.warn(`Reaped ${reaped} stale 'running' scrape_logs row(s) from previous runs`);
+          }
+          return reaped;
+        })
+        // Best effort: a failed reap must not stop a scrape from running.
+        .catch(error => {
+          scraperLogger.error('Could not reap stale scrape_logs rows:', error);
+          return 0;
+        });
+    }
+    return this.reaping;
+  }
+
+
   constructor(
     productService?: ProductService,
     supermarketRepo?: SupermarketRepository,
@@ -105,6 +135,8 @@ export class ScraperService {
         scraperLogger.warn(`Supermarket is not active: ${supermarket.name}`);
         return this.buildEmptyResult(supermarketId, 'Supermarket not active');
       }
+
+      await this.withDeadline(this.ensureStaleRunsReaped(), remaining(), budgetMs);
 
       // A row whose insert outlives the deadline racing it, or whose process
       // is killed mid-scrape, stays on 'running' until reapStaleRuns closes
@@ -246,10 +278,7 @@ export class ScraperService {
 
     // A run killed mid-scraper (CI timeout, SIGKILL) leaves its 'running' row
     // behind forever, which permanently inflates the admin status endpoint.
-    const reaped = await this.scrapeLogRepository.reapStaleRuns();
-    if (reaped > 0) {
-      scraperLogger.warn(`Reaped ${reaped} stale 'running' scrape_logs row(s) from previous runs`);
-    }
+    await this.ensureStaleRunsReaped();
 
     const supermarkets = await this.supermarketRepository.getActive();
     scraperLogger.info(`Found ${supermarkets.length} active supermarkets to scrape`);
