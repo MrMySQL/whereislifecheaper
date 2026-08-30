@@ -16,6 +16,7 @@
     "scraper:test": "ts-node scripts/test-scrapers.ts",
     "scraper:run": "ts-node scripts/run-scraper.ts",
     "scraper:toggle": "ts-node scripts/toggle-scraper.ts",
+    "check:freshness": "ts-node scripts/check-freshness.ts",
     "api": "ts-node src/api/server.ts",
     "rates:sync": "ts-node scripts/sync-exchange-rates.ts",
     "rent:scrape": "ts-node scripts/scrape-rent.ts",

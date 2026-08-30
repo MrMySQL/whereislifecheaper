@@ -182,6 +182,15 @@ function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
                   {formatPrice(product.price, priceData.currency)}
                 </span>
               </div>
+              {/* An average blends products collected on different days, so
+                  each line carries its own date rather than borrowing the
+                  country-level one. */}
+              {product.scraped_at && (
+                <span className="text-[10px] text-charcoal-400 flex items-center gap-0.5 mt-0.5">
+                  <Calendar className="w-2.5 h-2.5" />
+                  {formatFullDate(product.scraped_at)}
+                </span>
+              )}
             </div>
           </div>
         ))}

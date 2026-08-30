@@ -20,9 +20,22 @@ async function main() {
   const scraperService = new ScraperService();
   const args = process.argv.slice(2);
 
+  // Set to true by any scraper that errors or stores nothing, so a run where
+  // everything silently returned 0 products fails the CI job instead of
+  // printing "completed successfully" and exiting 0.
+  let degraded = false;
+
   // Parse flags
   const concurrencyArg = args.find(a => a.startsWith('--concurrency='));
   const concurrency = concurrencyArg ? parseInt(concurrencyArg.split('=')[1], 10) : 3;
+  // --concurrency=0 used to start no workers at all: the run finished
+  // instantly, scraped nothing, and printed "completed successfully".
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    console.error(`❌ --concurrency must be a positive integer, got "${concurrencyArg?.split('=')[1]}".`);
+    process.exitCode = 1;
+    await closePool();
+    return;
+  }
 
   const categoriesArg = args.find(a => a.startsWith('--categories='));
   const categoryIds = categoriesArg ? categoriesArg.split('=')[1].split(',').map(c => c.trim()) : undefined;
@@ -46,6 +59,24 @@ async function main() {
         console.log(`  Errors: ${result.errors.length}`);
         console.log('');
       }
+
+      // runAllScrapers now returns a result for every active supermarket,
+      // including ones that threw before producing one, so an empty run and a
+      // silently-swallowed rejection both land in `barren` rather than
+      // vanishing between the pool and this check.
+      const barren = results.filter(r => r.productsScraped === 0);
+      const errored = results.filter(r => r.errors.length > 0);
+      if (barren.length > 0 || errored.length > 0) {
+        degraded = true;
+        console.error(
+          `⚠️  ${barren.length} scraper(s) stored 0 products, ${errored.length} reported errors ` +
+          `(of ${results.length} run).`
+        );
+        for (const r of barren) {
+          const why = r.errors[0]?.message ?? 'completed without storing anything';
+          console.error(`   · ${r.supermarketId}: ${why}`);
+        }
+      }
     } else {
       // Run specific scraper
       const identifier = filteredArgs[0];
@@ -53,8 +84,10 @@ async function main() {
       // Try to find supermarket by ID or name
       let supermarketId = identifier;
 
-      if (!identifier.match(/^[0-9a-f-]{36}$/i)) {
-        // Not a UUID, try to find by name or scraper_class
+      // supermarkets.id is SERIAL, not a UUID — the old 36-char hex test here
+      // never matched, so `scraper:run -- 63` fell through and always failed.
+      if (!/^\d+$/.test(identifier)) {
+        // Not an ID, try to find by name or scraper_class
         const result = await query<{ id: string; name: string }>(
           `SELECT id, name FROM supermarkets
            WHERE LOWER(name) = LOWER($1)
@@ -103,6 +136,10 @@ async function main() {
       console.log(`Duration: ${(result.duration / 1000).toFixed(2)}s`);
       console.log(`Errors: ${result.errors.length}`);
 
+      if (result.productsScraped === 0 || result.errors.length > 0) {
+        degraded = true;
+      }
+
       if (result.errors.length > 0) {
         console.log('\nErrors:');
         result.errors.forEach((error, i) => {
@@ -135,14 +172,45 @@ async function main() {
       console.log('');
     });
 
-    console.log('✅ Scraping completed successfully!');
+    if (degraded) {
+      console.error('❌ Scraping finished with failures — see the warnings above.');
+      process.exitCode = 1;
+    } else {
+      console.log('✅ Scraping completed successfully!');
+    }
   } catch (error) {
     scraperLogger.error('Scraping failed:', error);
     console.error('❌ Scraping failed:', error);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     await closePool();
   }
+}
+
+/** How long to wait for the pool to drain before exiting regardless. */
+const SHUTDOWN_GRACE_MS = 5000;
+
+// A run killed here leaves its scrape_logs row on 'running'; reapStaleRuns
+// closes it at the start of the next run. In-process cleanup was tried and
+// removed — see the note on reapStaleRuns.
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    scraperLogger.warn(`Received ${signal} — shutting down; in-flight scrapes will be reaped on the next run.`);
+    process.exitCode = 1;
+
+    // pool.end() waits for checked-out clients to come back, and a page
+    // callback mid-write holds one. Referenced on purpose: this timer is what
+    // guarantees the process both waits briefly and cannot wait forever.
+    const forced = setTimeout(() => {
+      scraperLogger.error(`Pool did not close within ${SHUTDOWN_GRACE_MS}ms — exiting anyway.`);
+      process.exit(1);
+    }, SHUTDOWN_GRACE_MS);
+
+    closePool().catch(() => undefined).finally(() => {
+      clearTimeout(forced);
+      process.exit(1);
+    });
+  });
 }
 
 main();

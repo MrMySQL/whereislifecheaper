@@ -12,12 +12,113 @@ import { generateRunId } from '../utils/runId';
 
 export interface RunScraperOptions {
   categoryIds?: string[];
+  /** Wall-clock budget for this scraper, in ms. Defaults to SCRAPER_DEADLINE_MS. */
+  deadlineMs?: number;
+}
+
+/**
+ * Wall-clock budget for a single scraper.
+ *
+ * Without this, one scraper that never returns holds the whole run open until
+ * the CI job is killed — which is exactly what Woolworths did from 2026-04-28
+ * to 2026-08-01, costing 33 consecutive runs. The default leaves room for the
+ * slowest healthy scraper (Voli, ~28 min on the 2026-08-01 run) with margin.
+ */
+export const FALLBACK_SCRAPER_DEADLINE_MS = 45 * 60 * 1000;
+
+/**
+ * Resolve SCRAPER_DEADLINE_MS, falling back to the default rather than
+ * disabling the safeguard. `SCRAPER_DEADLINE_MS=0` or a typo'd value used to
+ * parse to 0/NaN, which `withDeadline` reads as "no deadline" — silently
+ * restoring the exact failure mode this whole change exists to prevent.
+ */
+export function resolveDeadlineMs(raw = process.env.SCRAPER_DEADLINE_MS): number {
+  if (raw === undefined || raw.trim() === '') return FALLBACK_SCRAPER_DEADLINE_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    scraperLogger.warn(
+      `Ignoring invalid SCRAPER_DEADLINE_MS="${raw}" — using the ${FALLBACK_SCRAPER_DEADLINE_MS}ms default. ` +
+      `A deadline can only be disabled per call, never by configuration.`
+    );
+    return FALLBACK_SCRAPER_DEADLINE_MS;
+  }
+  return parsed;
+}
+
+export const DEFAULT_SCRAPER_DEADLINE_MS = resolveDeadlineMs();
+
+/**
+ * How often a single ScraperService will reap stale scrape_logs rows.
+ * Long enough that one run costs one query, short enough that a long-lived
+ * API process keeps reaping.
+ */
+export const REAP_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Thrown when a scraper exceeds its wall-clock budget. */
+export class ScraperDeadlineError extends Error {
+  constructor(public readonly deadlineMs: number) {
+    super(`Scraper exceeded its ${Math.round(deadlineMs / 60000)} minute deadline`);
+    this.name = 'ScraperDeadlineError';
+  }
 }
 
 export class ScraperService {
   private productService: ProductService;
   private supermarketRepository: SupermarketRepository;
   private scrapeLogRepository: ScrapeLogRepository;
+
+  /**
+   * Reap stale rows, at most once per REAP_INTERVAL_MS.
+   *
+   * Reaping used to live only in runAllScrapers, so the three paths that call
+   * runScraper directly — `scraper:run -- <name>`, and both API triggers —
+   * never closed rows a previous killed run had stranded.
+   *
+   * The interval, rather than a permanent memo: the API's ScraperService is
+   * module-level and lives as long as the server, so a once-ever memo would
+   * reap on the first trigger after boot and never again. Rows stranded later,
+   * or a transient failure on that first query, would sit on 'running'
+   * forever. The interval still keeps a full 19-scraper run to one query, and
+   * an in-flight promise is shared so concurrent triggers never double up.
+   */
+  private reaping: Promise<number> | null = null;
+  private lastReapAt = 0;
+
+  private ensureStaleRunsReaped(): Promise<number> {
+    if (this.reaping) return this.reaping;
+    if (this.lastReapAt > 0) {
+      const sinceLast = Date.now() - this.lastReapAt;
+      // A negative value means the wall clock went backwards (NTP correction,
+      // a manual change). Treat that as expired rather than as "no time has
+      // passed", which would suppress reaping until the clock caught up. The
+      // cost of being wrong is one extra cheap query.
+      if (sinceLast >= 0 && sinceLast < REAP_INTERVAL_MS) {
+        return Promise.resolve(0);
+      }
+    }
+
+    this.reaping = this.scrapeLogRepository
+      .reapStaleRuns()
+      .then(reaped => {
+        if (reaped > 0) {
+          scraperLogger.warn(`Reaped ${reaped} stale 'running' scrape_logs row(s) from previous runs`);
+        }
+        return reaped;
+      })
+      // Best effort: a failed reap must not stop a scrape from running. The
+      // next call past the interval retries it.
+      .catch(error => {
+        scraperLogger.error('Could not reap stale scrape_logs rows:', error);
+        return 0;
+      })
+      .finally(() => {
+        this.lastReapAt = Date.now();
+        this.reaping = null;
+      });
+
+    return this.reaping;
+  }
+
 
   constructor(
     productService?: ProductService,
@@ -41,8 +142,21 @@ export class ScraperService {
     const startTime = Date.now();
     let totalStoredCount = 0;
 
+    // Clock starts here so lookup, browser launch and scrape all draw on one
+    // budget. `remaining()` never returns 0 while a budget is in force, since
+    // withDeadline reads 0 as "unbounded".
+    const budgetMs = options?.deadlineMs ?? DEFAULT_SCRAPER_DEADLINE_MS;
+    const bounded = Number.isFinite(budgetMs) && budgetMs > 0;
+    const deadlineAt = startTime + budgetMs;
+    const remaining = () => (bounded ? Math.max(1, deadlineAt - Date.now()) : 0);
+
     try {
-      const supermarket = await this.supermarketRepository.findById(supermarketId);
+      // Setup is inside the budget as well: a wedged connection pool or a
+      // lock on scrape_logs would otherwise hang the run before the first
+      // timed call is ever reached.
+      const supermarket = await this.withDeadline(
+        this.supermarketRepository.findById(supermarketId), remaining(), budgetMs
+      );
 
       if (!supermarket) {
         throw new Error(`Supermarket not found: ${supermarketId}`);
@@ -52,7 +166,14 @@ export class ScraperService {
         return this.buildEmptyResult(supermarketId, 'Supermarket not active');
       }
 
-      scrapeLogId = await this.scrapeLogRepository.create(supermarketId, 'running');
+      await this.withDeadline(this.ensureStaleRunsReaped(), remaining(), budgetMs);
+
+      // A row whose insert outlives the deadline racing it, or whose process
+      // is killed mid-scrape, stays on 'running' until reapStaleRuns closes
+      // it on the next run. That is deliberately the only cleanup path.
+      scrapeLogId = await this.withDeadline(
+        this.scrapeLogRepository.create(supermarketId, 'running'), remaining(), budgetMs
+      );
 
       const scraperOptions: CreateScraperOptions = { categoryIds: options?.categoryIds };
       scraper = ScraperFactory.createFromSupermarket(supermarket, scraperOptions);
@@ -67,17 +188,35 @@ export class ScraperService {
         return savedCount;
       });
 
-      await scraper.initialize();
-      const products = await scraper.scrapeProductList();
+      // The budget covers the whole lifecycle, not just the scrape: a browser
+      // that never launches holds the run open just as effectively as a
+      // scrape that never returns, and initialize() is a network call too.
+      await this.withDeadline(scraper.initialize(), remaining(), budgetMs);
+      const products = await this.withDeadline(scraper.scrapeProductList(), remaining(), budgetMs);
 
       scraperLogger.info(
         `Scraped ${products.length} products from ${supermarket.name}, stored ${totalStoredCount}`
       );
 
+      // A scraper that returns cleanly but stores nothing is not a success —
+      // a swallowed API error, a captcha, or a dead category all look like
+      // this, and recording them as 'success' is what hid REWE's 0-product
+      // runs for three months.
+      const status = totalStoredCount === 0 ? 'partial' : 'success';
+      if (status === 'partial') {
+        scraperLogger.warn(
+          `${supermarket.name} completed without storing any products — recording as 'partial'`
+        );
+      }
+
       if (scrapeLogId) {
-        await this.scrapeLogRepository.update(scrapeLogId, 'success', {
+        // onlyIfRunning: reapStaleRuns is a second writer, in another
+        // process. The database is the only place the two can be ordered.
+        await this.scrapeLogRepository.update(scrapeLogId, status, {
           productsScraped: totalStoredCount,
+          error: status === 'partial' ? 'Completed but stored 0 products' : undefined,
           duration: Date.now() - startTime,
+          onlyIfRunning: true,
         });
       }
 
@@ -102,23 +241,74 @@ export class ScraperService {
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      scraperLogger.error(`Scraping failed for supermarket ${supermarketId}:`, error);
+      const timedOut = error instanceof ScraperDeadlineError;
 
+      if (timedOut) {
+        scraperLogger.error(
+          `Scraper for supermarket ${supermarketId} hit its deadline after ` +
+          `${Math.round((Date.now() - startTime) / 1000)}s; ${totalStoredCount} products were stored before the cut`
+        );
+      } else {
+        scraperLogger.error(`Scraping failed for supermarket ${supermarketId}:`, error);
+      }
+
+      // Products are persisted incrementally by the page callback, so a
+      // deadline that lands mid-run still leaves real data behind.
       if (scrapeLogId) {
-        await this.scrapeLogRepository.update(scrapeLogId, 'failed', {
+        await this.scrapeLogRepository.update(scrapeLogId, timedOut && totalStoredCount > 0 ? 'partial' : 'failed', {
+          productsScraped: totalStoredCount,
           error: errorMessage,
           duration: Date.now() - startTime,
+          onlyIfRunning: true,
         });
       }
 
-      return this.buildEmptyResult(supermarketId, errorMessage);
+      const result = this.buildEmptyResult(supermarketId, errorMessage);
+      result.productsScraped = totalStoredCount;
+      result.duration = Date.now() - startTime;
+      return result;
     } finally {
+      // cleanup() closes the browser, which is what actually stops a scraper
+      // that blew its deadline — Promise.race alone leaves it running.
       if (scraper) await scraper.cleanup();
     }
   }
 
+  /**
+   * Reject with ScraperDeadlineError if `promise` has not settled in time.
+   *
+   * The underlying work is not cancellable, so it keeps going until the caller
+   * closes the browser in its finally block; its eventual settlement is
+   * swallowed here so it cannot surface as an unhandled rejection.
+   */
+  private withDeadline<T>(promise: Promise<T>, timeoutMs: number, budgetMs = timeoutMs): Promise<T> {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
+
+    promise.catch(() => undefined);
+
+    let timer: NodeJS.Timeout | undefined;
+    return Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        // Reports the full budget, not the slice left for this step.
+        timer = setTimeout(() => reject(new ScraperDeadlineError(budgetMs)), timeoutMs);
+      }),
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    }) as Promise<T>;
+  }
+
   async runAllScrapers(concurrency: number = 3): Promise<ScrapeResult[]> {
+    // Math.min(0 | NaN, n) leaves the worker pool empty, so the run would
+    // finish instantly with zero results and report success.
+    if (!Number.isInteger(concurrency) || concurrency < 1) {
+      throw new Error(`Invalid concurrency: ${concurrency}. Expected a positive integer.`);
+    }
     scraperLogger.info(`Starting scrape for all active supermarkets (concurrency: ${concurrency})`);
+
+    // A run killed mid-scraper (CI timeout, SIGKILL) leaves its 'running' row
+    // behind forever, which permanently inflates the admin status endpoint.
+    await this.ensureStaleRunsReaped();
 
     const supermarkets = await this.supermarketRepository.getActive();
     scraperLogger.info(`Found ${supermarkets.length} active supermarkets to scrape`);
@@ -137,7 +327,17 @@ export class ScraperService {
         results.push(result);
         scraperLogger.info(`[Pool] Completed: ${supermarket.name} (${result.productsScraped} products)`);
       } catch (error) {
+        // runScraper handles its own failures, so reaching here means
+        // something outside it threw (cleanup, a repository write). Dropping
+        // the result entirely is what let the caller exit 0 on a run where a
+        // scraper never produced one.
         scraperLogger.error(`Failed to run scraper for ${supermarket.name}:`, error);
+        results.push(
+          this.buildEmptyResult(
+            supermarket.id,
+            error instanceof Error ? error.message : 'Unknown error'
+          )
+        );
       }
 
       await runNext();
@@ -149,7 +349,22 @@ export class ScraperService {
 
     await Promise.all(running);
 
-    scraperLogger.info(`Completed scraping all supermarkets. Total results: ${results.length}`);
+    const empty = results.filter(r => r.productsScraped === 0);
+    const errored = results.filter(r => r.errors.length > 0);
+    scraperLogger.info(
+      `Completed scraping all supermarkets. ${results.length}/${supermarkets.length} ran, ` +
+      `${empty.length} stored nothing, ${errored.length} reported errors`
+    );
+
+    // Every active supermarket must be accounted for; a caller deciding the
+    // run's exit code can only see what is in this array.
+    const accountedFor = new Set(results.map(r => r.supermarketId));
+    for (const supermarket of supermarkets) {
+      if (accountedFor.has(supermarket.id)) continue;
+      scraperLogger.error(`No result recorded for ${supermarket.name} — reporting it as failed`);
+      results.push(this.buildEmptyResult(supermarket.id, 'Scraper produced no result'));
+    }
+
     return results;
   }
 

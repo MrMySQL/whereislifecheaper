@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation, Trans } from 'react-i18next';
-import { Search, RefreshCw, Globe2, TrendingDown, Sparkles, Layers, Check } from 'lucide-react';
+import { Search, RefreshCw, Globe2, TrendingDown, Sparkles, Layers, Check, AlertTriangle } from 'lucide-react';
 import { countriesApi, pricesApi, canonicalApi } from '../services/api';
 import CountrySelector from '../components/comparison/CountrySelector';
 import CountryCard from '../components/comparison/CountryCard';
@@ -12,6 +12,9 @@ import Loading from '../components/common/Loading';
 import { useSEO, generateWebsiteSchema, generateFAQSchema } from '../hooks/useSEO';
 
 const DEFAULT_COUNTRIES = ['TR', 'ES', 'ME', 'UA', 'KZ', 'UZ'];
+
+// The scrape runs roughly every 3 days; past a week the data is not "current".
+const STALE_AFTER_DAYS = 7;
 
 export default function Home() {
   const { t } = useTranslation();
@@ -26,7 +29,7 @@ export default function Home() {
     ...generateFAQSchema([
       {
         question: 'How do you compare grocery prices across countries?',
-        answer: 'We scrape prices daily from major supermarkets in each country and convert them to a common currency (USD) for comparison. This allows you to see real-time price differences.',
+        answer: 'We scrape prices every few days from major supermarkets in each country and convert them to a common currency (USD) for comparison, so you can see how grocery costs differ between them.',
       },
       {
         question: 'Which countries do you track grocery prices for?',
@@ -34,7 +37,7 @@ export default function Home() {
       },
       {
         question: 'How often are prices updated?',
-        answer: 'Prices are updated daily through automated scraping of supermarket websites, ensuring you always have access to current pricing information.',
+        answer: 'Prices are refreshed every few days by automated scraping of supermarket websites. Each figure carries the date it was collected, and we flag the data on the page when a refresh has been missed.',
       },
     ]),
   }), []);
@@ -42,7 +45,7 @@ export default function Home() {
   // Set SEO meta tags for home page
   useSEO({
     title: undefined, // Use default title for homepage
-    description: t('seo.homeDescription', 'Compare grocery prices across Turkey, Spain, Montenegro, Ukraine, Kazakhstan, and Uzbekistan. Track daily supermarket prices and find where life is cheaper.'),
+    description: t('seo.homeDescription', 'Compare grocery prices across Turkey, Spain, Montenegro, Ukraine, Kazakhstan, and Uzbekistan. Track regularly updated supermarket prices and find where life is cheaper.'),
     keywords: 'grocery prices, cost of living comparison, supermarket prices, Turkey prices, Spain prices, Montenegro prices, expat life, digital nomad, food costs',
     canonicalUrl: 'https://whereislifecheaper.com/',
     structuredData,
@@ -109,8 +112,32 @@ export default function Home() {
   const totalProducts = priceStats.reduce((sum, s) => sum + (Number(s.product_count) || 0), 0);
   const totalCountries = countries.length;
 
+  // Warn when the prices on screen are older than the scrape cadence would
+  // explain. Without this the page looks identical whether the pipeline ran
+  // last night or stopped four months ago.
+  const freshness = comparisonData?.freshness;
+  const staleDays = freshness?.newest_age_days ?? null;
+  // >=, not >: newest_age_days is a floor, so 7 already means a full week has
+  // passed. `>` held the notice back until day 8.
+  const showStaleNotice = staleDays !== null && staleDays >= STALE_AFTER_DAYS;
+
   return (
     <div className="space-y-5">
+      {showStaleNotice && (
+        <div
+          role="status"
+          className="flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+          <p className="text-sm text-amber-900">
+            {t('home.staleData', {
+              days: staleDays,
+              defaultValue:
+                'Prices have not refreshed in {{days}} days. The figures below are the most recent we have, not today’s prices.',
+            })}
+          </p>
+        </div>
+      )}
       {/* Compact Hero Section */}
       <section className="rounded-2xl bg-saffron-50 px-5 py-5">
 

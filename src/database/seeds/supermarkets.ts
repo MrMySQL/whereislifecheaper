@@ -8,6 +8,22 @@ export interface SupermarketSeedData {
   is_active: boolean;
 }
 
+/**
+ * Seed data for supermarkets.
+ *
+ * This file is the source of truth for `is_active` — the scrape workflow runs
+ * `npm run seed` before every run, so the upsert below resets it each time.
+ *
+ * Several entries here are placeholders whose scraper_class has no
+ * implementation in SCRAPER_REGISTRY: A101Scraper, BIMScraper, SokScraper,
+ * CarrefourTurkeyScraper, IdeaScraper, CarrefourSpainScraper, AlcampoScraper,
+ * DiaScraper and KorzinkaScraper. They are all is_active: false
+ * and harmless while they stay that way — enabling one makes
+ * ScraperFactory.createFromSupermarket throw `Scraper class not found`, which
+ * is caught and logged as a failed run every single time it is scheduled
+ * (Uzum Market did exactly this daily through February 2026). Write the
+ * scraper and register it before flipping any of them on.
+ */
 export const supermarketsData: SupermarketSeedData[] = [
   // Turkey
   {
@@ -129,12 +145,17 @@ export const supermarketsData: SupermarketSeedData[] = [
   },
   // Germany
   // NOTE: REWE uses stealth mode (playwright-extra) to bypass Cloudflare
+  // DISABLED 2026-08-31: the scraper's delivery-market selection silently
+  // fails, so every product reads as location-dependent and is dropped. It
+  // paginated 1,919 pages for 0 products on the 2026-08-01 run, burning 4h43m
+  // (79% of the CI budget). Last price actually stored: 2026-05-04.
+  // Germany is still covered by Knuspr. Re-enable once market selection works.
   {
     country_code: 'DE',
     name: 'REWE',
     website_url: 'https://www.rewe.de/shop/',
     scraper_class: 'ReweScraper',
-    is_active: true,
+    is_active: false,
   },
   {
     country_code: 'DE',
@@ -255,6 +276,10 @@ export async function seedSupermarkets(): Promise<void> {
 
     const countryId = countryResult.rows[0].id;
 
+    // This file is the source of truth for is_active: the CI workflow runs
+    // `npm run seed` immediately before every scrape, so this upsert resets it
+    // on each run. Anything done with `npm run scraper:toggle` is therefore
+    // temporary — to disable a scraper durably, set is_active here.
     await query(
       `INSERT INTO supermarkets (country_id, name, website_url, scraper_class, is_active)
        VALUES ($1, $2, $3, $4, $5)

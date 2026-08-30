@@ -14,6 +14,11 @@ chromium.use(stealth());
  * Woolworths AU top-level grocery categories.
  * IDs come from `GET /apis/ui/PiesCategoriesWithSpecials` (NodeId field).
  * Marketing/non-grocery nodes (Specials, Everyday Market, Back to School, Front of Store) are excluded.
+ *
+ * Drugstore and homewares nodes (Beauty, Personal Care, Health & Wellness,
+ * Cleaning & Maintenance, Baby, Pet, Electronics, Home & Lifestyle) are also
+ * excluded — see `woolworthsNonGroceryCategories` below. They are the largest
+ * nodes on the site and none of them feed the grocery basket comparison.
  */
 export const woolworthsCategories: CategoryConfig[] = [
   { id: '1-E5BEE36E', name: 'Fruit & Veg', url: '/shop/browse/fruit-veg' },
@@ -29,6 +34,23 @@ export const woolworthsCategories: CategoryConfig[] = [
   { id: '1_F229FBE', name: 'International Foods', url: '/shop/browse/international-foods' },
   { id: '1_5AF3A0A', name: 'Drinks', url: '/shop/browse/drinks' },
   { id: '1_8E4DA6F', name: 'Beer, Wine & Spirits', url: '/shop/browse/beer-wine-spirits' },
+];
+
+/**
+ * Non-grocery nodes, kept here so they are documented rather than lost.
+ *
+ * These were scraped until 2026-08 and were the direct cause of the daily
+ * workflow hitting its 6-hour CI timeout: on the 2026-08-01 run they consumed
+ * 2h42m before the job was killed part-way through Baby, with Pet, Electronics
+ * and Home & Lifestyle never reached. They are bounded but very long — the API
+ * returns 36 genuinely-new stockcodes per page over ~280 pages each, so the
+ * duplicate-page guard never trips.
+ *
+ * `--categories=` filters `woolworthsCategories`, so these are not reachable
+ * from the CLI while they live here — spread them back into the array above to
+ * scrape them, and raise the per-scraper deadline in ScraperService if you do.
+ */
+export const woolworthsNonGroceryCategories: CategoryConfig[] = [
   { id: '1_8D61DD6', name: 'Beauty', url: '/shop/browse/beauty' },
   { id: '1_894D0A8', name: 'Personal Care', url: '/shop/browse/personal-care' },
   { id: '1_9851658', name: 'Health & Wellness', url: '/shop/browse/health-wellness' },

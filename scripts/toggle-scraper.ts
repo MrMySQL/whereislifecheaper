@@ -66,6 +66,12 @@ async function main() {
   }
 
   console.log('');
+  console.warn(
+    'Note: this change is temporary. The scrape workflow runs `npm run seed` ' +
+    'before every run, which resets is_active from src/database/seeds/supermarkets.ts. ' +
+    'To make this stick, edit that file.'
+  );
+  console.log('');
 }
 
 async function listScrapers() {

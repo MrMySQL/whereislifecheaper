@@ -19,6 +19,13 @@ export class ScrapeLogRepository {
     return result.rows[0].id;
   }
 
+  /**
+   * @param data.onlyIfRunning Refuse to write if the row has already reached a
+   *   terminal status. A scraper finishing at the same moment a signal handler
+   *   closes its row would otherwise overwrite the 'failed' that shutdown
+   *   recorded — the in-process flag cannot cover it, because the status check
+   *   and this write are separated by an await. Returns the rows affected.
+   */
   async update(
     logId: string,
     status: string,
@@ -27,10 +34,11 @@ export class ScrapeLogRepository {
       productsFailed?: number;
       error?: string;
       duration?: number;
+      onlyIfRunning?: boolean;
     }
-  ): Promise<void> {
+  ): Promise<number> {
     const durationSeconds = data.duration ? Math.round(data.duration / 1000) : null;
-    await query(
+    const result = await query(
       `UPDATE scrape_logs SET
         status = $2,
         products_scraped = $3,
@@ -38,16 +46,45 @@ export class ScrapeLogRepository {
         error_message = $5,
         duration_seconds = $6,
         completed_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
+       WHERE id = $1${data.onlyIfRunning ? " AND status = 'running'" : ''}`,
       [
         logId,
         status,
-        data.productsScraped || null,
-        data.productsFailed || null,
+        // `??`, not `||` — a real 0 must be stored as 0, not collapsed to NULL.
+        data.productsScraped ?? null,
+        data.productsFailed ?? null,
         data.error || null,
         durationSeconds,
       ]
     );
+    return result.rowCount ?? 0;
+  }
+
+  /**
+   * Close out 'running' rows left behind by a killed process.
+   *
+   * runScraper only moves a row off 'running' in its own success or catch
+   * path, so a killed process — a SIGKILL, or the CI timeout — strands it
+   * forever. This is the only cleanup path for those rows.
+   *
+   * An in-process version that closed rows from the SIGINT/SIGTERM handler
+   * was tried and removed: it bought a few hours of earlier closure and cost
+   * four rounds of races between the signal handler, a scrape completing, and
+   * an insert still in flight. Reaping on the next run is duller and correct.
+   * Returns the number of rows reaped.
+   */
+  async reapStaleRuns(olderThanHours: number = 8): Promise<number> {
+    const result = await query(
+      `UPDATE scrape_logs
+       SET status = 'failed',
+           error_message = COALESCE(error_message, 'Orphaned: process exited before the scraper finished'),
+           completed_at = CURRENT_TIMESTAMP,
+           duration_seconds = COALESCE(duration_seconds, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at))::int)
+       WHERE status = 'running'
+         AND started_at < CURRENT_TIMESTAMP - ($1 * INTERVAL '1 hour')`,
+      [olderThanHours]
+    );
+    return result.rowCount ?? 0;
   }
 
   async getHistoryForSupermarket(

@@ -45,6 +45,7 @@ export interface ProductDetail {
   supermarket: string;
   image_url: string | null;
   product_url: string | null;
+  scraped_at: string | null;
 }
 
 export interface CountryPrice {

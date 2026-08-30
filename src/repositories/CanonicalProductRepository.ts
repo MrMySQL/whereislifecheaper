@@ -239,16 +239,34 @@ export class CanonicalProductRepository {
     return result.rows;
   }
 
+  /**
+   * @param filters.maxAgeDays When set, only prices scraped within this many
+   *   days are considered — both for eligibility and for the price actually
+   *   returned. Left unset the query has no date bound at all, which is how a
+   *   price from January 2026 was still being served as "latest" in August.
+   *   It is opt-in rather than a default because turning it on while the
+   *   scrape pipeline is down empties the comparison table entirely.
+   */
   async getComparison(
-    filters: { search?: string },
+    filters: { search?: string; maxAgeDays?: number },
     pagination: { limit: number; offset: number }
-  ): Promise<{ data: CanonicalComparisonRow[]; total: number }> {
+  ): Promise<{
+    data: CanonicalComparisonRow[];
+    total: number;
+    freshness: { newest: Date | null; oldest: Date | null };
+  }> {
     const whereClauses = ['cp.disabled IS NOT TRUE'];
     const baseParams: unknown[] = [];
 
     if (filters.search) {
       baseParams.push(`%${filters.search}%`);
       whereClauses.push(`cp.name ILIKE $${baseParams.length}`);
+    }
+
+    let freshnessSql = '';
+    if (filters.maxAgeDays !== undefined) {
+      baseParams.push(filters.maxAgeDays);
+      freshnessSql = ` AND scraped_at >= CURRENT_TIMESTAMP - ($${baseParams.length} * INTERVAL '1 day')`;
     }
 
     const baseWhereSql = whereClauses.join(' AND ');
@@ -261,7 +279,13 @@ export class CanonicalProductRepository {
         INNER JOIN supermarkets s ON pm.supermarket_id = s.id
         WHERE ${baseWhereSql}
           AND EXISTS (
-            SELECT 1 FROM prices pr_exists WHERE pr_exists.product_mapping_id = pm.id
+            SELECT 1 FROM prices pr_exists
+            WHERE pr_exists.product_mapping_id = pm.id
+              -- Must match the laterals below, which skip NULL-dated rows.
+              -- Counting one here that they then discard would inflate the
+              -- total and the country count past what the page can show.
+              AND pr_exists.scraped_at IS NOT NULL
+              ${freshnessSql.replace('scraped_at', 'pr_exists.scraped_at')}
           )
         GROUP BY cp.id, cp.name
         HAVING COUNT(DISTINCT s.country_id) >= 2
@@ -295,7 +319,7 @@ export class CanonicalProductRepository {
       INNER JOIN LATERAL (
         SELECT price, currency, original_price, is_on_sale, scraped_at, price_per_unit
         FROM prices
-        WHERE product_mapping_id = pm.id
+        WHERE product_mapping_id = pm.id AND scraped_at IS NOT NULL${freshnessSql}
         ORDER BY scraped_at DESC
         LIMIT 1
       ) pr ON true
@@ -307,14 +331,40 @@ export class CanonicalProductRepository {
       SELECT COUNT(*)::int as total FROM eligible_canonical
     `;
 
-    const [dataResult, countResult] = await Promise.all([
+    // Deliberately unpaginated: the caller uses this to decide whether the
+    // scrape pipeline is alive, and one page of 100 says nothing about the
+    // other `total - 100`. Cheap because idx_prices_mapping_scraped serves
+    // the lateral directly.
+    const freshnessAggregateSql = `
+      ${eligibleCanonicalCte}
+      SELECT MAX(pr.scraped_at) as newest, MIN(pr.scraped_at) as oldest
+      FROM eligible_canonical ec
+      INNER JOIN products p ON p.canonical_product_id = ec.id
+      INNER JOIN product_mappings pm ON p.id = pm.product_id
+      INNER JOIN LATERAL (
+        SELECT scraped_at
+        FROM prices
+        -- IS NOT NULL because DESC sorts NULLs first: one NULL-dated row
+        -- would otherwise become the mapping's "latest" and poison MIN/MAX.
+        WHERE product_mapping_id = pm.id AND scraped_at IS NOT NULL${freshnessSql}
+        ORDER BY scraped_at DESC
+        LIMIT 1
+      ) pr ON true
+    `;
+
+    const [dataResult, countResult, freshnessResult] = await Promise.all([
       query<CanonicalComparisonRow>(dataSql, [...baseParams, pagination.limit, pagination.offset]),
       query<{ total: number }>(countSql, baseParams),
+      query<{ newest: Date | null; oldest: Date | null }>(freshnessAggregateSql, baseParams),
     ]);
 
     return {
       data: dataResult.rows,
       total: countResult.rows[0]?.total || 0,
+      freshness: {
+        newest: freshnessResult.rows[0]?.newest ?? null,
+        oldest: freshnessResult.rows[0]?.oldest ?? null,
+      },
     };
   }
 

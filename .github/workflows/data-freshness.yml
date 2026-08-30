@@ -1,0 +1,45 @@
+name: Data Freshness Check
+
+# Fails when grocery price data goes stale, so a broken scrape pipeline
+# surfaces as a red workflow (and the notification that comes with it) instead
+# of a site that quietly serves months-old prices.
+#
+# This is deliberately separate from Daily Scrape: that job's own failure mode
+# is a timeout, which ends as 'cancelled' and notifies nobody.
+
+on:
+  schedule:
+    # Daily at 08:00 UTC, a few hours after the scrape window.
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      max_age_hours:
+        description: 'Fail if any active supermarket has no price newer than this many hours'
+        required: false
+        default: '96'
+        type: string
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check price data freshness
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_ENV: production
+          MAX_AGE_HOURS: ${{ inputs.max_age_hours || '96' }}
+        run: npm run check:freshness -- --max-age="$MAX_AGE_HOURS"

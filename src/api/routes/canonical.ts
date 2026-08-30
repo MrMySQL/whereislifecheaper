@@ -17,6 +17,10 @@ const mappedProductsSchema = paginationSchema.extend({
 const comparisonSchema = paginationSchema.extend({
   limit: z.coerce.number().int().min(1).max(500).default(100),
   search: z.string().optional(),
+  // Opt-in freshness bound. Off by default: switching it on while the scrape
+  // pipeline is down would empty the table rather than show stale prices, and
+  // the response's `freshness` block already tells callers how old the data is.
+  max_age_days: z.coerce.number().int().min(1).max(365).optional(),
 });
 
 const productsByCountrySchema = paginationSchema.extend({
@@ -86,10 +90,10 @@ router.get('/mapped-products', isAdmin, validateQuery(mappedProductsSchema), asy
 
 router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next) => {
   try {
-    const { search, limit, offset } = req.validatedQuery as z.infer<typeof comparisonSchema>;
+    const { search, limit, offset, max_age_days } = req.validatedQuery as z.infer<typeof comparisonSchema>;
 
-    const { data: rows, total } = await canonicalProductRepository.getComparison(
-      { search: search?.trim() },
+    const { data: rows, total, freshness } = await canonicalProductRepository.getComparison(
+      { search: search?.trim(), maxAgeDays: max_age_days },
       { limit, offset }
     );
 
@@ -239,6 +243,10 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
               supermarket: p.supermarket,
               image_url: p.image_url,
               product_url: p.product_url,
+              // Each constituent carries its own date. The country-level
+              // scraped_at is only the first product's, which says nothing
+              // about the rest of an average.
+              scraped_at: p.scraped_at,
             })),
           };
         }
@@ -255,7 +263,35 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
       };
     });
 
-    res.json({ data: comparison, total, pagination: { limit, offset } });
+    // Tell callers how old this data actually is. Without it a dead scrape
+    // pipeline is indistinguishable from a healthy one: the table renders the
+    // same either way, just with older numbers.
+    //
+    // Computed over the whole filtered dataset, not this page — the home page
+    // asks for the first 100 of `total` and draws a site-wide stale-data
+    // notice from the answer.
+    const toMs = (value: Date | null) => {
+      if (value === null) return null;
+      const ms = new Date(value).getTime();
+      return Number.isFinite(ms) ? ms : null;
+    };
+    const newest = toMs(freshness.newest);
+    const oldest = toMs(freshness.oldest);
+    const ageInDays = (ms: number) => Math.floor((Date.now() - ms) / 86_400_000);
+
+    res.json({
+      data: comparison,
+      total,
+      pagination: { limit, offset },
+      freshness: {
+        newest_price_at: newest === null ? null : new Date(newest).toISOString(),
+        oldest_price_at: oldest === null ? null : new Date(oldest).toISOString(),
+        newest_age_days: newest === null ? null : ageInDays(newest),
+        oldest_age_days: oldest === null ? null : ageInDays(oldest),
+        max_age_days: max_age_days ?? null,
+        scope: 'dataset' as const,
+      },
+    });
   } catch (error) {
     next(error);
   }

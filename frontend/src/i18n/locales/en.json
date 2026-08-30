@@ -62,7 +62,8 @@
     "allCountries": "All countries",
     "allCountriesTooltip": "Show only products available in all selected countries",
     "searchProducts": "Search products...",
-    "showingProducts": "Showing <strong>{{shown}}</strong> of <strong>{{total}}</strong> products"
+    "showingProducts": "Showing <strong>{{shown}}</strong> of <strong>{{total}}</strong> products",
+    "staleData": "Prices haven't refreshed in {{days}} days. The figures below are the most recent we have, not today's prices."
   },
   "comparison": {
     "product": "Product",
@@ -216,7 +217,7 @@
     "lowConfidence": "* 3BR is a small, luxury-skewed sample - treat as indicative only."
   },
   "seo": {
-    "homeDescription": "Compare grocery prices across Turkey, Spain, Montenegro, Ukraine, Kazakhstan, and Uzbekistan. Track daily supermarket prices and find where life is cheaper.",
+    "homeDescription": "Compare grocery prices across Turkey, Spain, Montenegro, Ukraine, Kazakhstan, and Uzbekistan. Track regularly updated supermarket prices and find where life is cheaper.",
     "homeTitle": "Compare Grocery Prices Across Countries",
     "countryTitle": "Grocery Prices in {{country}}",
     "countryDescription": "Browse {{count}} grocery products and supermarket prices in {{country}}. Compare prices, find deals, and track price changes."
