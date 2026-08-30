@@ -192,13 +192,36 @@ describe('ScraperService per-scraper deadline', () => {
     // server, so a permanent memo would reap on the first trigger after boot
     // and never again.
     const { service, reapStaleRuns } = harness(fakeScraper(async () => []));
-    const realNow = Date.now();
 
-    await service.runScraper('1', { deadlineMs: 10_000 });
-    expect(reapStaleRuns).toHaveBeenCalledTimes(1);
-
-    const clock = jest.spyOn(Date, 'now').mockReturnValue(realNow + REAP_INTERVAL_MS + 1);
+    // Frozen, not offset: lastReapAt is stamped with Date.now() *after* the
+    // first run, so any real elapsed time would eat into the margin and make
+    // the assertion depend on how fast the run happened to be.
+    const base = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(base);
     try {
+      await service.runScraper('1', { deadlineMs: 10_000 });
+      expect(reapStaleRuns).toHaveBeenCalledTimes(1);
+
+      clock.mockReturnValue(base + REAP_INTERVAL_MS + 1);
+      await service.runScraper('1', { deadlineMs: 10_000 });
+      expect(reapStaleRuns).toHaveBeenCalledTimes(2);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('reaps again if the clock jumps backwards', async () => {
+    const { service, reapStaleRuns } = harness(fakeScraper(async () => []));
+
+    const base = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(base);
+    try {
+      await service.runScraper('1', { deadlineMs: 10_000 });
+      expect(reapStaleRuns).toHaveBeenCalledTimes(1);
+
+      // NTP correction: elapsed goes negative, which must not read as
+      // "no time has passed" and suppress reaping indefinitely.
+      clock.mockReturnValue(base - 60_000);
       await service.runScraper('1', { deadlineMs: 10_000 });
       expect(reapStaleRuns).toHaveBeenCalledTimes(2);
     } finally {
@@ -209,12 +232,13 @@ describe('ScraperService per-scraper deadline', () => {
   it('retries a reap that failed once the interval has passed', async () => {
     const { service, reapStaleRuns } = harness(fakeScraper(async () => []));
     reapStaleRuns.mockRejectedValueOnce(new Error('deadlock'));
-    const realNow = Date.now();
 
-    await service.runScraper('1', { deadlineMs: 10_000 });
-
-    const clock = jest.spyOn(Date, 'now').mockReturnValue(realNow + REAP_INTERVAL_MS + 1);
+    const base = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(base);
     try {
+      await service.runScraper('1', { deadlineMs: 10_000 });
+
+      clock.mockReturnValue(base + REAP_INTERVAL_MS + 1);
       await service.runScraper('1', { deadlineMs: 10_000 });
       // A transient failure must not disable reaping for the process lifetime.
       expect(reapStaleRuns).toHaveBeenCalledTimes(2);

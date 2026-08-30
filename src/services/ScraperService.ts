@@ -86,8 +86,15 @@ export class ScraperService {
 
   private ensureStaleRunsReaped(): Promise<number> {
     if (this.reaping) return this.reaping;
-    if (this.lastReapAt > 0 && Date.now() - this.lastReapAt < REAP_INTERVAL_MS) {
-      return Promise.resolve(0);
+    if (this.lastReapAt > 0) {
+      const sinceLast = Date.now() - this.lastReapAt;
+      // A negative value means the wall clock went backwards (NTP correction,
+      // a manual change). Treat that as expired rather than as "no time has
+      // passed", which would suppress reaping until the clock caught up. The
+      // cost of being wrong is one extra cheap query.
+      if (sinceLast >= 0 && sinceLast < REAP_INTERVAL_MS) {
+        return Promise.resolve(0);
+      }
     }
 
     this.reaping = this.scrapeLogRepository
