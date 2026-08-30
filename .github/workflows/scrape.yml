@@ -2,8 +2,14 @@ name: Daily Scrape
 
 on:
   schedule:
-    # Run at 3:00 AM UTC daily
-    - cron: '0 3 1/3 * *'
+    # Days 1, 4, 7 ... 31 of each month at 03:00 UTC — roughly every 3 days.
+    #
+    # This is a day-of-MONTH step, so the counter restarts on the 1st: the 31st
+    # and the 1st land back-to-back, and it yields ~11 runs a month rather than
+    # a true 3-day cycle. Cron cannot express "every 3 days" across month
+    # boundaries; '*/3' here is identical to the previous '1/3'. Accepted as-is
+    # — the alternative is a daily trigger with a skip check in the script.
+    - cron: '0 3 */3 * *'
   workflow_dispatch:
     # Allow manual trigger from GitHub UI
     inputs:
@@ -54,23 +60,32 @@ jobs:
           SCRAPER_MAX_RETRIES: '3'
           SCRAPER_TIMEOUT: '30000'
           SCRAPER_CONCURRENT_BROWSERS: '3'
+          # Wall-clock budget per scraper. Without this one stuck scraper holds
+          # the whole job open until the 360-minute timeout kills it.
+          SCRAPER_DEADLINE_MS: '2700000'
           NODE_ENV: production
           DISPLAY: ':99'
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          # Bound to an env var rather than interpolated into the script, so a
+          # dispatch input cannot inject shell.
+          SCRAPER_INPUT: ${{ inputs.scraper }}
         run: |
-          if [ -n "${{ inputs.scraper }}" ]; then
-            echo "Running specific scraper: ${{ inputs.scraper }}"
+          if [ -n "$SCRAPER_INPUT" ]; then
+            echo "Running specific scraper: $SCRAPER_INPUT"
             xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
-              npm run scraper:run -- ${{ inputs.scraper }}
+              npm run scraper:run -- "$SCRAPER_INPUT"
           else
             echo "Running all scrapers"
             xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
               npm run scraper:run
           fi
 
-      - name: Upload logs on failure
-        if: failure()
+      # always(), not failure(): a job killed by timeout-minutes ends as
+      # 'cancelled', for which failure() is false — which is why the logs from
+      # all 33 timed-out runs between 2026-05 and 2026-08 were discarded.
+      - name: Upload logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: scraper-logs

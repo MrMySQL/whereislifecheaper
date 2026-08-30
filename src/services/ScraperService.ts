@@ -12,6 +12,26 @@ import { generateRunId } from '../utils/runId';
 
 export interface RunScraperOptions {
   categoryIds?: string[];
+  /** Wall-clock budget for this scraper, in ms. Defaults to SCRAPER_DEADLINE_MS. */
+  deadlineMs?: number;
+}
+
+/**
+ * Wall-clock budget for a single scraper.
+ *
+ * Without this, one scraper that never returns holds the whole run open until
+ * the CI job is killed — which is exactly what Woolworths did from 2026-04-28
+ * to 2026-08-01, costing 33 consecutive runs. The default leaves room for the
+ * slowest healthy scraper (Voli, ~28 min on the 2026-08-01 run) with margin.
+ */
+export const DEFAULT_SCRAPER_DEADLINE_MS = Number(process.env.SCRAPER_DEADLINE_MS ?? 45 * 60 * 1000);
+
+/** Thrown when a scraper exceeds its wall-clock budget. */
+export class ScraperDeadlineError extends Error {
+  constructor(public readonly deadlineMs: number) {
+    super(`Scraper exceeded its ${Math.round(deadlineMs / 60000)} minute deadline`);
+    this.name = 'ScraperDeadlineError';
+  }
 }
 
 export class ScraperService {
@@ -68,15 +88,28 @@ export class ScraperService {
       });
 
       await scraper.initialize();
-      const products = await scraper.scrapeProductList();
+      const deadlineMs = options?.deadlineMs ?? DEFAULT_SCRAPER_DEADLINE_MS;
+      const products = await this.withDeadline(scraper.scrapeProductList(), deadlineMs);
 
       scraperLogger.info(
         `Scraped ${products.length} products from ${supermarket.name}, stored ${totalStoredCount}`
       );
 
+      // A scraper that returns cleanly but stores nothing is not a success —
+      // a swallowed API error, a captcha, or a dead category all look like
+      // this, and recording them as 'success' is what hid REWE's 0-product
+      // runs for three months.
+      const status = totalStoredCount === 0 ? 'partial' : 'success';
+      if (status === 'partial') {
+        scraperLogger.warn(
+          `${supermarket.name} completed without storing any products — recording as 'partial'`
+        );
+      }
+
       if (scrapeLogId) {
-        await this.scrapeLogRepository.update(scrapeLogId, 'success', {
+        await this.scrapeLogRepository.update(scrapeLogId, status, {
           productsScraped: totalStoredCount,
+          error: status === 'partial' ? 'Completed but stored 0 products' : undefined,
           duration: Date.now() - startTime,
         });
       }
@@ -102,23 +135,70 @@ export class ScraperService {
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      scraperLogger.error(`Scraping failed for supermarket ${supermarketId}:`, error);
+      const timedOut = error instanceof ScraperDeadlineError;
 
+      if (timedOut) {
+        scraperLogger.error(
+          `Scraper for supermarket ${supermarketId} hit its deadline after ` +
+          `${Math.round((Date.now() - startTime) / 1000)}s; ${totalStoredCount} products were stored before the cut`
+        );
+      } else {
+        scraperLogger.error(`Scraping failed for supermarket ${supermarketId}:`, error);
+      }
+
+      // Products are persisted incrementally by the page callback, so a
+      // deadline that lands mid-run still leaves real data behind.
       if (scrapeLogId) {
-        await this.scrapeLogRepository.update(scrapeLogId, 'failed', {
+        await this.scrapeLogRepository.update(scrapeLogId, timedOut && totalStoredCount > 0 ? 'partial' : 'failed', {
+          productsScraped: totalStoredCount,
           error: errorMessage,
           duration: Date.now() - startTime,
         });
       }
 
-      return this.buildEmptyResult(supermarketId, errorMessage);
+      const result = this.buildEmptyResult(supermarketId, errorMessage);
+      result.productsScraped = totalStoredCount;
+      result.duration = Date.now() - startTime;
+      return result;
     } finally {
+      // cleanup() closes the browser, which is what actually stops a scraper
+      // that blew its deadline — Promise.race alone leaves it running.
       if (scraper) await scraper.cleanup();
     }
   }
 
+  /**
+   * Reject with ScraperDeadlineError if `promise` has not settled in time.
+   *
+   * The underlying work is not cancellable, so it keeps going until the caller
+   * closes the browser in its finally block; its eventual settlement is
+   * swallowed here so it cannot surface as an unhandled rejection.
+   */
+  private withDeadline<T>(promise: Promise<T>, deadlineMs: number): Promise<T> {
+    if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) return promise;
+
+    promise.catch(() => undefined);
+
+    let timer: NodeJS.Timeout | undefined;
+    return Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new ScraperDeadlineError(deadlineMs)), deadlineMs);
+      }),
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    }) as Promise<T>;
+  }
+
   async runAllScrapers(concurrency: number = 3): Promise<ScrapeResult[]> {
     scraperLogger.info(`Starting scrape for all active supermarkets (concurrency: ${concurrency})`);
+
+    // A run killed mid-scraper (CI timeout, SIGKILL) leaves its 'running' row
+    // behind forever, which permanently inflates the admin status endpoint.
+    const reaped = await this.scrapeLogRepository.reapStaleRuns();
+    if (reaped > 0) {
+      scraperLogger.warn(`Reaped ${reaped} stale 'running' scrape_logs row(s) from previous runs`);
+    }
 
     const supermarkets = await this.supermarketRepository.getActive();
     scraperLogger.info(`Found ${supermarkets.length} active supermarkets to scrape`);
@@ -149,7 +229,12 @@ export class ScraperService {
 
     await Promise.all(running);
 
-    scraperLogger.info(`Completed scraping all supermarkets. Total results: ${results.length}`);
+    const empty = results.filter(r => r.productsScraped === 0);
+    const errored = results.filter(r => r.errors.length > 0);
+    scraperLogger.info(
+      `Completed scraping all supermarkets. ${results.length}/${supermarkets.length} ran, ` +
+      `${empty.length} stored nothing, ${errored.length} reported errors`
+    );
     return results;
   }
 

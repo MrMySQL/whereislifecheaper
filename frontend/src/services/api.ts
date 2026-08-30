@@ -52,17 +52,27 @@ export const pricesApi = {
 };
 
 // Canonical Products API
+/** How old the prices behind a comparison response actually are. */
+export interface ComparisonFreshness {
+  newest_price_at: string | null;
+  oldest_price_at: string | null;
+  newest_age_days: number | null;
+  oldest_age_days: number | null;
+  max_age_days: number | null;
+}
+
 export const canonicalApi = {
   getAll: async (search?: string): Promise<CanonicalProductBasic[]> => {
     const params = search ? { search } : {};
     const response = await api.get<{ data: CanonicalProductBasic[] }>('/canonical', { params });
     return response.data.data;
   },
-  getComparison: async (params?: { search?: string; limit?: number; offset?: number }): Promise<{
+  getComparison: async (params?: { search?: string; limit?: number; offset?: number; max_age_days?: number }): Promise<{
     data: CanonicalProduct[];
     total: number;
+    freshness?: ComparisonFreshness;
   }> => {
-    const response = await api.get<{ data: CanonicalProduct[]; total: number }>('/canonical/comparison', { params });
+    const response = await api.get<{ data: CanonicalProduct[]; total: number; freshness?: ComparisonFreshness }>('/canonical/comparison', { params });
     return response.data;
   },
   create: async (data: { name: string; description?: string; category_id?: number }): Promise<CanonicalProductBasic> => {

@@ -239,8 +239,16 @@ export class CanonicalProductRepository {
     return result.rows;
   }
 
+  /**
+   * @param filters.maxAgeDays When set, only prices scraped within this many
+   *   days are considered — both for eligibility and for the price actually
+   *   returned. Left unset the query has no date bound at all, which is how a
+   *   price from January 2026 was still being served as "latest" in August.
+   *   It is opt-in rather than a default because turning it on while the
+   *   scrape pipeline is down empties the comparison table entirely.
+   */
   async getComparison(
-    filters: { search?: string },
+    filters: { search?: string; maxAgeDays?: number },
     pagination: { limit: number; offset: number }
   ): Promise<{ data: CanonicalComparisonRow[]; total: number }> {
     const whereClauses = ['cp.disabled IS NOT TRUE'];
@@ -249,6 +257,12 @@ export class CanonicalProductRepository {
     if (filters.search) {
       baseParams.push(`%${filters.search}%`);
       whereClauses.push(`cp.name ILIKE $${baseParams.length}`);
+    }
+
+    let freshnessSql = '';
+    if (filters.maxAgeDays !== undefined) {
+      baseParams.push(filters.maxAgeDays);
+      freshnessSql = ` AND scraped_at >= CURRENT_TIMESTAMP - ($${baseParams.length} * INTERVAL '1 day')`;
     }
 
     const baseWhereSql = whereClauses.join(' AND ');
@@ -261,7 +275,9 @@ export class CanonicalProductRepository {
         INNER JOIN supermarkets s ON pm.supermarket_id = s.id
         WHERE ${baseWhereSql}
           AND EXISTS (
-            SELECT 1 FROM prices pr_exists WHERE pr_exists.product_mapping_id = pm.id
+            SELECT 1 FROM prices pr_exists
+            WHERE pr_exists.product_mapping_id = pm.id
+              ${freshnessSql.replace('scraped_at', 'pr_exists.scraped_at')}
           )
         GROUP BY cp.id, cp.name
         HAVING COUNT(DISTINCT s.country_id) >= 2
@@ -295,7 +311,7 @@ export class CanonicalProductRepository {
       INNER JOIN LATERAL (
         SELECT price, currency, original_price, is_on_sale, scraped_at, price_per_unit
         FROM prices
-        WHERE product_mapping_id = pm.id
+        WHERE product_mapping_id = pm.id${freshnessSql}
         ORDER BY scraped_at DESC
         LIMIT 1
       ) pr ON true

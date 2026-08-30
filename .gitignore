@@ -60,3 +60,4 @@ temp/
 terraform/.terraform
 
 .playwright-mcp
+.env.local.bak-*

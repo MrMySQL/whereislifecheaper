@@ -42,12 +42,34 @@ export class ScrapeLogRepository {
       [
         logId,
         status,
-        data.productsScraped || null,
-        data.productsFailed || null,
+        // `??`, not `||` — a real 0 must be stored as 0, not collapsed to NULL.
+        data.productsScraped ?? null,
+        data.productsFailed ?? null,
         data.error || null,
         durationSeconds,
       ]
     );
+  }
+
+  /**
+   * Close out 'running' rows left behind by a killed process.
+   *
+   * runScraper only moves a row off 'running' in its own success or catch
+   * path, so a SIGKILL — which is how the CI timeout ends a run — strands it
+   * forever. Returns the number of rows reaped.
+   */
+  async reapStaleRuns(olderThanHours: number = 8): Promise<number> {
+    const result = await query(
+      `UPDATE scrape_logs
+       SET status = 'failed',
+           error_message = COALESCE(error_message, 'Orphaned: process exited before the scraper finished'),
+           completed_at = CURRENT_TIMESTAMP,
+           duration_seconds = COALESCE(duration_seconds, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at))::int)
+       WHERE status = 'running'
+         AND started_at < CURRENT_TIMESTAMP - ($1 * INTERVAL '1 hour')`,
+      [olderThanHours]
+    );
+    return result.rowCount ?? 0;
   }
 
   async getHistoryForSupermarket(
