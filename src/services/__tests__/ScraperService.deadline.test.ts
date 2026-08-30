@@ -38,20 +38,15 @@ function harness(scraper: ReturnType<typeof fakeScraper>) {
       id: '1', name: 'Testmarket', is_active: true, scraper_class: 'TestScraper',
     }),
   };
-  // Models the SQL guard: only a row still 'running' can be closed this way.
+  // Models the SQL guard: onlyIfRunning refuses a row past 'running'.
   const status = { current: 'running' };
   update.mockImplementation(async (_id: string, next: string, data?: { onlyIfRunning?: boolean }) => {
     if (data?.onlyIfRunning && status.current !== 'running') return 0;
     status.current = next;
     return 1;
   });
-  const failIfRunning = jest.fn(async () => {
-    if (status.current !== 'running') return 0;
-    status.current = 'failed';
-    return 1;
-  });
   const create = jest.fn().mockResolvedValue('log-1');
-  const scrapeLogRepo = { create, update, failIfRunning };
+  const scrapeLogRepo = { create, update };
 
   mockedFactory.createFromSupermarket = jest.fn().mockReturnValue(scraper) as never;
 
@@ -61,7 +56,7 @@ function harness(scraper: ReturnType<typeof fakeScraper>) {
     supermarketRepo as never,
     scrapeLogRepo as never,
   );
-  return { service, update, scraper, failIfRunning, status, create };
+  return { service, update, scraper, status, create };
 }
 
 describe('ScraperService per-scraper deadline', () => {
@@ -145,31 +140,9 @@ describe('ScraperService per-scraper deadline', () => {
     }));
   });
 
-  it('closes an in-flight scrape log on shutdown, and the scrape cannot reopen it', async () => {
-    let release: (() => void) | undefined;
-    const scraper = fakeScraper(() => new Promise<unknown[]>(resolve => {
-      release = () => resolve([]);
-    }));
-    const { service, failIfRunning, status } = harness(scraper);
-
-    const run = service.runScraper('1', { deadlineMs: 10_000 });
-    await new Promise(r => setImmediate(r));
-
-    expect(await service.markInFlightFailed('SIGTERM')).toBe(1);
-    expect(failIfRunning).toHaveBeenCalledWith('log-1', 'SIGTERM');
-    expect(status.current).toBe('failed');
-
-    // Let the scrape finish. Without the shuttingDown guard it would write
-    // 'partial' over the shutdown's 'failed'.
-    release!();
-    await run;
-
-    expect(status.current).toBe('failed');
-  });
-
-  it('will not let a terminal update overwrite a row shutdown already closed', async () => {
-    // The in-process flag is read one await before the write lands, so the
-    // guard that actually orders the two writers is the SQL one.
+  it('will not let a terminal update overwrite a row reapStaleRuns closed', async () => {
+    // reapStaleRuns runs in another process, so the database is the only
+    // place the two writers can be ordered.
     const scraper = fakeScraper(async () => []);
     const { update, status } = harness(scraper);
 
@@ -178,145 +151,6 @@ describe('ScraperService per-scraper deadline', () => {
 
     expect(wrote).toBe(0);
     expect(status.current).toBe('failed');
-  });
-
-  it('closes a scrape log created after its run was abandoned', async () => {
-    // create() outlives the setup deadline: the row still gets inserted, and
-    // nothing in runScraper is left to close it.
-    let finishCreate: ((id: string) => void) | undefined;
-    const scraper = fakeScraper(async () => []);
-    const { service, failIfRunning, create } = harness(scraper);
-    create.mockImplementation(() => new Promise<string>(resolve => { finishCreate = resolve; }));
-
-    const result = await service.runScraper('1', { deadlineMs: 50 });
-    expect(result.errors[0].message).toMatch(/deadline/i);
-
-    // The insert lands after the deadline already gave up on it.
-    finishCreate!('log-late');
-    await new Promise(r => setImmediate(r));
-
-    expect(failIfRunning).toHaveBeenCalledWith('log-late', expect.stringMatching(/abandoned/i));
-  });
-
-  it('waits for an insert still in flight before shutdown returns', async () => {
-    // The row exists in the database but its id has not reached inFlightLogs
-    // yet, so an unguarded markInFlightFailed would return and let the
-    // process exit with the row stranded on 'running'.
-    let finishCreate: ((id: string) => void) | undefined;
-    const scraper = fakeScraper(async () => []);
-    const { service, failIfRunning, create } = harness(scraper);
-    create.mockImplementation(() => new Promise<string>(resolve => { finishCreate = resolve; }));
-
-    const run = service.runScraper('1', { deadlineMs: 10_000 });
-    await new Promise(r => setImmediate(r));
-    expect(finishCreate).toBeDefined();
-
-    // Signal arrives mid-insert. Shutdown must still be waiting: if it
-    // returns here the caller exits the process and the row is stranded.
-    let settled = false;
-    const shutdown = service.markInFlightFailed('SIGTERM', 2000).then(n => { settled = true; return n; });
-    await new Promise(r => setImmediate(r));
-    await new Promise(r => setImmediate(r));
-    expect(settled).toBe(false);
-
-    finishCreate!('log-mid');
-    await shutdown;
-
-    expect(settled).toBe(true);
-    expect(failIfRunning).toHaveBeenCalledWith('log-mid', expect.any(String));
-    void run;
-  });
-
-  it('closes known rows even when another insert never lands', async () => {
-    // With concurrent scrapers, one wedged insert must not hold every other
-    // scraper's row on 'running' until the forced exit fires.
-    const scraper = fakeScraper(() => new Promise<unknown[]>(() => {}));
-    const { service, failIfRunning, create } = harness(scraper);
-
-    // First run registers log-known; second run's insert never settles.
-    create.mockResolvedValueOnce('log-known');
-    const runA = service.runScraper('1', { deadlineMs: 10_000 });
-    await new Promise(r => setImmediate(r));
-
-    let finishB: ((id: string) => void) | undefined;
-    create.mockImplementationOnce(() => new Promise<string>(res => { finishB = res; }));
-    const runB = service.runScraper('2', { deadlineMs: 10_000 });
-    await new Promise(r => setImmediate(r));
-
-    // Generous grace: the point is that log-known does not wait for it.
-    const shutdown = service.markInFlightFailed('SIGTERM', 5000);
-    await new Promise(r => setImmediate(r));
-    await new Promise(r => setImmediate(r));
-
-    expect(failIfRunning).toHaveBeenCalledWith('log-known', 'SIGTERM');
-
-    finishB!('log-b');
-    await shutdown;
-    void runA; void runB;
-  });
-
-  it('records the signal on a row created after shutdown began', async () => {
-    let finishCreate: ((id: string) => void) | undefined;
-    const scraper = fakeScraper(async () => []);
-    const { service, failIfRunning, create } = harness(scraper);
-    create.mockImplementation(() => new Promise<string>(resolve => { finishCreate = resolve; }));
-
-    const run = service.runScraper('1', { deadlineMs: 10_000 });
-    await new Promise(r => setImmediate(r));
-
-    const shutdown = service.markInFlightFailed('Process received SIGTERM', 2000);
-    finishCreate!('log-late');
-    await shutdown;
-
-    // The row's error_message is the only record of why it stopped.
-    expect(failIfRunning).toHaveBeenCalledWith('log-late', 'Process received SIGTERM');
-    void run;
-  });
-
-  it('does not open a new scrape log once shutdown has begun', async () => {
-    const scraper = fakeScraper(async () => []);
-    const { service, create } = harness(scraper);
-
-    await service.markInFlightFailed('SIGTERM');
-    const result = await service.runScraper('1', { deadlineMs: 10_000 });
-
-    expect(create).not.toHaveBeenCalled();
-    expect(result.errors[0].message).toMatch(/shutting down/i);
-  });
-
-  it('does not overwrite a run that completed before shutdown landed', async () => {
-    const scraper = fakeScraper(async () => []);
-    const { service, failIfRunning, status } = harness(scraper);
-
-    await service.runScraper('1', { deadlineMs: 10_000 });
-    expect(status.current).toBe('partial');
-
-    // runScraper drops the id once it closes the row, so shutdown has nothing
-    // left to close and cannot clobber the status it earned.
-    expect(await service.markInFlightFailed('SIGTERM')).toBe(0);
-    expect(failIfRunning).not.toHaveBeenCalled();
-    expect(status.current).toBe('partial');
-  });
-
-  it('keeps a log id for retry when closing it fails', async () => {
-    let release: (() => void) | undefined;
-    const scraper = fakeScraper(() => new Promise<unknown[]>(resolve => {
-      release = () => resolve([]);
-    }));
-    const { service, failIfRunning } = harness(scraper);
-
-    const run = service.runScraper('1', { deadlineMs: 10_000 });
-    await new Promise(r => setImmediate(r));
-
-    failIfRunning.mockRejectedValueOnce(new Error('connection lost'));
-    expect(await service.markInFlightFailed('SIGTERM')).toBe(0);
-
-    // Still tracked, so a second attempt closes it rather than stranding the
-    // row on 'running' until reapStaleRuns catches it 8 hours later.
-    expect(await service.markInFlightFailed('SIGTERM')).toBe(1);
-
-    release!();
-    await run;
   });
 
   it('applies the deadline to the supermarket lookup', async () => {

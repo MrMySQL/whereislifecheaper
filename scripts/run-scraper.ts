@@ -16,9 +16,8 @@ import { closePool } from '../src/config/database';
  *   npm run scraper:run -- voli -l                       # Short form for --list-categories
  */
 
-const scraperService = new ScraperService();
-
 async function main() {
+  const scraperService = new ScraperService();
   const args = process.argv.slice(2);
 
   // Set to true by any scraper that errors or stores nothing, so a run where
@@ -188,34 +187,14 @@ async function main() {
   }
 }
 
-/** How long the signal handler may spend closing rows before it exits regardless. */
-const SHUTDOWN_GRACE_MS = 5000;
-
-// Close out the in-flight scrape_logs row rather than stranding it on 'running'
-// when CI cancels the job or someone hits Ctrl-C.
+// A run killed here leaves its scrape_logs row on 'running'; reapStaleRuns
+// closes it at the start of the next run. In-process cleanup was tried and
+// removed — see the note on reapStaleRuns.
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
-    scraperLogger.warn(`Received ${signal} — closing out any in-flight scrape_logs rows.`);
+    scraperLogger.warn(`Received ${signal} — shutting down; in-flight scrapes will be reaped on the next run.`);
     process.exitCode = 1;
-
-    // Bounded: the cleanup is a database write, and the reason we are shutting
-    // down may well be that the database is unreachable. Exiting late is
-    // recoverable (reapStaleRuns closes the row); never exiting is not.
-    // Deliberately not unref'd: this timer is the guarantee that the process
-    // both waits for the cleanup and cannot wait forever. unref'ing it would
-    // let the loop drain and exit mid-write, stranding the row on 'running'.
-    const forced = setTimeout(() => {
-      scraperLogger.error(`Shutdown cleanup exceeded ${SHUTDOWN_GRACE_MS}ms — exiting anyway.`);
-      process.exit(1);
-    }, SHUTDOWN_GRACE_MS);
-
-    scraperService
-      .markInFlightFailed(`Process received ${signal} before the scraper finished`)
-      .catch(error => scraperLogger.error('Failed to close in-flight scrape logs:', error))
-      .finally(() => closePool().catch(() => undefined).finally(() => {
-        clearTimeout(forced);
-        process.exit(1);
-      }));
+    closePool().catch(() => undefined).finally(() => process.exit(1));
   });
 }
 
