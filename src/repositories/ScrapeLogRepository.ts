@@ -52,6 +52,29 @@ export class ScrapeLogRepository {
   }
 
   /**
+   * Close one row, but only while it is still 'running'.
+   *
+   * Guarded so a shutdown racing a normal completion cannot overwrite a row
+   * that already recorded 'success'. Counts and duration are preserved rather
+   * than overwritten — products stored before the signal are real, and the
+   * plain update() would blank products_scraped back to NULL.
+   *
+   * Returns 1 if the row was still running and got closed, 0 otherwise.
+   */
+  async failIfRunning(logId: string, errorMessage: string): Promise<number> {
+    const result = await query(
+      `UPDATE scrape_logs
+       SET status = 'failed',
+           error_message = COALESCE(error_message, $2),
+           completed_at = CURRENT_TIMESTAMP,
+           duration_seconds = COALESCE(duration_seconds, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at))::int)
+       WHERE id = $1 AND status = 'running'`,
+      [logId, errorMessage]
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /**
    * Close out 'running' rows left behind by a killed process.
    *
    * runScraper only moves a row off 'running' in its own success or catch

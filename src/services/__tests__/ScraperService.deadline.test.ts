@@ -38,7 +38,15 @@ function harness(scraper: ReturnType<typeof fakeScraper>) {
       id: '1', name: 'Testmarket', is_active: true, scraper_class: 'TestScraper',
     }),
   };
-  const scrapeLogRepo = { create: jest.fn().mockResolvedValue('log-1'), update };
+  // Models the SQL guard: only a row still 'running' can be closed this way.
+  const status = { current: 'running' };
+  update.mockImplementation(async (_id: string, next: string) => { status.current = next; });
+  const failIfRunning = jest.fn(async () => {
+    if (status.current !== 'running') return 0;
+    status.current = 'failed';
+    return 1;
+  });
+  const scrapeLogRepo = { create: jest.fn().mockResolvedValue('log-1'), update, failIfRunning };
 
   mockedFactory.createFromSupermarket = jest.fn().mockReturnValue(scraper) as never;
 
@@ -48,7 +56,7 @@ function harness(scraper: ReturnType<typeof fakeScraper>) {
     supermarketRepo as never,
     scrapeLogRepo as never,
   );
-  return { service, update, scraper };
+  return { service, update, scraper, failIfRunning, status };
 }
 
 describe('ScraperService per-scraper deadline', () => {
@@ -132,21 +140,75 @@ describe('ScraperService per-scraper deadline', () => {
     }));
   });
 
-  it('closes an in-flight scrape log on shutdown', async () => {
+  it('closes an in-flight scrape log on shutdown, and the scrape cannot reopen it', async () => {
     let release: (() => void) | undefined;
     const scraper = fakeScraper(() => new Promise<unknown[]>(resolve => {
       release = () => resolve([]);
     }));
-    const { service, update } = harness(scraper);
+    const { service, update, failIfRunning, status } = harness(scraper);
 
     const run = service.runScraper('1', { deadlineMs: 10_000 });
     await new Promise(r => setImmediate(r));
 
     expect(await service.markInFlightFailed('SIGTERM')).toBe(1);
-    expect(update).toHaveBeenCalledWith('log-1', 'failed', { error: 'SIGTERM' });
+    expect(failIfRunning).toHaveBeenCalledWith('log-1', 'SIGTERM');
+    expect(status.current).toBe('failed');
+
+    // Let the scrape finish. Without the shuttingDown guard it would write
+    // 'partial' over the shutdown's 'failed'.
+    release!();
+    await run;
+
+    expect(status.current).toBe('failed');
+    expect(update).not.toHaveBeenCalledWith('log-1', 'partial', expect.anything());
+  });
+
+  it('does not overwrite a run that completed before shutdown landed', async () => {
+    const scraper = fakeScraper(async () => []);
+    const { service, failIfRunning, status } = harness(scraper);
+
+    await service.runScraper('1', { deadlineMs: 10_000 });
+    expect(status.current).toBe('partial');
+
+    // runScraper drops the id once it closes the row, so shutdown has nothing
+    // left to close and cannot clobber the status it earned.
+    expect(await service.markInFlightFailed('SIGTERM')).toBe(0);
+    expect(failIfRunning).not.toHaveBeenCalled();
+    expect(status.current).toBe('partial');
+  });
+
+  it('keeps a log id for retry when closing it fails', async () => {
+    let release: (() => void) | undefined;
+    const scraper = fakeScraper(() => new Promise<unknown[]>(resolve => {
+      release = () => resolve([]);
+    }));
+    const { service, failIfRunning } = harness(scraper);
+
+    const run = service.runScraper('1', { deadlineMs: 10_000 });
+    await new Promise(r => setImmediate(r));
+
+    failIfRunning.mockRejectedValueOnce(new Error('connection lost'));
+    expect(await service.markInFlightFailed('SIGTERM')).toBe(0);
+
+    // Still tracked, so a second attempt closes it rather than stranding the
+    // row on 'running' until reapStaleRuns catches it 8 hours later.
+    expect(await service.markInFlightFailed('SIGTERM')).toBe(1);
 
     release!();
     await run;
+  });
+
+  it('applies the deadline to the supermarket lookup', async () => {
+    const scraper = fakeScraper(async () => []);
+    const { service } = harness(scraper);
+    // A wedged pool must not hold the run open before the first timed call.
+    (service as never as { supermarketRepository: { findById: jest.Mock } })
+      .supermarketRepository.findById.mockImplementation(() => new Promise(() => {}));
+
+    const result = await service.runScraper('1', { deadlineMs: 50 });
+
+    expect(result.errors[0].message).toMatch(/deadline/i);
+    expect(scraper.initialize).not.toHaveBeenCalled();
   });
 
   it('ScraperDeadlineError reports the budget it blew', () => {
@@ -160,7 +222,20 @@ describe('resolveDeadlineMs', () => {
   });
 
   // Configuration must never be able to switch the safeguard off.
-  it.each(['0', '-1', 'abc', '', undefined])('falls back to the default for %p', raw => {
+  it.each(['0', '-1', 'abc', ''])('falls back to the default for %p', raw => {
     expect(resolveDeadlineMs(raw)).toBe(FALLBACK_SCRAPER_DEADLINE_MS);
+  });
+
+  it('falls back when the variable is unset', () => {
+    // Read through the default parameter, so the real env has to be cleared
+    // or this asserts against whatever the developer happens to have set.
+    const previous = process.env.SCRAPER_DEADLINE_MS;
+    delete process.env.SCRAPER_DEADLINE_MS;
+    try {
+      expect(resolveDeadlineMs()).toBe(FALLBACK_SCRAPER_DEADLINE_MS);
+    } finally {
+      if (previous === undefined) delete process.env.SCRAPER_DEADLINE_MS;
+      else process.env.SCRAPER_DEADLINE_MS = previous;
+    }
   });
 });

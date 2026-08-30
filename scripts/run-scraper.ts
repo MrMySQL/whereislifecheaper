@@ -188,16 +188,32 @@ async function main() {
   }
 }
 
+/** How long the signal handler may spend closing rows before it exits regardless. */
+const SHUTDOWN_GRACE_MS = 5000;
+
 // Close out the in-flight scrape_logs row rather than stranding it on 'running'
 // when CI cancels the job or someone hits Ctrl-C.
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     scraperLogger.warn(`Received ${signal} — closing out any in-flight scrape_logs rows.`);
     process.exitCode = 1;
+
+    // Bounded: the cleanup is a database write, and the reason we are shutting
+    // down may well be that the database is unreachable. Exiting late is
+    // recoverable (reapStaleRuns closes the row); never exiting is not.
+    const forced = setTimeout(() => {
+      scraperLogger.error(`Shutdown cleanup exceeded ${SHUTDOWN_GRACE_MS}ms — exiting anyway.`);
+      process.exit(1);
+    }, SHUTDOWN_GRACE_MS);
+    forced.unref();
+
     scraperService
       .markInFlightFailed(`Process received ${signal} before the scraper finished`)
       .catch(error => scraperLogger.error('Failed to close in-flight scrape logs:', error))
-      .finally(() => closePool().finally(() => process.exit(1)));
+      .finally(() => closePool().catch(() => undefined).finally(() => {
+        clearTimeout(forced);
+        process.exit(1);
+      }));
   });
 }
 

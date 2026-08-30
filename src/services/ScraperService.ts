@@ -61,6 +61,8 @@ export class ScraperService {
   private scrapeLogRepository: ScrapeLogRepository;
   /** scrape_logs rows this process opened and has not closed yet, id -> supermarket. */
   private readonly inFlightLogs = new Map<string, string>();
+  /** Set once a signal handler has closed the in-flight rows; see markInFlightFailed. */
+  private shuttingDown = false;
 
   constructor(
     productService?: ProductService,
@@ -93,7 +95,12 @@ export class ScraperService {
     const remaining = () => (bounded ? Math.max(1, deadlineAt - Date.now()) : 0);
 
     try {
-      const supermarket = await this.supermarketRepository.findById(supermarketId);
+      // Setup is inside the budget as well: a wedged connection pool or a
+      // lock on scrape_logs would otherwise hang the run before the first
+      // timed call is ever reached.
+      const supermarket = await this.withDeadline(
+        this.supermarketRepository.findById(supermarketId), remaining(), budgetMs
+      );
 
       if (!supermarket) {
         throw new Error(`Supermarket not found: ${supermarketId}`);
@@ -103,7 +110,9 @@ export class ScraperService {
         return this.buildEmptyResult(supermarketId, 'Supermarket not active');
       }
 
-      scrapeLogId = await this.scrapeLogRepository.create(supermarketId, 'running');
+      scrapeLogId = await this.withDeadline(
+        this.scrapeLogRepository.create(supermarketId, 'running'), remaining(), budgetMs
+      );
       this.inFlightLogs.set(scrapeLogId, supermarket.name);
 
       const scraperOptions: CreateScraperOptions = { categoryIds: options?.categoryIds };
@@ -140,7 +149,7 @@ export class ScraperService {
         );
       }
 
-      if (scrapeLogId) {
+      if (scrapeLogId && !this.shuttingDown) {
         await this.scrapeLogRepository.update(scrapeLogId, status, {
           productsScraped: totalStoredCount,
           error: status === 'partial' ? 'Completed but stored 0 products' : undefined,
@@ -183,7 +192,7 @@ export class ScraperService {
 
       // Products are persisted incrementally by the page callback, so a
       // deadline that lands mid-run still leaves real data behind.
-      if (scrapeLogId) {
+      if (scrapeLogId && !this.shuttingDown) {
         await this.scrapeLogRepository.update(scrapeLogId, timedOut && totalStoredCount > 0 ? 'partial' : 'failed', {
           productsScraped: totalStoredCount,
           error: errorMessage,
@@ -308,15 +317,20 @@ export class ScraperService {
    * status endpoint claiming a scrape is still in progress.
    */
   async markInFlightFailed(reason: string): Promise<number> {
-    const pending = [...this.inFlightLogs.entries()];
-    this.inFlightLogs.clear();
+    // Stops runScraper reopening a row this method has already closed.
+    this.shuttingDown = true;
 
     let closed = 0;
-    for (const [logId, name] of pending) {
+    for (const [logId, name] of [...this.inFlightLogs.entries()]) {
       try {
-        await this.scrapeLogRepository.update(logId, 'failed', { error: reason });
-        closed++;
+        // Guarded in SQL: if the scraper finished between this loop starting
+        // and the update landing, the row is no longer 'running' and keeps
+        // the status it earned.
+        closed += await this.scrapeLogRepository.failIfRunning(logId, reason);
+        this.inFlightLogs.delete(logId);
       } catch (error) {
+        // Keep the entry so a caller that survives can try again; a dropped
+        // id is a row stranded on 'running' until reapStaleRuns catches it.
         scraperLogger.error(`Could not close scrape log ${logId} for ${name}:`, error);
       }
     }
