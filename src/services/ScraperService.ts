@@ -110,10 +110,36 @@ export class ScraperService {
         return this.buildEmptyResult(supermarketId, 'Supermarket not active');
       }
 
-      scrapeLogId = await this.withDeadline(
-        this.scrapeLogRepository.create(supermarketId, 'running'), remaining(), budgetMs
+      // Nothing to gain from opening a row this process has already committed
+      // to abandoning.
+      if (this.shuttingDown) {
+        return this.buildEmptyResult(supermarketId, 'Shutting down');
+      }
+
+      // The insert can outlive the deadline that is racing it. Either way the
+      // row it creates has to be accounted for: this run owns it, or it is
+      // closed straight away. A row nobody owns sits on 'running' until
+      // reapStaleRuns finds it eight hours later.
+      const creating = this.scrapeLogRepository.create(supermarketId, 'running');
+      let owned = true;
+      void creating.then(
+        id => {
+          this.inFlightLogs.set(id, supermarket.name);
+          // Abandoned by the deadline, or by a signal that arrived while the
+          // insert was still in flight.
+          if (!owned || this.shuttingDown) {
+            void this.closeInFlight(id, 'scrape_logs row created after its run was abandoned');
+          }
+        },
+        () => undefined,
       );
-      this.inFlightLogs.set(scrapeLogId, supermarket.name);
+
+      try {
+        scrapeLogId = await this.withDeadline(creating, remaining(), budgetMs);
+      } catch (error) {
+        owned = false;
+        throw error;
+      }
 
       const scraperOptions: CreateScraperOptions = { categoryIds: options?.categoryIds };
       scraper = ScraperFactory.createFromSupermarket(supermarket, scraperOptions);
@@ -150,10 +176,14 @@ export class ScraperService {
       }
 
       if (scrapeLogId && !this.shuttingDown) {
+        // onlyIfRunning: the flag above is read one await before this write
+        // lands, so shutdown can still slip in between. The database is the
+        // only place the two writers can actually be ordered.
         await this.scrapeLogRepository.update(scrapeLogId, status, {
           productsScraped: totalStoredCount,
           error: status === 'partial' ? 'Completed but stored 0 products' : undefined,
           duration: Date.now() - startTime,
+          onlyIfRunning: true,
         });
         this.inFlightLogs.delete(scrapeLogId);
       }
@@ -197,6 +227,7 @@ export class ScraperService {
           productsScraped: totalStoredCount,
           error: errorMessage,
           duration: Date.now() - startTime,
+          onlyIfRunning: true,
         });
         this.inFlightLogs.delete(scrapeLogId);
       }
@@ -317,24 +348,33 @@ export class ScraperService {
    * status endpoint claiming a scrape is still in progress.
    */
   async markInFlightFailed(reason: string): Promise<number> {
-    // Stops runScraper reopening a row this method has already closed.
+    // Stops runScraper opening or reopening rows once shutdown has begun.
     this.shuttingDown = true;
 
     let closed = 0;
-    for (const [logId, name] of [...this.inFlightLogs.entries()]) {
-      try {
-        // Guarded in SQL: if the scraper finished between this loop starting
-        // and the update landing, the row is no longer 'running' and keeps
-        // the status it earned.
-        closed += await this.scrapeLogRepository.failIfRunning(logId, reason);
-        this.inFlightLogs.delete(logId);
-      } catch (error) {
-        // Keep the entry so a caller that survives can try again; a dropped
-        // id is a row stranded on 'running' until reapStaleRuns catches it.
-        scraperLogger.error(`Could not close scrape log ${logId} for ${name}:`, error);
-      }
+    for (const logId of [...this.inFlightLogs.keys()]) {
+      closed += await this.closeInFlight(logId, reason);
     }
     return closed;
+  }
+
+  /**
+   * Close one tracked row, keeping it tracked if the write fails.
+   *
+   * Guarded in SQL, so a scraper that finished between the caller deciding to
+   * close the row and this write landing keeps the status it earned. A
+   * dropped id is a row stranded on 'running', so the entry survives a throw
+   * and a later call can retry it.
+   */
+  private async closeInFlight(logId: string, reason: string): Promise<number> {
+    try {
+      const closed = await this.scrapeLogRepository.failIfRunning(logId, reason);
+      this.inFlightLogs.delete(logId);
+      return closed;
+    } catch (error) {
+      scraperLogger.error(`Could not close scrape log ${logId}:`, error);
+      return 0;
+    }
   }
 
   private async storeProducts(products: ProductData[], supermarketId: string): Promise<number> {

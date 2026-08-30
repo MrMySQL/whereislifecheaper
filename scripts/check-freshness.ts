@@ -56,7 +56,9 @@ async function main(): Promise<void> {
        CROSS JOIN LATERAL (
          SELECT pr.scraped_at
          FROM prices pr
-         WHERE pr.product_mapping_id = pm.id
+         -- Postgres sorts NULLs first under DESC, so without this a single
+         -- NULL-dated row would be picked as a mapping's "latest" price.
+         WHERE pr.product_mapping_id = pm.id AND pr.scraped_at IS NOT NULL
          ORDER BY pr.scraped_at DESC
          LIMIT 1
        ) newest

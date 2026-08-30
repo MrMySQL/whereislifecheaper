@@ -201,11 +201,13 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     // Bounded: the cleanup is a database write, and the reason we are shutting
     // down may well be that the database is unreachable. Exiting late is
     // recoverable (reapStaleRuns closes the row); never exiting is not.
+    // Deliberately not unref'd: this timer is the guarantee that the process
+    // both waits for the cleanup and cannot wait forever. unref'ing it would
+    // let the loop drain and exit mid-write, stranding the row on 'running'.
     const forced = setTimeout(() => {
       scraperLogger.error(`Shutdown cleanup exceeded ${SHUTDOWN_GRACE_MS}ms — exiting anyway.`);
       process.exit(1);
     }, SHUTDOWN_GRACE_MS);
-    forced.unref();
 
     scraperService
       .markInFlightFailed(`Process received ${signal} before the scraper finished`)

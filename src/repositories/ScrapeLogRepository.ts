@@ -19,6 +19,13 @@ export class ScrapeLogRepository {
     return result.rows[0].id;
   }
 
+  /**
+   * @param data.onlyIfRunning Refuse to write if the row has already reached a
+   *   terminal status. A scraper finishing at the same moment a signal handler
+   *   closes its row would otherwise overwrite the 'failed' that shutdown
+   *   recorded — the in-process flag cannot cover it, because the status check
+   *   and this write are separated by an await. Returns the rows affected.
+   */
   async update(
     logId: string,
     status: string,
@@ -27,10 +34,11 @@ export class ScrapeLogRepository {
       productsFailed?: number;
       error?: string;
       duration?: number;
+      onlyIfRunning?: boolean;
     }
-  ): Promise<void> {
+  ): Promise<number> {
     const durationSeconds = data.duration ? Math.round(data.duration / 1000) : null;
-    await query(
+    const result = await query(
       `UPDATE scrape_logs SET
         status = $2,
         products_scraped = $3,
@@ -38,7 +46,7 @@ export class ScrapeLogRepository {
         error_message = $5,
         duration_seconds = $6,
         completed_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
+       WHERE id = $1${data.onlyIfRunning ? " AND status = 'running'" : ''}`,
       [
         logId,
         status,
@@ -49,6 +57,7 @@ export class ScrapeLogRepository {
         durationSeconds,
       ]
     );
+    return result.rowCount ?? 0;
   }
 
   /**

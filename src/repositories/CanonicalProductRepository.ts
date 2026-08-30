@@ -315,7 +315,7 @@ export class CanonicalProductRepository {
       INNER JOIN LATERAL (
         SELECT price, currency, original_price, is_on_sale, scraped_at, price_per_unit
         FROM prices
-        WHERE product_mapping_id = pm.id${freshnessSql}
+        WHERE product_mapping_id = pm.id AND scraped_at IS NOT NULL${freshnessSql}
         ORDER BY scraped_at DESC
         LIMIT 1
       ) pr ON true
@@ -340,7 +340,9 @@ export class CanonicalProductRepository {
       INNER JOIN LATERAL (
         SELECT scraped_at
         FROM prices
-        WHERE product_mapping_id = pm.id${freshnessSql}
+        -- IS NOT NULL because DESC sorts NULLs first: one NULL-dated row
+        -- would otherwise become the mapping's "latest" and poison MIN/MAX.
+        WHERE product_mapping_id = pm.id AND scraped_at IS NOT NULL${freshnessSql}
         ORDER BY scraped_at DESC
         LIMIT 1
       ) pr ON true
