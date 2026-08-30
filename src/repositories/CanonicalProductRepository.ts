@@ -250,7 +250,11 @@ export class CanonicalProductRepository {
   async getComparison(
     filters: { search?: string; maxAgeDays?: number },
     pagination: { limit: number; offset: number }
-  ): Promise<{ data: CanonicalComparisonRow[]; total: number }> {
+  ): Promise<{
+    data: CanonicalComparisonRow[];
+    total: number;
+    freshness: { newest: Date | null; oldest: Date | null };
+  }> {
     const whereClauses = ['cp.disabled IS NOT TRUE'];
     const baseParams: unknown[] = [];
 
@@ -323,14 +327,38 @@ export class CanonicalProductRepository {
       SELECT COUNT(*)::int as total FROM eligible_canonical
     `;
 
-    const [dataResult, countResult] = await Promise.all([
+    // Deliberately unpaginated: the caller uses this to decide whether the
+    // scrape pipeline is alive, and one page of 100 says nothing about the
+    // other `total - 100`. Cheap because idx_prices_mapping_scraped serves
+    // the lateral directly.
+    const freshnessAggregateSql = `
+      ${eligibleCanonicalCte}
+      SELECT MAX(pr.scraped_at) as newest, MIN(pr.scraped_at) as oldest
+      FROM eligible_canonical ec
+      INNER JOIN products p ON p.canonical_product_id = ec.id
+      INNER JOIN product_mappings pm ON p.id = pm.product_id
+      INNER JOIN LATERAL (
+        SELECT scraped_at
+        FROM prices
+        WHERE product_mapping_id = pm.id${freshnessSql}
+        ORDER BY scraped_at DESC
+        LIMIT 1
+      ) pr ON true
+    `;
+
+    const [dataResult, countResult, freshnessResult] = await Promise.all([
       query<CanonicalComparisonRow>(dataSql, [...baseParams, pagination.limit, pagination.offset]),
       query<{ total: number }>(countSql, baseParams),
+      query<{ newest: Date | null; oldest: Date | null }>(freshnessAggregateSql, baseParams),
     ]);
 
     return {
       data: dataResult.rows,
       total: countResult.rows[0]?.total || 0,
+      freshness: {
+        newest: freshnessResult.rows[0]?.newest ?? null,
+        oldest: freshnessResult.rows[0]?.oldest ?? null,
+      },
     };
   }
 

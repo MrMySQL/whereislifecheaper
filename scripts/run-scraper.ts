@@ -16,8 +16,9 @@ import { closePool } from '../src/config/database';
  *   npm run scraper:run -- voli -l                       # Short form for --list-categories
  */
 
+const scraperService = new ScraperService();
+
 async function main() {
-  const scraperService = new ScraperService();
   const args = process.argv.slice(2);
 
   // Set to true by any scraper that errors or stores nothing, so a run where
@@ -28,6 +29,14 @@ async function main() {
   // Parse flags
   const concurrencyArg = args.find(a => a.startsWith('--concurrency='));
   const concurrency = concurrencyArg ? parseInt(concurrencyArg.split('=')[1], 10) : 3;
+  // --concurrency=0 used to start no workers at all: the run finished
+  // instantly, scraped nothing, and printed "completed successfully".
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    console.error(`❌ --concurrency must be a positive integer, got "${concurrencyArg?.split('=')[1]}".`);
+    process.exitCode = 1;
+    await closePool();
+    return;
+  }
 
   const categoriesArg = args.find(a => a.startsWith('--categories='));
   const categoryIds = categoriesArg ? categoriesArg.split('=')[1].split(',').map(c => c.trim()) : undefined;
@@ -52,6 +61,10 @@ async function main() {
         console.log('');
       }
 
+      // runAllScrapers now returns a result for every active supermarket,
+      // including ones that threw before producing one, so an empty run and a
+      // silently-swallowed rejection both land in `barren` rather than
+      // vanishing between the pool and this check.
       const barren = results.filter(r => r.productsScraped === 0);
       const errored = results.filter(r => r.errors.length > 0);
       if (barren.length > 0 || errored.length > 0) {
@@ -179,9 +192,12 @@ async function main() {
 // when CI cancels the job or someone hits Ctrl-C.
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
-    scraperLogger.warn(`Received ${signal} — shutting down; in-flight scrapes will be reaped on the next run.`);
+    scraperLogger.warn(`Received ${signal} — closing out any in-flight scrape_logs rows.`);
     process.exitCode = 1;
-    closePool().finally(() => process.exit(1));
+    scraperService
+      .markInFlightFailed(`Process received ${signal} before the scraper finished`)
+      .catch(error => scraperLogger.error('Failed to close in-flight scrape logs:', error))
+      .finally(() => closePool().finally(() => process.exit(1)));
   });
 }
 

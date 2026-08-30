@@ -17,7 +17,7 @@ export interface SupermarketSeedData {
  * Several entries here are placeholders whose scraper_class has no
  * implementation in SCRAPER_REGISTRY: A101Scraper, BIMScraper, SokScraper,
  * CarrefourTurkeyScraper, IdeaScraper, CarrefourSpainScraper, AlcampoScraper,
- * DiaScraper, KorzinkaScraper and UzumScraper. They are all is_active: false
+ * DiaScraper and KorzinkaScraper. They are all is_active: false
  * and harmless while they stay that way — enabling one makes
  * ScraperFactory.createFromSupermarket throw `Scraper class not found`, which
  * is caught and logged as a failed run every single time it is scheduled

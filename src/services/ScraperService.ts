@@ -24,7 +24,28 @@ export interface RunScraperOptions {
  * to 2026-08-01, costing 33 consecutive runs. The default leaves room for the
  * slowest healthy scraper (Voli, ~28 min on the 2026-08-01 run) with margin.
  */
-export const DEFAULT_SCRAPER_DEADLINE_MS = Number(process.env.SCRAPER_DEADLINE_MS ?? 45 * 60 * 1000);
+export const FALLBACK_SCRAPER_DEADLINE_MS = 45 * 60 * 1000;
+
+/**
+ * Resolve SCRAPER_DEADLINE_MS, falling back to the default rather than
+ * disabling the safeguard. `SCRAPER_DEADLINE_MS=0` or a typo'd value used to
+ * parse to 0/NaN, which `withDeadline` reads as "no deadline" — silently
+ * restoring the exact failure mode this whole change exists to prevent.
+ */
+export function resolveDeadlineMs(raw = process.env.SCRAPER_DEADLINE_MS): number {
+  if (raw === undefined || raw.trim() === '') return FALLBACK_SCRAPER_DEADLINE_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    scraperLogger.warn(
+      `Ignoring invalid SCRAPER_DEADLINE_MS="${raw}" — using the ${FALLBACK_SCRAPER_DEADLINE_MS}ms default. ` +
+      `A deadline can only be disabled per call, never by configuration.`
+    );
+    return FALLBACK_SCRAPER_DEADLINE_MS;
+  }
+  return parsed;
+}
+
+export const DEFAULT_SCRAPER_DEADLINE_MS = resolveDeadlineMs();
 
 /** Thrown when a scraper exceeds its wall-clock budget. */
 export class ScraperDeadlineError extends Error {
@@ -38,6 +59,8 @@ export class ScraperService {
   private productService: ProductService;
   private supermarketRepository: SupermarketRepository;
   private scrapeLogRepository: ScrapeLogRepository;
+  /** scrape_logs rows this process opened and has not closed yet, id -> supermarket. */
+  private readonly inFlightLogs = new Map<string, string>();
 
   constructor(
     productService?: ProductService,
@@ -61,6 +84,14 @@ export class ScraperService {
     const startTime = Date.now();
     let totalStoredCount = 0;
 
+    // Clock starts here so lookup, browser launch and scrape all draw on one
+    // budget. `remaining()` never returns 0 while a budget is in force, since
+    // withDeadline reads 0 as "unbounded".
+    const budgetMs = options?.deadlineMs ?? DEFAULT_SCRAPER_DEADLINE_MS;
+    const bounded = Number.isFinite(budgetMs) && budgetMs > 0;
+    const deadlineAt = startTime + budgetMs;
+    const remaining = () => (bounded ? Math.max(1, deadlineAt - Date.now()) : 0);
+
     try {
       const supermarket = await this.supermarketRepository.findById(supermarketId);
 
@@ -73,6 +104,7 @@ export class ScraperService {
       }
 
       scrapeLogId = await this.scrapeLogRepository.create(supermarketId, 'running');
+      this.inFlightLogs.set(scrapeLogId, supermarket.name);
 
       const scraperOptions: CreateScraperOptions = { categoryIds: options?.categoryIds };
       scraper = ScraperFactory.createFromSupermarket(supermarket, scraperOptions);
@@ -87,9 +119,11 @@ export class ScraperService {
         return savedCount;
       });
 
-      await scraper.initialize();
-      const deadlineMs = options?.deadlineMs ?? DEFAULT_SCRAPER_DEADLINE_MS;
-      const products = await this.withDeadline(scraper.scrapeProductList(), deadlineMs);
+      // The budget covers the whole lifecycle, not just the scrape: a browser
+      // that never launches holds the run open just as effectively as a
+      // scrape that never returns, and initialize() is a network call too.
+      await this.withDeadline(scraper.initialize(), remaining(), budgetMs);
+      const products = await this.withDeadline(scraper.scrapeProductList(), remaining(), budgetMs);
 
       scraperLogger.info(
         `Scraped ${products.length} products from ${supermarket.name}, stored ${totalStoredCount}`
@@ -112,6 +146,7 @@ export class ScraperService {
           error: status === 'partial' ? 'Completed but stored 0 products' : undefined,
           duration: Date.now() - startTime,
         });
+        this.inFlightLogs.delete(scrapeLogId);
       }
 
       const result: ScrapeResult = {
@@ -154,6 +189,7 @@ export class ScraperService {
           error: errorMessage,
           duration: Date.now() - startTime,
         });
+        this.inFlightLogs.delete(scrapeLogId);
       }
 
       const result = this.buildEmptyResult(supermarketId, errorMessage);
@@ -174,8 +210,8 @@ export class ScraperService {
    * closes the browser in its finally block; its eventual settlement is
    * swallowed here so it cannot surface as an unhandled rejection.
    */
-  private withDeadline<T>(promise: Promise<T>, deadlineMs: number): Promise<T> {
-    if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) return promise;
+  private withDeadline<T>(promise: Promise<T>, timeoutMs: number, budgetMs = timeoutMs): Promise<T> {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
 
     promise.catch(() => undefined);
 
@@ -183,7 +219,8 @@ export class ScraperService {
     return Promise.race([
       promise,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new ScraperDeadlineError(deadlineMs)), deadlineMs);
+        // Reports the full budget, not the slice left for this step.
+        timer = setTimeout(() => reject(new ScraperDeadlineError(budgetMs)), timeoutMs);
       }),
     ]).finally(() => {
       if (timer) clearTimeout(timer);
@@ -191,6 +228,11 @@ export class ScraperService {
   }
 
   async runAllScrapers(concurrency: number = 3): Promise<ScrapeResult[]> {
+    // Math.min(0 | NaN, n) leaves the worker pool empty, so the run would
+    // finish instantly with zero results and report success.
+    if (!Number.isInteger(concurrency) || concurrency < 1) {
+      throw new Error(`Invalid concurrency: ${concurrency}. Expected a positive integer.`);
+    }
     scraperLogger.info(`Starting scrape for all active supermarkets (concurrency: ${concurrency})`);
 
     // A run killed mid-scraper (CI timeout, SIGKILL) leaves its 'running' row
@@ -217,7 +259,17 @@ export class ScraperService {
         results.push(result);
         scraperLogger.info(`[Pool] Completed: ${supermarket.name} (${result.productsScraped} products)`);
       } catch (error) {
+        // runScraper handles its own failures, so reaching here means
+        // something outside it threw (cleanup, a repository write). Dropping
+        // the result entirely is what let the caller exit 0 on a run where a
+        // scraper never produced one.
         scraperLogger.error(`Failed to run scraper for ${supermarket.name}:`, error);
+        results.push(
+          this.buildEmptyResult(
+            supermarket.id,
+            error instanceof Error ? error.message : 'Unknown error'
+          )
+        );
       }
 
       await runNext();
@@ -235,7 +287,40 @@ export class ScraperService {
       `Completed scraping all supermarkets. ${results.length}/${supermarkets.length} ran, ` +
       `${empty.length} stored nothing, ${errored.length} reported errors`
     );
+
+    // Every active supermarket must be accounted for; a caller deciding the
+    // run's exit code can only see what is in this array.
+    const accountedFor = new Set(results.map(r => r.supermarketId));
+    for (const supermarket of supermarkets) {
+      if (accountedFor.has(supermarket.id)) continue;
+      scraperLogger.error(`No result recorded for ${supermarket.name} — reporting it as failed`);
+      results.push(this.buildEmptyResult(supermarket.id, 'Scraper produced no result'));
+    }
+
     return results;
+  }
+
+  /**
+   * Close out any scrape_logs row this process left on 'running'.
+   *
+   * reapStaleRuns only fires at the start of the next full run and only after
+   * 8 hours, so without this a Ctrl-C or a cancelled CI job leaves the admin
+   * status endpoint claiming a scrape is still in progress.
+   */
+  async markInFlightFailed(reason: string): Promise<number> {
+    const pending = [...this.inFlightLogs.entries()];
+    this.inFlightLogs.clear();
+
+    let closed = 0;
+    for (const [logId, name] of pending) {
+      try {
+        await this.scrapeLogRepository.update(logId, 'failed', { error: reason });
+        closed++;
+      } catch (error) {
+        scraperLogger.error(`Could not close scrape log ${logId} for ${name}:`, error);
+      }
+    }
+    return closed;
   }
 
   private async storeProducts(products: ProductData[], supermarketId: string): Promise<number> {

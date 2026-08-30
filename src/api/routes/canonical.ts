@@ -92,7 +92,7 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
   try {
     const { search, limit, offset, max_age_days } = req.validatedQuery as z.infer<typeof comparisonSchema>;
 
-    const { data: rows, total } = await canonicalProductRepository.getComparison(
+    const { data: rows, total, freshness } = await canonicalProductRepository.getComparison(
       { search: search?.trim(), maxAgeDays: max_age_days },
       { limit, offset }
     );
@@ -262,11 +262,17 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
     // Tell callers how old this data actually is. Without it a dead scrape
     // pipeline is indistinguishable from a healthy one: the table renders the
     // same either way, just with older numbers.
-    const timestamps = rows
-      .map(r => new Date(r.scraped_at).getTime())
-      .filter(t => Number.isFinite(t));
-    const newest = timestamps.length ? Math.max(...timestamps) : null;
-    const oldest = timestamps.length ? Math.min(...timestamps) : null;
+    //
+    // Computed over the whole filtered dataset, not this page — the home page
+    // asks for the first 100 of `total` and draws a site-wide stale-data
+    // notice from the answer.
+    const toMs = (value: Date | null) => {
+      if (value === null) return null;
+      const ms = new Date(value).getTime();
+      return Number.isFinite(ms) ? ms : null;
+    };
+    const newest = toMs(freshness.newest);
+    const oldest = toMs(freshness.oldest);
     const ageInDays = (ms: number) => Math.floor((Date.now() - ms) / 86_400_000);
 
     res.json({
@@ -274,11 +280,12 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
       total,
       pagination: { limit, offset },
       freshness: {
-        newest_price_at: newest ? new Date(newest).toISOString() : null,
-        oldest_price_at: oldest ? new Date(oldest).toISOString() : null,
+        newest_price_at: newest === null ? null : new Date(newest).toISOString(),
+        oldest_price_at: oldest === null ? null : new Date(oldest).toISOString(),
         newest_age_days: newest === null ? null : ageInDays(newest),
         oldest_age_days: oldest === null ? null : ageInDays(oldest),
         max_age_days: max_age_days ?? null,
+        scope: 'dataset' as const,
       },
     });
   } catch (error) {

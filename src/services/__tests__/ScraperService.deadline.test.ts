@@ -1,4 +1,9 @@
-import { ScraperService, ScraperDeadlineError } from '../ScraperService';
+import {
+  ScraperService,
+  ScraperDeadlineError,
+  resolveDeadlineMs,
+  FALLBACK_SCRAPER_DEADLINE_MS,
+} from '../ScraperService';
 import { ScraperFactory } from '../../scrapers/base/ScraperFactory';
 
 jest.mock('../../scrapers/base/ScraperFactory');
@@ -12,6 +17,8 @@ jest.mock('../../utils/logger', () => {
 });
 
 const mockedFactory = ScraperFactory as jest.Mocked<typeof ScraperFactory>;
+
+type PageCallback = (products: unknown[], pageInfo: unknown) => Promise<number>;
 
 /** Minimal BaseScraper stand-in whose scrapeProductList we control. */
 function fakeScraper(scrapeProductList: () => Promise<unknown[]>) {
@@ -35,7 +42,7 @@ function harness(scraper: ReturnType<typeof fakeScraper>) {
 
   mockedFactory.createFromSupermarket = jest.fn().mockReturnValue(scraper) as never;
 
-  const productService = { bulkSaveProducts: jest.fn().mockResolvedValue(0) };
+  const productService = { bulkSaveProducts: jest.fn(async (products: unknown[]) => products.length) };
   const service = new ScraperService(
     productService as never,
     supermarketRepo as never,
@@ -84,19 +91,76 @@ describe('ScraperService per-scraper deadline', () => {
     }));
   });
 
-  it('leaves a healthy scraper alone', async () => {
-    const scraper = fakeScraper(async () => []);
+  it('records a scraper that stores products as success', async () => {
+    // Drive the service's own page callback — the one that increments the
+    // stored count — instead of replacing it, so the success branch of the
+    // partial/success classification is actually exercised.
+    let registered: PageCallback | undefined;
+    const product = { name: 'Milk', price: 1 };
+    const scraper = fakeScraper(async () => {
+      await registered!([product], { categoryName: 'Dairy', pageNumber: 1 });
+      return [product];
+    });
+    scraper.setOnPageScrapedCallback.mockImplementation((cb: PageCallback) => {
+      registered = cb;
+    });
+
     const { service, update } = harness(scraper);
-    // Report one stored product via the page callback.
-    scraper.setOnPageScrapedCallback.mockImplementation(() => undefined);
 
-    await service.runScraper('1', { deadlineMs: 10_000 });
+    const result = await service.runScraper('1', { deadlineMs: 10_000 });
 
+    expect(result.productsScraped).toBe(1);
     expect(scraper.cleanup).toHaveBeenCalledTimes(1);
-    expect(update).toHaveBeenCalledWith('log-1', expect.stringMatching(/partial|success/), expect.anything());
+    expect(update).toHaveBeenCalledWith('log-1', 'success', expect.objectContaining({
+      productsScraped: 1,
+    }));
+  });
+
+  it('applies the deadline to initialize(), not just the scrape', async () => {
+    // A browser that never launches holds the run open just as effectively as
+    // a scrape that never returns.
+    const scraper = fakeScraper(async () => []);
+    scraper.initialize.mockImplementation(() => new Promise(() => {}));
+    const { service, update } = harness(scraper);
+
+    const result = await service.runScraper('1', { deadlineMs: 50 });
+
+    expect(scraper.scrapeProductList).not.toHaveBeenCalled();
+    expect(result.errors[0].message).toMatch(/deadline/i);
+    expect(update).toHaveBeenCalledWith('log-1', 'failed', expect.objectContaining({
+      error: expect.stringMatching(/deadline/i),
+    }));
+  });
+
+  it('closes an in-flight scrape log on shutdown', async () => {
+    let release: (() => void) | undefined;
+    const scraper = fakeScraper(() => new Promise<unknown[]>(resolve => {
+      release = () => resolve([]);
+    }));
+    const { service, update } = harness(scraper);
+
+    const run = service.runScraper('1', { deadlineMs: 10_000 });
+    await new Promise(r => setImmediate(r));
+
+    expect(await service.markInFlightFailed('SIGTERM')).toBe(1);
+    expect(update).toHaveBeenCalledWith('log-1', 'failed', { error: 'SIGTERM' });
+
+    release!();
+    await run;
   });
 
   it('ScraperDeadlineError reports the budget it blew', () => {
     expect(new ScraperDeadlineError(45 * 60 * 1000).message).toContain('45 minute');
+  });
+});
+
+describe('resolveDeadlineMs', () => {
+  it('uses the configured value when it is a positive number', () => {
+    expect(resolveDeadlineMs('60000')).toBe(60_000);
+  });
+
+  // Configuration must never be able to switch the safeguard off.
+  it.each(['0', '-1', 'abc', '', undefined])('falls back to the default for %p', raw => {
+    expect(resolveDeadlineMs(raw)).toBe(FALLBACK_SCRAPER_DEADLINE_MS);
   });
 });

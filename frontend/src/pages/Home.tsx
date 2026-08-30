@@ -45,7 +45,7 @@ export default function Home() {
   // Set SEO meta tags for home page
   useSEO({
     title: undefined, // Use default title for homepage
-    description: t('seo.homeDescription', 'Compare grocery prices across Turkey, Spain, Montenegro, Ukraine, Kazakhstan, and Uzbekistan. Track daily supermarket prices and find where life is cheaper.'),
+    description: t('seo.homeDescription', 'Compare grocery prices across Turkey, Spain, Montenegro, Ukraine, Kazakhstan, and Uzbekistan. Track regularly updated supermarket prices and find where life is cheaper.'),
     keywords: 'grocery prices, cost of living comparison, supermarket prices, Turkey prices, Spain prices, Montenegro prices, expat life, digital nomad, food costs',
     canonicalUrl: 'https://whereislifecheaper.com/',
     structuredData,

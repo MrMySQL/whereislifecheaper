@@ -59,6 +59,8 @@ export interface ComparisonFreshness {
   newest_age_days: number | null;
   oldest_age_days: number | null;
   max_age_days: number | null;
+  /** 'dataset' — computed over the whole filtered set, not just this page. */
+  scope?: 'dataset';
 }
 
 export const canonicalApi = {
