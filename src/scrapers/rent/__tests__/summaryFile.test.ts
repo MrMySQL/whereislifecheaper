@@ -107,6 +107,64 @@ describe('rent scrape summary file', () => {
     expect(summaryFile.readRentSummary()).toBeNull();
   });
 
+  test('returns null for a status the gate has no branch for', () => {
+    // 'okay' is neither 'ok' nor 'dead' nor 'error', so the gate falls off the
+    // end of its if/else and says nothing about the source at all - a silent
+    // pass for an outcome nobody judged. A summary from a revision that spelled
+    // the statuses differently arrives exactly like this.
+    writeRaw(
+      JSON.stringify({
+        ...summary,
+        sources: [{ ...summary.sources[0], status: 'okay' }],
+        finishedAt: new Date().toISOString(),
+      }),
+    );
+    expect(summaryFile.readRentSummary()).toBeNull();
+  });
+
+  test('returns null for an expectation the gate has no branch for', () => {
+    // Anything but 'blocked' reads as "expected healthy" in the gate's second
+    // branch, so a dead source marked 'unknown' is reported as a still-blocked
+    // one and never becomes a regression.
+    writeRaw(
+      JSON.stringify({
+        ...summary,
+        sources: [{ ...summary.sources[0], expected: 'unknown', status: 'dead' }],
+        finishedAt: new Date().toISOString(),
+      }),
+    );
+    expect(summaryFile.readRentSummary()).toBeNull();
+  });
+
+  test('returns null for a source name that is not one of ours', () => {
+    writeRaw(
+      JSON.stringify({
+        ...summary,
+        sources: [{ ...summary.sources[0], name: 'craigslist' }],
+        finishedAt: new Date().toISOString(),
+      }),
+    );
+    expect(summaryFile.readRentSummary()).toBeNull();
+  });
+
+  test('accepts every status and expectation the scrape actually writes', () => {
+    // The guard has to reject unknown values without rejecting the real ones -
+    // a too-strict guard sends a genuine regression down the "did the scrape
+    // step run?" path and hides which source died.
+    for (const expected of ['healthy', 'blocked'] as const) {
+      for (const status of ['ok', 'dead', 'error'] as const) {
+        writeRaw(
+          JSON.stringify({
+            ...summary,
+            sources: [{ ...summary.sources[0], expected, status }],
+            finishedAt: new Date().toISOString(),
+          }),
+        );
+        expect(summaryFile.readRentSummary()).not.toBeNull();
+      }
+    }
+  });
+
   test('clearRentSummary removes a previous run so it cannot be read as this one', () => {
     summaryFile.writeRentSummary(summary);
     summaryFile.clearRentSummary();

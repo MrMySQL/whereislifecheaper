@@ -47,4 +47,10 @@ test('aborts when the previous summary cannot be cleared', () => {
 
   expect(res.status).toBe(1);
   expect(`${res.stdout}${res.stderr}`).toMatch(/cannot clear the previous scrape summary/);
+  // The abort's only record of *why* the run stopped. winston's File transports
+  // write asynchronously, so a `process.exit()` fired in the same tick as the
+  // log call cuts them off and the operator gets an exit code with no reason.
+  expect(fs.readFileSync(path.join(dir, 'logs', 'error.log'), 'utf8')).toMatch(
+    /cannot clear the previous scrape summary/,
+  );
 });

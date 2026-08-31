@@ -16,39 +16,64 @@ function report(summary: RentScrapeSummary): void {
   }
 }
 
+/**
+ * Exit once winston has drained.
+ *
+ * Its Console, File and (in production) GCP transports all write
+ * asynchronously, so a `process.exit()` in the same tick as a `logger.error`
+ * kills the process before the message reaches `logs/error.log` - the run ends
+ * with an exit code and no stated reason. The exit still has to be forced:
+ * Playwright and the pg pool can leave handles that would otherwise keep the
+ * process alive. `exitCode` is set first so a 'finish' that never arrives ends
+ * as a drained event loop with the right status rather than a hang.
+ */
+function exitWhenLogsFlush(code: number): void {
+  process.exitCode = code;
+  logger.on('finish', () => process.exit(code));
+  logger.end();
+}
+
 // Any summary still on disk is from an earlier run; the gate must not mistake
 // it for this one if this scrape dies before it writes.
 // Aborting rather than continuing: the gate accepts any summary younger than
 // six hours, so a leftover file we could not delete would be read as this
 // run's verdict if this scrape then died before writing its own. A scrape we
 // cannot judge is worth less than the green check it would forge.
-try {
-  clearRentSummary();
-} catch (e) {
-  logger.error(`[rent] cannot clear the previous scrape summary at ${SUMMARY_PATH} - aborting:`, e);
-  process.exit(1);
+function main(): void {
+  try {
+    clearRentSummary();
+  } catch (e) {
+    logger.error(
+      `[rent] cannot clear the previous scrape summary at ${SUMMARY_PATH} - aborting:`,
+      e,
+    );
+    exitWhenLogsFlush(1);
+    return;
+  }
+
+  scrapeRent()
+    .then(async (summary) => {
+      // Reporting I/O must never fail a scrape whose listings are already
+      // committed - an unwritable logs/ would otherwise send the run down the
+      // catch below and skip the aggregate step.
+      try {
+        writeRentSummary(summary);
+      } catch (e) {
+        logger.error('[rent] failed to write the scrape summary (continuing):', e);
+      }
+      report(summary);
+      await closePool();
+      logger.info(
+        `[rent] scrape complete: ${summary.totalInserted} inserted, ` +
+          `${summary.regressions.length} regression(s), ${summary.recovered.length} recovered`,
+      );
+      exitWhenLogsFlush(0);
+    })
+    .catch(async (err) => {
+      logger.error('[rent] scrape failed:', err);
+      await closePool().catch(() => undefined);
+      exitWhenLogsFlush(1);
+    });
 }
 
-scrapeRent()
-  .then(async (summary) => {
-    // Reporting I/O must never fail a scrape whose listings are already
-    // committed - an unwritable logs/ would otherwise send the run down the
-    // catch below and skip the aggregate step.
-    try {
-      writeRentSummary(summary);
-    } catch (e) {
-      logger.error('[rent] failed to write the scrape summary (continuing):', e);
-    }
-    report(summary);
-    await closePool();
-    logger.info(
-      `[rent] scrape complete: ${summary.totalInserted} inserted, ` +
-        `${summary.regressions.length} regression(s), ${summary.recovered.length} recovered`,
-    );
-    process.exit(0);
-  })
-  .catch(async (err) => {
-    logger.error('[rent] scrape failed:', err);
-    await closePool().catch(() => undefined);
-    process.exit(1);
-  });
+main();

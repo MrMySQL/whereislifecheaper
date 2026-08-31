@@ -1,6 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import type { RentScrapeSummary, SourceOutcome } from './RentScraperService';
+import type {
+  RentScrapeSummary,
+  SourceExpectation,
+  SourceOutcome,
+  SourceStatus,
+} from './RentScraperService';
+import type { Source } from './types';
 
 /**
  * Where `rent:scrape` leaves its per-source summary for `rent:check-sources`
@@ -85,15 +91,49 @@ function isOutcomeList(value: unknown): value is SourceOutcome[] {
   return Array.isArray(value) && value.every(isSourceOutcome);
 }
 
+/**
+ * The values the gate branches on, not merely "a string".
+ *
+ * The gate's verdict is a chain of comparisons against these literals:
+ * `status === 'ok'`, else `expected === 'blocked'`. A value outside the union -
+ * a summary from a revision that spelled the statuses differently, a
+ * hand-edited file - matches no branch, so the source is passed over without a
+ * word and the run stays green on an outcome nobody judged. `expected` is worse
+ * than silent: anything that is not 'blocked' reads as "expected healthy", so a
+ * dead source is reported as a still-blocked one.
+ *
+ * Written as records keyed by the union so that adding a source or a status
+ * fails to compile here until it is listed, rather than quietly making every
+ * summary that uses it unreadable.
+ */
+const SOURCE_NAMES = keysOf<Source>({
+  olx: true,
+  domria: true,
+  flatfy: true,
+  realestateau: true,
+  domainau: true,
+});
+
+const EXPECTATIONS = keysOf<SourceExpectation>({ healthy: true, blocked: true });
+
+const STATUSES = keysOf<SourceStatus>({ ok: true, dead: true, error: true });
+
+function keysOf<T extends string>(members: Record<T, true>): ReadonlySet<string> {
+  return new Set(Object.keys(members));
+}
+
 function isSourceOutcome(value: unknown): value is SourceOutcome {
   if (typeof value !== 'object' || value === null) return false;
   const s = value as Record<string, unknown>;
   return (
     typeof s.name === 'string' &&
+    SOURCE_NAMES.has(s.name) &&
     typeof s.countryCode === 'string' &&
     typeof s.city === 'string' &&
     typeof s.expected === 'string' &&
+    EXPECTATIONS.has(s.expected) &&
     typeof s.status === 'string' &&
+    STATUSES.has(s.status) &&
     typeof s.raw === 'number' &&
     typeof s.normalized === 'number' &&
     typeof s.inserted === 'number' &&
