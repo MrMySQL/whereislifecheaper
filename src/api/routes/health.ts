@@ -4,18 +4,23 @@ import { checkConnection } from '../../config/database';
 /**
  * Health check, shared by both entry points.
  *
- * Mounted at `/health` and `/api/health` in each entry: in production only the
- * `/api/*` paths reach the function (everything else is rewritten to the SPA),
- * while local tooling has long used `/health`. Keeping one router mounted at
- * both paths in both entries is also what lets the parity test compare the two
- * route tables as whole sets.
+ * Mounted at `/api/health` in both entries, and additionally at `/health` in
+ * the long-running server, which local tooling and the docs have long used. The
+ * Vercel function mounts only `/api/health`: its `/((?!api/).*)` rewrite hands
+ * every other path to the SPA shell, so a `/health` there would answer HTML, or
+ * rather never be invoked at all.
  */
 const router = Router();
 
 router.get('/', async (_req, res) => {
   try {
     const dbHealthy = await checkConnection();
-    res.json({
+    // 503, not 200-with-a-'degraded'-body: uptime monitors read the status
+    // code, and the API cannot answer a single query without the database, so
+    // a 200 here reports a dead service as up. `checkConnection` swallows its
+    // own errors and returns false, so this - not the catch below - is the
+    // branch a real outage takes.
+    res.status(dbHealthy ? 200 : 503).json({
       status: dbHealthy ? 'healthy' : 'degraded',
       database: dbHealthy ? 'connected' : 'disconnected',
       timestamp: new Date().toISOString(),
