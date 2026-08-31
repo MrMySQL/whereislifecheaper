@@ -165,6 +165,15 @@ export class LotussApiScraper extends BaseScraper {
   private readonly WEBSITE_CODE = 'malaysia_hy';
   private apiHeaders: Record<string, string> = {};
 
+  /**
+   * The product API, which is a different host from the storefront.
+   *
+   * Deliberately not derived from `config.baseUrl`: ScraperFactory fills that
+   * from the supermarket's `website_url` (https://www.lotuss.com.my), so
+   * building the API URL from it silently produces a 404 on the storefront.
+   */
+  private readonly API_BASE = 'https://api-o2o.lotuss.com.my/lotuss-mobile-bff';
+
   /** The API caps a response at 100 products however large a `size` we ask for. */
   private readonly PAGE_SIZE = 100;
 
@@ -321,7 +330,7 @@ export class LotussApiScraper extends BaseScraper {
       size: this.PAGE_SIZE,
     };
 
-    return `${this.config.baseUrl}/product/v2/products?q=${encodeURIComponent(JSON.stringify(q))}`;
+    return `${this.API_BASE}/product/v2/products?q=${encodeURIComponent(JSON.stringify(q))}`;
   }
 
   /**

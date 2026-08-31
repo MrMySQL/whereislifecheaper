@@ -34,7 +34,10 @@ function config(): ScraperConfig {
   return {
     supermarketId: '221',
     name: 'Lotuss',
-    baseUrl: 'https://api-o2o.lotuss.com.my/lotuss-mobile-bff',
+    // ScraperFactory fills baseUrl from the supermarket's website_url, NOT from
+    // lotussApiConfig — so this is the storefront, not the API host. Building
+    // the API URL from it 404s on every category.
+    baseUrl: 'https://www.lotuss.com.my',
     categories: [CATEGORY],
     selectors: { productCard: '', productName: '', productPrice: '' },
     waitTimes: { pageLoad: 0, dynamicContent: 0, betweenRequests: 0 },
@@ -50,10 +53,13 @@ function config(): ScraperConfig {
  */
 function fakePage(pages: Record<number, unknown[] | 'error'>) {
   const requested: number[] = [];
+  const urls: string[] = [];
   return {
     requested,
+    urls,
     request: {
       get: jest.fn(async (url: string) => {
+        urls.push(url);
         const q = JSON.parse(decodeURIComponent(url.split('q=')[1]));
         const offset = q.offset ?? 0;
         requested.push(offset);
@@ -85,6 +91,17 @@ function build(pages: Record<number, unknown[] | 'error'>) {
 }
 
 describe('LotussApiScraper category pagination', () => {
+  it('calls the API host, not the storefront in config.baseUrl', async () => {
+    const { page, scrapeCategory } = build({ 0: [apiProduct(1)] });
+
+    await scrapeCategory(CATEGORY);
+
+    expect(page.urls[0]).toMatch(
+      /^https:\/\/api-o2o\.lotuss\.com\.my\/lotuss-mobile-bff\/product\/v2\/products\?q=/
+    );
+    expect(page.urls[0]).not.toContain('www.lotuss.com.my');
+  });
+
   it('walks offsets until a short page and returns every product', async () => {
     const { page, saved, scrapeCategory } = build({
       0: Array.from({ length: 100 }, (_, i) => apiProduct(1000 + i)),
