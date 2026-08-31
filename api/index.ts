@@ -58,8 +58,9 @@ initializePassport();
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Health check - mounted at both paths in both entries; see routes/health.ts.
-app.use('/health', healthRouter);
+// Health check. Only `/api/health` here: vercel.json rewrites every other path
+// to the SPA shell, so a root-level `/health` in this function would never be
+// reached. See routes/health.ts.
 app.use('/api/health', healthRouter);
 
 // API routes

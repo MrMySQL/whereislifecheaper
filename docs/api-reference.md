@@ -885,7 +885,11 @@ Synchronize exchange rates from external API.
 
 ### GET /health
 
-Check API health status.
+Check API health status. Also served at `/api/health`, which is the path to use
+on Vercel - the SPA rewrite claims root paths there.
+
+Answers `200` while the database is reachable and `503` when it is not, so an
+uptime monitor can read the status code alone.
 
 **Response**:
 ```json

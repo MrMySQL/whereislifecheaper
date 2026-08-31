@@ -80,7 +80,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check - mounted at both paths in both entries; see routes/health.ts.
+// Health check. `/health` is this entry only - it is the path local tooling and
+// the docs have long used, and only this server can serve a root path. See
+// routes/health.ts.
 app.use('/health', healthRouter);
 app.use('/api/health', healthRouter);
 
