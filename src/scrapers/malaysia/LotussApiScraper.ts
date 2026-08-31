@@ -164,7 +164,16 @@ export class LotussApiScraper extends BaseScraper {
   private context: BrowserContext | null = null;
   private readonly WEBSITE_CODE = 'malaysia_hy';
   private apiHeaders: Record<string, string> = {};
-  private capturedProducts: Map<string, LotussApiProduct[]> = new Map();
+
+  /** The API caps a response at 100 products however large a `size` we ask for. */
+  private readonly PAGE_SIZE = 100;
+
+  /**
+   * Safety net for the pagination loop. The largest category seen is Grocery at
+   * ~4,050 products (41 requests), so 200 pages is far above any real catalogue
+   * while still bounding a category that never terminates.
+   */
+  private readonly MAX_PAGES_PER_CATEGORY = 200;
 
   constructor(config: ScraperConfig) {
     super(config);
@@ -210,38 +219,6 @@ export class LotussApiScraper extends BaseScraper {
 
     this.page = await this.context.newPage();
 
-    // Set up route interception to capture API responses
-    await this.page.route('**/lotuss-mobile-bff/product/v2/products**', async (route) => {
-      const response = await route.fetch();
-      const body = await response.json();
-
-      if (body?.data?.products) {
-        // Extract category from the request URL
-        const url = route.request().url();
-        const queryMatch = url.match(/q=([^&]+)/);
-        if (queryMatch) {
-          const query = JSON.parse(decodeURIComponent(queryMatch[1]));
-          // API uses either categoryId or categoryUrlKey depending on category
-          const categoryId = query?.filter?.categoryId?.[0];
-          const categoryUrlKey = query?.filter?.categoryUrlKey;
-
-          // Store under both keys if available (for lookup flexibility)
-          const keys: string[] = [];
-          if (categoryId) keys.push(String(categoryId));
-          if (categoryUrlKey) keys.push(categoryUrlKey);
-          if (keys.length === 0) keys.push('unknown');
-
-          for (const key of keys) {
-            const existing = this.capturedProducts.get(key) || [];
-            this.capturedProducts.set(key, [...existing, ...body.data.products]);
-          }
-          this.logger.debug(`Captured ${body.data.products.length} products for category keys: ${keys.join(', ')}`);
-        }
-      }
-
-      await route.fulfill({ response });
-    });
-
     // Visit homepage first to establish session
     await this.page.goto('https://www.lotuss.com.my/en', {
       waitUntil: 'domcontentloaded',
@@ -254,7 +231,15 @@ export class LotussApiScraper extends BaseScraper {
   }
 
   /**
-   * Scrape a single category by navigating to category pages and capturing API responses
+   * Scrape a single category straight from the product API.
+   *
+   * This used to drive the category page in the browser and passively capture
+   * whatever API responses the site happened to fire, gated behind
+   * `waitForSelector('[class*="product"]')`. The site stopped rendering any
+   * element with "product" in a class, so that gate threw for all 54 categories
+   * and the catch discarded each one — 0 products for 64 days while the API
+   * underneath was answering normally. Nothing about the data needed a DOM, so
+   * the request is now explicit and the DOM is out of the path entirely.
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
     if (!this.page) {
@@ -262,89 +247,130 @@ export class LotussApiScraper extends BaseScraper {
     }
 
     const products: ProductData[] = [];
+    const seenSkus = new Set<string>();
+    let offset = 0;
+    let pages = 0;
 
-    this.logger.info(`Scraping category: ${category.name} (ID: ${category.id})`);
+    while (pages < this.MAX_PAGES_PER_CATEGORY) {
+      const batch = await this.fetchProductPage(category, offset);
+      pages++;
 
-    // Clear any previously captured products for this category (both id and url keys)
-    this.capturedProducts.delete(category.id);
-    this.capturedProducts.delete(category.url);
+      // A failed request is not an empty category: keep what we have and stop,
+      // leaving the error recorded so the run cannot report clean.
+      if (batch === null) break;
+      if (batch.length === 0) break;
 
-    // Navigate to the category page - this will trigger API calls that we intercept
-    const categoryUrl = `https://www.lotuss.com.my/en/category/${category.url}`;
-    this.logger.info(`Navigating to ${categoryUrl}`);
-
-    try {
-      await this.page.goto(categoryUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 60000,
-      });
-
-      // Wait for products to load
-      await this.page.waitForSelector('[class*="product"]', { timeout: 30000 });
-      await this.page.waitForTimeout(2000);
-
-      // Scroll to load more products (trigger lazy loading)
-      let previousHeight = 0;
-      let scrollAttempts = 0;
-      const maxScrollAttempts = 20;
-
-      while (scrollAttempts < maxScrollAttempts) {
-        const currentHeight = await this.page.evaluate(() => document.body.scrollHeight);
-
-        if (currentHeight === previousHeight) {
-          // No more content to load
-          break;
-        }
-
-        previousHeight = currentHeight;
-        await this.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-        await this.page.waitForTimeout(1500);
-        scrollAttempts++;
-
-        const capturedById = this.capturedProducts.get(category.id)?.length || 0;
-        const capturedByUrl = this.capturedProducts.get(category.url)?.length || 0;
-        this.logger.debug(`${category.name}: Scroll attempt ${scrollAttempts}, captured ${capturedById || capturedByUrl} products`);
+      const fresh = batch.filter((p) => p.sku && !seenSkus.has(p.sku));
+      for (const p of batch) {
+        if (p.sku) seenSkus.add(p.sku);
       }
 
-      // Get captured products (try both category.id and category.url as keys)
-      const apiProducts = this.capturedProducts.get(category.id) || this.capturedProducts.get(category.url) || [];
-      this.logger.info(`${category.name}: Captured ${apiProducts.length} products from API intercepts`);
+      // Past the end of a category the API replays its last page rather than
+      // returning an empty list, so a page of nothing new means we are done.
+      if (fresh.length === 0) break;
 
-      // Convert and deduplicate products
-      const seenSkus = new Set<string>();
-      for (const p of apiProducts) {
-        if (seenSkus.has(p.sku)) continue;
-        seenSkus.add(p.sku);
-
-        const converted = this.convertApiProduct(p, category.name);
-        if (converted) {
-          products.push(converted);
-        }
+      const pageProducts: ProductData[] = [];
+      for (const apiProduct of fresh) {
+        const converted = this.convertApiProduct(apiProduct, category.name);
+        if (converted) pageProducts.push(converted);
       }
 
-      // Save products via callback
-      if (this.onPageScraped && products.length > 0) {
-        const savedCount = await this.onPageScraped(products, {
+      if (this.onPageScraped && pageProducts.length > 0) {
+        const savedCount = await this.onPageScraped(pageProducts, {
           categoryId: category.id,
           categoryName: category.name,
-          pageNumber: 1,
-          totalProductsOnPage: products.length,
+          pageNumber: pages,
+          totalProductsOnPage: pageProducts.length,
         });
-        this.logger.info(`${category.name}: Saved ${savedCount}/${products.length} products`);
+        this.logger.info(
+          `${category.name} (offset ${offset}): Saved ${savedCount}/${pageProducts.length} products`
+        );
       }
 
-      this.productsScraped += products.length;
+      products.push(...pageProducts);
+      this.productsScraped += pageProducts.length;
 
-    } catch (error) {
-      this.logError(
-        `Failed to scrape category ${category.name}`,
-        categoryUrl,
-        error as Error
-      );
+      if (batch.length < this.PAGE_SIZE) break;
+
+      offset += this.PAGE_SIZE;
+      await this.waitBetweenRequests();
     }
 
-    this.logger.info(`${category.name}: Total ${products.length} products scraped`);
+    this.logger.info(
+      `${category.name}: Total ${products.length} products scraped across ${pages} request(s)`
+    );
     return products;
+  }
+
+  /**
+   * Build the products URL for one page of a category.
+   *
+   * Pagination is by `offset`, not `page` — the API silently ignores a `page`
+   * parameter and returns the first page every time, which is what a naive
+   * rewrite would have capped every category at 100 products.
+   */
+  private buildProductsUrl(category: CategoryConfig, offset: number): string {
+    const filter = /^\d+$/.test(category.id)
+      ? { categoryId: [Number(category.id)] }
+      : { categoryUrlKey: category.url };
+
+    const q = {
+      websiteCode: this.WEBSITE_CODE,
+      filter,
+      offset,
+      size: this.PAGE_SIZE,
+    };
+
+    return `${this.config.baseUrl}/product/v2/products?q=${encodeURIComponent(JSON.stringify(q))}`;
+  }
+
+  /**
+   * Fetch one page of a category. Returns null when the request itself failed,
+   * so the caller can tell a broken request from a genuinely empty category.
+   */
+  private async fetchProductPage(
+    category: CategoryConfig,
+    offset: number
+  ): Promise<LotussApiProduct[] | null> {
+    if (!this.page) {
+      throw new Error('Page not initialized');
+    }
+
+    const url = this.buildProductsUrl(category, offset);
+
+    try {
+      // Playwright's request context: carries the browser session and a real
+      // browser fingerprint. The API 403s clients it does not recognise.
+      const response = await this.page.request.get(url, { headers: this.apiHeaders });
+
+      if (!response.ok()) {
+        this.logError(
+          `Failed to fetch ${category.name} at offset ${offset}: ${response.status()} ${response.statusText()}`,
+          url
+        );
+        return null;
+      }
+
+      const body = await response.json();
+      const products = body?.data?.products;
+
+      if (!Array.isArray(products)) {
+        this.logError(
+          `Unexpected response shape for ${category.name} at offset ${offset}`,
+          url
+        );
+        return null;
+      }
+
+      return products as LotussApiProduct[];
+    } catch (error) {
+      this.logError(
+        `Failed to fetch ${category.name} at offset ${offset}`,
+        url,
+        error as Error
+      );
+      return null;
+    }
   }
 
   /**
@@ -486,9 +512,6 @@ export class LotussApiScraper extends BaseScraper {
    */
   async cleanup(): Promise<void> {
     this.logger.info(`Cleaning up Lotus's API scraper...`);
-
-    // Clear captured products
-    this.capturedProducts.clear();
 
     if (this.page) {
       // Unroute all to avoid errors from pending routes
