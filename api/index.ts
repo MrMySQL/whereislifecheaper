@@ -19,6 +19,8 @@ import canonicalRouter from '../src/api/routes/canonical';
 import scraperRouter from '../src/api/routes/scraper';
 import ratesRouter from '../src/api/routes/rates';
 import translateRouter from '../src/api/routes/translate';
+import rentRouter from '../src/api/routes/rent';
+import sitemapRouter from '../src/api/routes/sitemap';
 
 const app = express();
 
@@ -84,6 +86,7 @@ app.use('/api/scraper', scraperRouter);
 app.use('/api/canonical', canonicalRouter);
 app.use('/api/rates', ratesRouter);
 app.use('/api/translate', translateRouter);
+app.use('/api/rent', rentRouter);
 
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
@@ -92,6 +95,10 @@ app.use('/api/*', (req, res) => {
     message: `API route ${req.method} ${req.path} not found`,
   });
 });
+
+// SEO routes (sitemap.xml, robots.txt) - root paths, so they must be
+// registered after the /api/* 404 handler above.
+app.use('/', sitemapRouter);
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
