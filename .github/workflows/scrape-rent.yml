@@ -57,8 +57,22 @@ jobs:
           NODE_ENV: production
         run: npm run rent:aggregate
 
+      # The summary lives in logs/, which is gitignored and dies with the
+      # runner - keep a copy so per-source health is recoverable after the fact.
+      - name: Upload rent scrape summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rent-scrape-summary
+          path: logs/rent-scrape-summary.json
+          if-no-files-found: warn
+          retention-days: 30
+
       # Runs last, and only after the listings have been persisted and
       # aggregated, so a dead source reports loudly without costing us the
-      # data the surviving sources did collect.
+      # data the surviving sources did collect. `always()` because a failing
+      # aggregate step must not swallow the source-health verdict - the summary
+      # it reads is gone once the runner is torn down.
       - name: Check rent source health
+        if: always()
         run: npm run rent:check-sources

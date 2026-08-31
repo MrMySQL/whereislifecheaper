@@ -1,5 +1,5 @@
 import { scrapeRent, RentScrapeSummary } from '../src/scrapers/rent/RentScraperService';
-import { writeRentSummary } from '../src/scrapers/rent/summaryFile';
+import { clearRentSummary, writeRentSummary } from '../src/scrapers/rent/summaryFile';
 import { closePool } from '../src/config/database';
 import { logger } from '../src/utils/logger';
 
@@ -16,9 +16,24 @@ function report(summary: RentScrapeSummary): void {
   }
 }
 
+// Any summary still on disk is from an earlier run; the gate must not mistake
+// it for this one if this scrape dies before it writes.
+try {
+  clearRentSummary();
+} catch (e) {
+  logger.error('[rent] failed to clear the previous scrape summary (continuing):', e);
+}
+
 scrapeRent()
   .then(async (summary) => {
-    writeRentSummary(summary);
+    // Reporting I/O must never fail a scrape whose listings are already
+    // committed - an unwritable logs/ would otherwise send the run down the
+    // catch below and skip the aggregate step.
+    try {
+      writeRentSummary(summary);
+    } catch (e) {
+      logger.error('[rent] failed to write the scrape summary (continuing):', e);
+    }
     report(summary);
     await closePool();
     logger.info(
