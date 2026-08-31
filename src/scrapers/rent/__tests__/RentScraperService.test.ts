@@ -116,9 +116,9 @@ describe('scrapeRent source health reporting', () => {
 
     const summary = await scrapeRent();
 
-    expect(summary.regressions).toContain('olx');
+    expect(summary.regressions.map((r) => r.name)).toContain('olx');
     // flatfy is known-blocked, so its failure is not a regression
-    expect(summary.regressions).not.toContain('flatfy');
+    expect(summary.regressions.map((r) => r.name)).not.toContain('flatfy');
   });
 
   test('flags a known-blocked source that started working, so it can be promoted', async () => {
@@ -126,7 +126,20 @@ describe('scrapeRent source health reporting', () => {
 
     const summary = await scrapeRent();
 
-    expect(summary.recovered).toContain('flatfy');
+    expect(summary.recovered.map((r) => r.name)).toContain('flatfy');
+  });
+
+  test('a regression carries the target it failed for, not just the source name', async () => {
+    (scrapeOlx as jest.Mock).mockResolvedValue([]);
+    (scrapeDomria as jest.Mock).mockResolvedValue([{ ...rawListing, source: 'domria' }]);
+
+    const summary = await scrapeRent();
+
+    // The outcome list is keyed by (target, source) - a bare name cannot say
+    // which city died once a country has more than one.
+    expect(summary.regressions).toContainEqual(
+      expect.objectContaining({ name: 'olx', countryCode: 'UA', city: expect.any(String) }),
+    );
   });
 
   test('still throws when every source is dead', async () => {

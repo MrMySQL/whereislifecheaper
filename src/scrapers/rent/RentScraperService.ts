@@ -43,10 +43,16 @@ export interface SourceOutcome {
 
 export interface RentScrapeSummary {
   sources: SourceOutcome[];
-  /** Sources expected healthy that produced nothing - these fail the run. */
-  regressions: Source[];
-  /** Sources marked blocked that unexpectedly worked - promote them. */
-  recovered: Source[];
+  /**
+   * Outcomes expected healthy that produced nothing - these fail the run.
+   *
+   * Whole outcomes rather than source names: the list is keyed by
+   * (target, source), so with two cities in one country a bare 'olx' cannot say
+   * which one died, and looking it back up by name finds the wrong city.
+   */
+  regressions: SourceOutcome[];
+  /** Outcomes marked blocked that unexpectedly worked - promote them. */
+  recovered: SourceOutcome[];
   totalInserted: number;
 }
 
@@ -154,12 +160,8 @@ export async function scrapeRent(): Promise<RentScrapeSummary> {
     );
   }
 
-  const regressions = outcomes
-    .filter((o) => o.expected === 'healthy' && o.status !== 'ok')
-    .map((o) => o.name);
-  const recovered = outcomes
-    .filter((o) => o.expected === 'blocked' && o.status === 'ok')
-    .map((o) => o.name);
+  const regressions = outcomes.filter((o) => o.expected === 'healthy' && o.status !== 'ok');
+  const recovered = outcomes.filter((o) => o.expected === 'blocked' && o.status === 'ok');
 
   return { sources: outcomes, regressions, recovered, totalInserted };
 }
