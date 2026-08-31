@@ -79,6 +79,34 @@ describe('rent scrape summary file', () => {
     expect(summaryFile.readRentSummary()).toBeNull();
   });
 
+  test('returns null when an outcome is missing the fields the gate reads', () => {
+    // The arrays are the right shape, the entries are not: the gate would read
+    // `undefined` for status and expected and skip the source in silence, which
+    // is a green check for a run nobody judged.
+    writeRaw(JSON.stringify({ ...summary, sources: [{}], finishedAt: new Date().toISOString() }));
+    expect(summaryFile.readRentSummary()).toBeNull();
+  });
+
+  test('returns null for a null entry rather than letting the gate throw on it', () => {
+    writeRaw(
+      JSON.stringify({ ...summary, sources: [null], finishedAt: new Date().toISOString() }),
+    );
+    expect(summaryFile.readRentSummary()).toBeNull();
+  });
+
+  test('validates the regressions and recovered lists too', () => {
+    // `label(s)` on a malformed regression is where the gate crashes instead of
+    // reporting the source that died.
+    writeRaw(
+      JSON.stringify({
+        ...summary,
+        regressions: [{ name: 'olx' }],
+        finishedAt: new Date().toISOString(),
+      }),
+    );
+    expect(summaryFile.readRentSummary()).toBeNull();
+  });
+
   test('clearRentSummary removes a previous run so it cannot be read as this one', () => {
     summaryFile.writeRentSummary(summary);
     summaryFile.clearRentSummary();

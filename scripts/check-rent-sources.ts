@@ -47,8 +47,11 @@ function main(): void {
     return;
   }
 
+  // `ageMs < 0` too: a future-dated stamp is either a clock-skewed runner or a
+  // hand-edited file, and either way it is not evidence that this run wrote the
+  // summary - without it, `finishedAt: 3025-01-01` would sail through the gate.
   const ageMs = Date.now() - Date.parse(summary.finishedAt);
-  if (!Number.isFinite(ageMs) || ageMs > MAX_SUMMARY_AGE_MS) {
+  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_SUMMARY_AGE_MS) {
     annotate(
       'error',
       `The rent scrape summary at ${SUMMARY_PATH} is from ${summary.finishedAt}, ` +

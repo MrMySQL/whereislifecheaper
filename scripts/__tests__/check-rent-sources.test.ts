@@ -107,6 +107,38 @@ describe('rent source health gate', () => {
     expect(out).toMatch(/not from this run/);
   });
 
+  test('fails on a future-dated summary instead of treating it as fresh', () => {
+    // A skewed runner clock or a hand-edited file: the age is negative, which
+    // is not evidence that this run wrote the summary.
+    writeSummary({
+      finishedAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+      sources: [outcome()],
+      regressions: [],
+      recovered: [],
+      totalInserted: 10,
+    });
+
+    const { status, out } = runGate();
+
+    expect(status).toBe(1);
+    expect(out).toMatch(/not from this run/);
+  });
+
+  test('fails on a summary whose outcomes are missing the fields it reads', () => {
+    writeSummary({
+      sources: [{}],
+      regressions: [],
+      recovered: [],
+      totalInserted: 10,
+    });
+
+    const { status, out } = runGate();
+
+    expect(status).toBe(1);
+    expect(out).toMatch(/did the scrape step run\?/);
+    expect(out).not.toMatch(/all sources expected healthy are healthy/);
+  });
+
   test('names the failing city when two targets share a source name', () => {
     const kyiv = outcome();
     const lviv = outcome({ city: 'Lviv', status: 'dead', raw: 0, normalized: 0, inserted: 0 });

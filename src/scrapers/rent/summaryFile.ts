@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { RentScrapeSummary } from './RentScraperService';
+import type { RentScrapeSummary, SourceOutcome } from './RentScraperService';
 
 /**
  * Where `rent:scrape` leaves its per-source summary for `rent:check-sources`
@@ -63,10 +63,40 @@ function isStoredSummary(value: unknown): value is StoredRentSummary {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
-    Array.isArray(v.sources) &&
-    Array.isArray(v.regressions) &&
-    Array.isArray(v.recovered) &&
+    isOutcomeList(v.sources) &&
+    isOutcomeList(v.regressions) &&
+    isOutcomeList(v.recovered) &&
     typeof v.totalInserted === 'number' &&
     typeof v.finishedAt === 'string'
+  );
+}
+
+/**
+ * Every element, not just the array.
+ *
+ * The gate reads `s.status`, `s.expected` and `s.inserted` off each outcome to
+ * decide the verdict. An entry missing them - `[{}]` from a hand-edited file,
+ * `[null]` from a half-built summary - is not "no regressions"; it is a summary
+ * the gate cannot judge, and it would either skip the source silently or throw
+ * on `label(null)`. Rejecting the file sends it down the "did the scrape step
+ * run?" path instead, which fails the run loudly.
+ */
+function isOutcomeList(value: unknown): value is SourceOutcome[] {
+  return Array.isArray(value) && value.every(isSourceOutcome);
+}
+
+function isSourceOutcome(value: unknown): value is SourceOutcome {
+  if (typeof value !== 'object' || value === null) return false;
+  const s = value as Record<string, unknown>;
+  return (
+    typeof s.name === 'string' &&
+    typeof s.countryCode === 'string' &&
+    typeof s.city === 'string' &&
+    typeof s.expected === 'string' &&
+    typeof s.status === 'string' &&
+    typeof s.raw === 'number' &&
+    typeof s.normalized === 'number' &&
+    typeof s.inserted === 'number' &&
+    (s.error === undefined || typeof s.error === 'string')
   );
 }
