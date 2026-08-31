@@ -22,6 +22,7 @@ import canonicalRouter from './routes/canonical';
 import translateRouter from './routes/translate';
 import ratesRouter from './routes/rates';
 import rentRouter from './routes/rent';
+import healthRouter from './routes/health';
 import sitemapRouter from './routes/sitemap';
 
 const app = express();
@@ -79,23 +80,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
-app.get('/health', async (_req, res) => {
-  try {
-    const dbHealthy = await checkConnection();
-    res.json({
-      status: dbHealthy ? 'healthy' : 'degraded',
-      database: dbHealthy ? 'connected' : 'disconnected',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      database: 'error',
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
+// Health check - mounted at both paths in both entries; see routes/health.ts.
+app.use('/health', healthRouter);
+app.use('/api/health', healthRouter);
 
 // API routes
 app.use('/api/auth', authRouter);

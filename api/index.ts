@@ -4,7 +4,6 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { config } from '../src/config/env';
 import { apiLogger } from '../src/utils/logger';
-import { checkConnection } from '../src/config/database';
 import pool from '../src/config/database';
 
 // Auth imports
@@ -20,6 +19,7 @@ import scraperRouter from '../src/api/routes/scraper';
 import ratesRouter from '../src/api/routes/rates';
 import translateRouter from '../src/api/routes/translate';
 import rentRouter from '../src/api/routes/rent';
+import healthRouter from '../src/api/routes/health';
 import sitemapRouter from '../src/api/routes/sitemap';
 
 const app = express();
@@ -58,23 +58,9 @@ initializePassport();
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Health check endpoint
-app.get('/api/health', async (_req, res) => {
-  try {
-    const dbHealthy = await checkConnection();
-    res.json({
-      status: dbHealthy ? 'healthy' : 'degraded',
-      database: dbHealthy ? 'connected' : 'disconnected',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      database: 'error',
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
+// Health check - mounted at both paths in both entries; see routes/health.ts.
+app.use('/health', healthRouter);
+app.use('/api/health', healthRouter);
 
 // API routes
 app.use('/api/auth', authRouter);
