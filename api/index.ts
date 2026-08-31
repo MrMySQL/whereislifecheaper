@@ -4,7 +4,6 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { config } from '../src/config/env';
 import { apiLogger } from '../src/utils/logger';
-import { checkConnection } from '../src/config/database';
 import pool from '../src/config/database';
 
 // Auth imports
@@ -19,6 +18,9 @@ import canonicalRouter from '../src/api/routes/canonical';
 import scraperRouter from '../src/api/routes/scraper';
 import ratesRouter from '../src/api/routes/rates';
 import translateRouter from '../src/api/routes/translate';
+import rentRouter from '../src/api/routes/rent';
+import healthRouter from '../src/api/routes/health';
+import sitemapRouter from '../src/api/routes/sitemap';
 
 const app = express();
 
@@ -56,23 +58,10 @@ initializePassport();
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Health check endpoint
-app.get('/api/health', async (_req, res) => {
-  try {
-    const dbHealthy = await checkConnection();
-    res.json({
-      status: dbHealthy ? 'healthy' : 'degraded',
-      database: dbHealthy ? 'connected' : 'disconnected',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      database: 'error',
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
+// Health check. Only `/api/health` here: vercel.json rewrites every other path
+// to the SPA shell, so a root-level `/health` in this function would never be
+// reached. See routes/health.ts.
+app.use('/api/health', healthRouter);
 
 // API routes
 app.use('/api/auth', authRouter);
@@ -84,6 +73,7 @@ app.use('/api/scraper', scraperRouter);
 app.use('/api/canonical', canonicalRouter);
 app.use('/api/rates', ratesRouter);
 app.use('/api/translate', translateRouter);
+app.use('/api/rent', rentRouter);
 
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
@@ -92,6 +82,10 @@ app.use('/api/*', (req, res) => {
     message: `API route ${req.method} ${req.path} not found`,
   });
 });
+
+// SEO routes (sitemap.xml, robots.txt) - root paths, so they must be
+// registered after the /api/* 404 handler above.
+app.use('/', sitemapRouter);
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -21,6 +21,7 @@
     "rates:sync": "ts-node scripts/sync-exchange-rates.ts",
     "rent:scrape": "ts-node scripts/scrape-rent.ts",
     "rent:aggregate": "ts-node scripts/aggregate-rent.ts",
+    "rent:check-sources": "ts-node scripts/check-rent-sources.ts",
     "docker:run": "docker run --rm --network host --env-file .env whereislifecheaper-scraper:latest",
     "docker:build": "docker build -t whereislifecheaper-scraper .",
     "aws:deploy": "scripts/deploy-ecr.sh",

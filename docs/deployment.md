@@ -574,7 +574,8 @@ DATABASE_URL=postgresql://user:pass@host:5432/db?sslmode=require
 ### Health Check
 
 ```bash
-curl https://your-domain.vercel.app/health
+# /health is the long-running server; on Vercel the SPA rewrite owns root paths
+curl https://your-domain.vercel.app/api/health
 ```
 
 Response:
