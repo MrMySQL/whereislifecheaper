@@ -15,20 +15,59 @@ interface CountryRow {
   currency_code: string;
 }
 
+/**
+ * What we currently believe about a source.
+ *
+ * 'healthy' - has been returning listings; if it stops, that is a regression
+ *             and the run must go red.
+ * 'blocked' - known to be walled off by the portal's bot protection and has
+ *             never returned a listing. Its failure is expected, so it does not
+ *             fail the run - but it is still reported every time, and if it
+ *             ever starts working it is flagged for promotion to 'healthy'.
+ */
+export type SourceExpectation = 'healthy' | 'blocked';
+
+export type SourceStatus = 'ok' | 'dead' | 'error';
+
+export interface SourceOutcome {
+  name: Source;
+  countryCode: string;
+  city: string;
+  expected: SourceExpectation;
+  status: SourceStatus;
+  raw: number;
+  normalized: number;
+  inserted: number;
+  error?: string;
+}
+
+export interface RentScrapeSummary {
+  sources: SourceOutcome[];
+  /** Sources expected healthy that produced nothing - these fail the run. */
+  regressions: Source[];
+  /** Sources marked blocked that unexpectedly worked - promote them. */
+  recovered: Source[];
+  totalInserted: number;
+}
+
 interface SourceConfig {
   name: Source;
   scrape: () => Promise<ListingRaw[]>;
+  expect: SourceExpectation;
 }
 
 const SOURCES_BY_COUNTRY: Record<string, SourceConfig[]> = {
   UA: [
-    { name: 'olx', scrape: scrapeOlx },
-    { name: 'domria', scrape: scrapeDomria },
-    { name: 'flatfy', scrape: () => scrapeFlatfy() },
+    { name: 'olx', scrape: scrapeOlx, expect: 'healthy' },
+    { name: 'domria', scrape: scrapeDomria, expect: 'healthy' },
+    // DataDome wall - has returned 0 listings on every run since it was added.
+    { name: 'flatfy', scrape: () => scrapeFlatfy(), expect: 'blocked' },
   ],
   AU: [
-    { name: 'realestateau', scrape: scrapeRealestateAu },
-    { name: 'domainau', scrape: scrapeDomainAu },
+    // realestate.com.au answers 429 and domain.com.au 403 to the scraper's
+    // requests; neither has ever produced a listing, headless or headed.
+    { name: 'realestateau', scrape: scrapeRealestateAu, expect: 'blocked' },
+    { name: 'domainau', scrape: scrapeDomainAu, expect: 'blocked' },
   ],
 };
 
@@ -36,11 +75,17 @@ const SOURCES_BY_COUNTRY: Record<string, SourceConfig[]> = {
  * Scrape configured city/country rental sources, normalize to each country's
  * currency, and persist. Each source is wrapped in try/catch so a failure of one
  * protected portal does not abort the others.
+ *
+ * Returns a per-source summary so the caller can tell a genuinely healthy run
+ * from one where most sources are silently dead. The run still only *throws*
+ * when nothing at all was usable - a partial failure must not stop the caller
+ * from aggregating the listings that did land.
  */
-export async function scrapeRent(): Promise<void> {
+export async function scrapeRent(): Promise<RentScrapeSummary> {
   const repo = new RentalListingRepository();
   const rates = await loadRatesToEur();
 
+  const outcomes: SourceOutcome[] = [];
   let usableSources = 0;
   let totalRaw = 0;
   let totalNormalized = 0;
@@ -55,22 +100,38 @@ export async function scrapeRent(): Promise<void> {
     const toLocal = buildLocalConverter(rates, country.currency_code);
     const sources = SOURCES_BY_COUNTRY[target.countryCode] ?? [];
 
-    for (const { name, scrape } of sources) {
+    for (const { name, scrape, expect } of sources) {
+      const outcome: SourceOutcome = {
+        name,
+        countryCode: target.countryCode,
+        city: target.city,
+        expected: expect,
+        status: 'dead',
+        raw: 0,
+        normalized: 0,
+        inserted: 0,
+      };
+      outcomes.push(outcome);
+
       try {
         logger.info(`[rent] scraping ${target.countryCode}/${target.city}/${name}...`);
         const raw = await scrape();
+        outcome.raw = raw.length;
         totalRaw += raw.length;
         const normalized: RentListingNormalized[] = [];
         for (const r of raw) {
           const n = normalizeListing(r, toLocal, country.currency_code);
           if (n) normalized.push(n);
         }
+        outcome.normalized = normalized.length;
         totalNormalized += normalized.length;
         if (normalized.length === 0) {
           logger.error(`[rent] ${name}: ${raw.length} raw, 0 normalized; skipping insert`);
           continue;
         }
         const inserted = await repo.insertMany(country.id, target.city, normalized);
+        outcome.inserted = inserted;
+        outcome.status = 'ok';
         usableSources++;
         totalInserted += inserted;
         logger.info(
@@ -78,6 +139,8 @@ export async function scrapeRent(): Promise<void> {
             `${normalized.length} normalized, ${inserted} inserted`,
         );
       } catch (err) {
+        outcome.status = 'error';
+        outcome.error = err instanceof Error ? err.message : String(err);
         failedSources++;
         logger.error(`[rent] ${target.countryCode}/${name} failed (continuing with remaining sources):`, err);
       }
@@ -90,6 +153,15 @@ export async function scrapeRent(): Promise<void> {
         `(raw=${totalRaw}, normalized=${totalNormalized}, inserted=${totalInserted}, failedSources=${failedSources})`,
     );
   }
+
+  const regressions = outcomes
+    .filter((o) => o.expected === 'healthy' && o.status !== 'ok')
+    .map((o) => o.name);
+  const recovered = outcomes
+    .filter((o) => o.expected === 'blocked' && o.status === 'ok')
+    .map((o) => o.name);
+
+  return { sources: outcomes, regressions, recovered, totalInserted };
 }
 
 async function loadCountry(target: RentTarget): Promise<CountryRow & { id: number }> {

@@ -56,3 +56,9 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NODE_ENV: production
         run: npm run rent:aggregate
+
+      # Runs last, and only after the listings have been persisted and
+      # aggregated, so a dead source reports loudly without costing us the
+      # data the surviving sources did collect.
+      - name: Check rent source health
+        run: npm run rent:check-sources
