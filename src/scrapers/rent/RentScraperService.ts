@@ -73,12 +73,15 @@ const SOURCES_BY_COUNTRY: Record<string, SourceConfig[]> = {
     // realestate.com.au sits behind Kasada (the 429 carries x-kpsdk-* headers),
     // which no header set alone gets past.
     { name: 'realestateau', scrape: scrapeRealestateAu, expect: 'blocked' },
-    // domain.com.au was never actually blocked - the 403 it was marked for came
-    // from a bare curl, and the Playwright fetch it really used was silently
-    // returning a page with no `__NEXT_DATA__`. Fetched over plain HTTP with
-    // browser headers it serves the full payload, so a zero here is a real
-    // regression again.
-    { name: 'domainau', scrape: scrapeDomainAu, expect: 'healthy' },
+    // domain.com.au is blocked by *where the job runs*, not by the scraper.
+    // Over plain HTTP with browser headers it serves the full payload and
+    // yields ~150 Sydney listings - verified from a residential IP. From a
+    // GitHub Actions runner the identical request is refused with a 403 in
+    // under a second, so Akamai is judging the Azure egress range, not the
+    // request. Give the job a non-datacenter egress and this becomes 'healthy';
+    // until then its failure is expected, and the 'recovered' check will say so
+    // the moment a run does get through.
+    { name: 'domainau', scrape: scrapeDomainAu, expect: 'blocked' },
   ],
 };
 

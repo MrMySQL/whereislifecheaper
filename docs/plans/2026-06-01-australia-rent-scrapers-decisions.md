@@ -29,7 +29,7 @@ The "both portals block us" conclusion above was half wrong, and the note that
   actually failing was Playwright: `#__NEXT_DATA__` never appeared in the page
   it fetched, headless or headed under xvfb, so the parser - which was correct
   all along - had nothing to read. `scrape-domain-au.ts` now fetches over plain
-  HTTP and the source is marked `healthy`.
+  HTTP, which yields ~150 Sydney listings from a residential IP.
 - `realestate.com.au` is genuinely walled: the 429 carries Kasada `x-kpsdk-*`
   headers, and no header set alone gets past it. It stays `blocked`.
 - Its list URL also read `in-sydney%2Besw` ('esw' is not a state) from the first
@@ -41,3 +41,17 @@ The "both portals block us" conclusion above was half wrong, and the note that
 Lesson: a `curl` 403 says nothing about what the browser-based scraper is
 getting. The scrapers logged listing counts but never the HTTP status, so a
 guess about the cause sat in a code comment for three months.
+
+### Where it still fails: the egress, not the scraper
+
+A `workflow_dispatch` run on a GitHub Actions runner (33467139635) got a 403 on
+page 1 in under a second - same Node `fetch`, same headers, same commit that
+returns 200 locally. Akamai is judging the runner's Azure IP range, not the
+request, so no amount of header or browser work fixes it from CI.
+
+`domainau` therefore stays `blocked`: its failure is expected *in this
+environment*. It is not the old "we think the portal walls us off" blocked - the
+scraper is known-good, and the summary now reports `HTTP 403` rather than
+`0 raw`, so the reason is on the run page every week. Giving the job a
+non-datacenter egress (a residential/AU proxy, or running the rent scrape from a
+host outside a cloud range) is the one change that would let it be `healthy`.
