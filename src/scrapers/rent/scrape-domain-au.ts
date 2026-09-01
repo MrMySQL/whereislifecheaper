@@ -17,12 +17,22 @@ const POLITE_DELAY_MS = 2500;
  *
  * A bare request (no Accept-Language, no Sec-Fetch-*, no client hints) gets a
  * 403, so these headers are load-bearing rather than decorative.
+ *
+ * `Accept-Encoding` is the load-bearing one, and it is set explicitly rather
+ * than left to the runtime on purpose. Akamai wants Brotli advertised, the way
+ * a real Chrome does: `gzip, deflate, br` is served, plain `gzip, deflate` is
+ * refused with a 403. Node's own default differs by version - Node 26 sends
+ * `br, gzip, deflate, zstd` and works, Node 20 (what CI runs) does not include
+ * `br` and got the 403 that first looked like the runner's IP being blocked.
+ * Pinning it here makes the request identical on every Node. undici still
+ * decompresses the response when the header is set by hand.
  */
-const HEADERS: Record<string, string> = {
+export const HEADERS: Record<string, string> = {
   'User-Agent':
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
   'Accept-Language': 'en-AU,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
   'sec-ch-ua': '"Chromium";v="120", "Not(A:Brand";v="24", "Google Chrome";v="120"',
   'sec-ch-ua-mobile': '?0',
   'sec-ch-ua-platform': '"macOS"',

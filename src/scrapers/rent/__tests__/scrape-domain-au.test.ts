@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { scrapeDomainAu } from '../scrape-domain-au';
+import { HEADERS, scrapeDomainAu } from '../scrape-domain-au';
 
 function fixture(name: string): string {
   return fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
@@ -43,6 +43,15 @@ describe('scrapeDomainAu', () => {
     // separate a served page from a refused one.
     expect(headers['Accept-Language']).toMatch(/en-AU/);
     expect(headers['Sec-Fetch-Mode']).toBe('navigate');
+  });
+
+  test('advertises Brotli explicitly rather than inheriting the runtime default', () => {
+    // This one header decides the response: `gzip, deflate, br` is served,
+    // `gzip, deflate` is refused with a 403. Node's default differs by version
+    // (20 omits `br`, 26 includes it), which is what made the same code pass
+    // locally and 403 in CI. Pinned here so no runtime can change the request.
+    const headers = HEADERS as Record<string, string>;
+    expect(headers['Accept-Encoding']).toBe('gzip, deflate, br');
   });
 
   test('paginates and de-duplicates listings across pages', async () => {

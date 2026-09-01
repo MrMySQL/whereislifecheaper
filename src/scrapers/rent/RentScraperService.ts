@@ -73,14 +73,14 @@ const SOURCES_BY_COUNTRY: Record<string, SourceConfig[]> = {
     // realestate.com.au sits behind Kasada (the 429 carries x-kpsdk-* headers),
     // which no header set alone gets past.
     { name: 'realestateau', scrape: scrapeRealestateAu, expect: 'blocked' },
-    // domain.com.au is blocked by *where the job runs*, not by the scraper.
-    // Over plain HTTP with browser headers it serves the full payload and
-    // yields ~150 Sydney listings - verified from a residential IP. From a
-    // GitHub Actions runner the identical request is refused with a 403 in
-    // under a second, so Akamai is judging the Azure egress range, not the
-    // request. Give the job a non-datacenter egress and this becomes 'healthy';
-    // until then its failure is expected, and the 'recovered' check will say so
-    // the moment a run does get through.
+    // domain.com.au works over plain HTTP with browser headers (~200 Sydney
+    // listings locally). CI's 403 looked like the runner's IP being blocked,
+    // but it was the request: Akamai refuses a client that does not advertise
+    // Brotli, and Node 20 - what CI runs - leaves `br` out of its default
+    // Accept-Encoding where Node 26 includes it. The header is now pinned in
+    // the scraper, so the runner should send exactly what works locally.
+    // Left 'blocked' only until a CI run confirms that; the 'recovered' check
+    // will flag it for promotion on the first run that gets through.
     { name: 'domainau', scrape: scrapeDomainAu, expect: 'blocked' },
   ],
 };

@@ -42,16 +42,29 @@ Lesson: a `curl` 403 says nothing about what the browser-based scraper is
 getting. The scrapers logged listing counts but never the HTTP status, so a
 guess about the cause sat in a code comment for three months.
 
-### Where it still fails: the egress, not the scraper
+### The CI 403 was Brotli, not the IP
 
-A `workflow_dispatch` run on a GitHub Actions runner (33467139635) got a 403 on
-page 1 in under a second - same Node `fetch`, same headers, same commit that
-returns 200 locally. Akamai is judging the runner's Azure IP range, not the
-request, so no amount of header or browser work fixes it from CI.
+A `workflow_dispatch` run (33467139635) got a 403 on page 1 in under a second,
+which looked conclusively like Akamai judging the runner's Azure IP range. It
+was not. Bisecting the header set showed one header decides the response:
 
-`domainau` therefore stays `blocked`: its failure is expected *in this
-environment*. It is not the old "we think the portal walls us off" blocked - the
-scraper is known-good, and the summary now reports `HTTP 403` rather than
-`0 raw`, so the reason is on the run page every week. Giving the job a
-non-datacenter egress (a residential/AU proxy, or running the rent scrape from a
-host outside a cloud range) is the one change that would let it be `healthy`.
+| Accept-Encoding | Result |
+|---|---|
+| `gzip, deflate, br` | 200, full payload |
+| `gzip, deflate` (curl `--compressed`) | 403 |
+| absent | 403 |
+
+Akamai wants Brotli advertised, the way a real Chrome does. The scraper never
+set `Accept-Encoding`, so it inherited the runtime default - and that default
+differs by Node version: Node 26 sends `br, gzip, deflate, zstd`, Node 20 (what
+CI runs) omits `br`. Same code, same headers, different Node, opposite result.
+
+The header is now pinned explicitly in the scraper rather than inherited, so
+every runtime sends the request that works. `scripts/check-domain-egress.sh`
+tests any host's egress the same way - note it must not use curl's
+`--compressed`, which omits `br` and reports a working egress as a 403.
+
+Second lesson, after the curl-vs-Playwright one above: "the datacenter IP is
+blocked" is the same shape of guess as "the portal blocks us" - plausible,
+matches the symptom, and wrong. Bisecting the actual request beat reasoning
+about who owns the address space.
