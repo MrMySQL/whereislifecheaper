@@ -2,7 +2,11 @@ import { chromium, Browser, Page } from 'playwright';
 import { parseRealestateAuListPage } from './parse-realestate-au';
 import { ListingRaw } from './types';
 
-const BASE_URL = 'https://www.realestate.com.au/rent/in-sydney%2Besw/list-';
+// `%2B` is the '+' joining suburb and state: `in-sydney+nsw`. This read
+// `%2Besw` from the first commit onwards - 'esw' is not a state, so the region
+// never resolved. Kasada refuses the request before the path matters today,
+// but the URL has to be right for any anti-bot work to be worth doing.
+const BASE_URL = 'https://www.realestate.com.au/rent/in-sydney%2Bnsw/list-';
 const MAX_PAGES = 20;
 const TARGET_LISTINGS = 500;
 const POLITE_DELAY_MS = 2500;

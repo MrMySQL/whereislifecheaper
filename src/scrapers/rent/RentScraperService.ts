@@ -70,10 +70,15 @@ const SOURCES_BY_COUNTRY: Record<string, SourceConfig[]> = {
     { name: 'flatfy', scrape: () => scrapeFlatfy(), expect: 'blocked' },
   ],
   AU: [
-    // realestate.com.au answers 429 and domain.com.au 403 to the scraper's
-    // requests; neither has ever produced a listing, headless or headed.
+    // realestate.com.au sits behind Kasada (the 429 carries x-kpsdk-* headers),
+    // which no header set alone gets past.
     { name: 'realestateau', scrape: scrapeRealestateAu, expect: 'blocked' },
-    { name: 'domainau', scrape: scrapeDomainAu, expect: 'blocked' },
+    // domain.com.au was never actually blocked - the 403 it was marked for came
+    // from a bare curl, and the Playwright fetch it really used was silently
+    // returning a page with no `__NEXT_DATA__`. Fetched over plain HTTP with
+    // browser headers it serves the full payload, so a zero here is a real
+    // regression again.
+    { name: 'domainau', scrape: scrapeDomainAu, expect: 'healthy' },
   ],
 };
 
