@@ -27,8 +27,8 @@ const REQUEST_TIMEOUT_MS = 60000;
  * 403, so these headers are load-bearing rather than decorative.
  *
  * `Accept-Encoding` must advertise Brotli, the way a real Chrome does:
- * `gzip, deflate, br` is served, plain `gzip, deflate` (curl's `--compressed`)
- * is refused with a 403. It is pinned here rather than inherited so the
+ * `gzip, deflate, br` is served, plain `gzip, deflate` is refused with a 403.
+ * It is pinned here rather than inherited so the
  * request cannot change under us with a Node upgrade; every Node we run today
  * already defaults to including `br`, so this is insurance, not the fix for
  * anything. undici still decompresses when the header is set by hand.

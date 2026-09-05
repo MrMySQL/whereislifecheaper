@@ -6,8 +6,13 @@
 # `Accept-Encoding: gzip, deflate, br` is the one that decides it - Akamai wants
 # Brotli advertised. Both flags below are needed: the explicit -H is what goes
 # on the wire, and --compressed only makes curl decompress the reply so the
-# greps below see markup. Do NOT drop the -H and rely on --compressed alone -
-# it advertises `deflate, gzip`, turning a working egress into a 403.
+# greps below see markup.
+#
+# Do NOT drop the -H and rely on --compressed alone. It advertises whatever
+# encodings this curl binary was built with, so the answer changes per machine:
+# macOS system curl (Features: libz, no brotli) sends `deflate, gzip` and a
+# working egress reports 403, while a brotli-enabled build sends `br` and
+# passes. The explicit header is what makes this script's verdict portable.
 # 200 + a non-empty __NEXT_DATA__ count = this egress works for the scraper.
 URL='https://www.domain.com.au/rent/sydney-nsw-2000/?page=1'
 BODY=$(mktemp)

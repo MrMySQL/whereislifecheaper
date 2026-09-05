@@ -56,7 +56,7 @@ one header really does decide the response:
 | Accept-Encoding | Result (residential IP) |
 |---|---|
 | `gzip, deflate, br` | 200, full payload |
-| `gzip, deflate` (curl `--compressed` alone) | 403 |
+| `gzip, deflate` (see note on `--compressed` below) | 403 |
 | absent | 403 |
 
 That finding is real and reproducible. The inference drawn from it was not:
@@ -83,9 +83,18 @@ No change to the scraper can fix this; it needs a non-datacenter egress.
 `--compressed` and an explicit `-H 'Accept-Encoding: gzip, deflate, br'`, and
 needs both: the explicit header wins on the wire (curl sends exactly it), while
 `--compressed` only tells curl to decompress the reply so the `grep` for
-`__NEXT_DATA__` sees markup instead of Brotli bytes. Dropping the explicit
-header and leaving `--compressed` alone is the trap - curl then advertises
-`deflate, gzip`, and a perfectly good egress reports as a 403.
+`__NEXT_DATA__` sees markup instead of Brotli bytes.
+
+Keep the explicit header even though `--compressed` looks like it would do the
+job, because what `--compressed` advertises is a property of the curl *build*,
+not of curl. It sets `CURLOPT_ACCEPT_ENCODING` to the empty string, which means
+"every encoding this binary was compiled with" - `br` only on a brotli-enabled
+build, `zstd` only on a zstd-enabled one. The 403 row in the table above was
+measured with macOS's system curl 8.7.1, whose `Features:` line lists `libz`
+alone, so `--compressed` sent `deflate, gzip` and the request was refused. A
+Homebrew curl built with brotli would have sent `br` and quietly passed. The
+explicit header is what makes the script give the same answer on any machine
+you run it from, which is the entire point of a diagnostic.
 
 Railway was the obvious candidate to test and was not tested: `railway ssh` and
 `railway sandbox create` were both blocked by the local permission policy, and
