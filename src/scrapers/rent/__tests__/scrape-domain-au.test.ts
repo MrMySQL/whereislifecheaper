@@ -1,6 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { parseDomainAuListPage } from '../parse-domain-au';
 import { HEADERS, scrapeDomainAu } from '../scrape-domain-au';
+
+const BASE = 'https://www.domain.com.au';
 
 function fixture(name: string): string {
   return fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
@@ -31,7 +34,7 @@ describe('scrapeDomainAu', () => {
     // browser here is what made this source look permanently blocked.
     fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(ok(''));
 
-    const listings = await scrapeDomainAu();
+    const { listings } = await scrapeDomainAu();
 
     expect(listings.length).toBeGreaterThan(0);
     expect(listings[0].source).toBe('domainau');
@@ -54,17 +57,29 @@ describe('scrapeDomainAu', () => {
     expect(headers['Accept-Encoding']).toBe('gzip, deflate, br');
   });
 
-  test('paginates and de-duplicates listings across pages', async () => {
+  test('appends new listings from later pages and de-duplicates the overlap', async () => {
+    // Page 2 has to differ from page 1, or the scraper breaks on `newCount === 0`
+    // and the dedup assertion passes without a second page ever contributing.
+    // This overlaps one listing and introduces one, so both halves are exercised.
+    const firstPage = parseDomainAuListPage(listPage);
+    const carriedOver = firstPage[0].url;
+    const introduced = 'https://www.domain.com.au/1-new-street-sydney-nsw-2000-99999999';
+    const secondPage = listPage.replace(firstPage[1].url.replace(BASE, ''), introduced.replace(BASE, ''));
+
     fetchMock
       .mockResolvedValueOnce(ok(listPage))
-      .mockResolvedValueOnce(ok(listPage)) // same page again -> no new listings
+      .mockResolvedValueOnce(ok(secondPage))
       .mockResolvedValue(ok(''));
 
-    const listings = await scrapeDomainAu();
+    const { listings } = await scrapeDomainAu();
     const urls = listings.map((l) => l.url);
 
     expect(new Set(urls).size).toBe(urls.length);
-  });
+    expect(urls.filter((u) => u === carriedOver)).toHaveLength(1);
+    expect(urls).toContain(introduced);
+    expect(urls.length).toBe(firstPage.length + 1);
+    // Three real fetches, each followed by the polite delay, outruns Jest's 5s default.
+  }, 15000);
 
   test('reports the HTTP status when the first page is refused', async () => {
     // The old scraper swallowed this and returned [], which the summary logged
@@ -78,8 +93,40 @@ describe('scrapeDomainAu', () => {
   test('keeps the pages it already has when a later page is refused', async () => {
     fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(status(429));
 
-    const listings = await scrapeDomainAu();
+    const { listings } = await scrapeDomainAu();
 
     expect(listings.length).toBeGreaterThan(0);
+  });
+
+  test('marks a truncated scrape degraded rather than passing it off as clean', () => {
+    // A partial sample is a slice of an ordered result set, so it skews the
+    // median the aggregate computes - and, for a source still marked 'blocked',
+    // a plain 'ok' would report it as recovered and invite promotion.
+    return (async () => {
+      fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(status(403));
+
+      const { listings, degraded } = await scrapeDomainAu();
+
+      expect(listings.length).toBeGreaterThan(0);
+      expect(degraded).toMatch(/403/);
+      expect(degraded).toMatch(/partial/);
+    })();
+  });
+
+  test('leaves degraded unset for a scrape that ran to the end', async () => {
+    fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(ok(''));
+
+    const { degraded } = await scrapeDomainAu();
+
+    expect(degraded).toBeUndefined();
+  });
+
+  test('bounds each request so a stalled portal cannot hang the whole rent run', async () => {
+    fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(ok(''));
+
+    await scrapeDomainAu();
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 });

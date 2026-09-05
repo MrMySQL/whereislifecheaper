@@ -56,7 +56,7 @@ one header really does decide the response:
 | Accept-Encoding | Result (residential IP) |
 |---|---|
 | `gzip, deflate, br` | 200, full payload |
-| `gzip, deflate` (curl `--compressed`) | 403 |
+| `gzip, deflate` (curl `--compressed` alone) | 403 |
 | absent | 403 |
 
 That finding is real and reproducible. The inference drawn from it was not:
@@ -79,8 +79,13 @@ No client gets the real page from that egress, and every client gets it from a
 residential one. So it is the egress after all - wrong answer 1 was right by
 accident, having been believed for a bad reason before any evidence existed.
 No change to the scraper can fix this; it needs a non-datacenter egress.
-`scripts/check-domain-egress.sh` tests any candidate host (do not swap in curl's
-`--compressed` - it drops `br` and reports a good egress as a 403).
+`scripts/check-domain-egress.sh` tests any candidate host. It passes both
+`--compressed` and an explicit `-H 'Accept-Encoding: gzip, deflate, br'`, and
+needs both: the explicit header wins on the wire (curl sends exactly it), while
+`--compressed` only tells curl to decompress the reply so the `grep` for
+`__NEXT_DATA__` sees markup instead of Brotli bytes. Dropping the explicit
+header and leaving `--compressed` alone is the trap - curl then advertises
+`deflate, gzip`, and a perfectly good egress reports as a 403.
 
 Railway was the obvious candidate to test and was not tested: `railway ssh` and
 `railway sandbox create` were both blocked by the local permission policy, and

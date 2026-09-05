@@ -116,7 +116,7 @@ const SOURCE_NAMES = keysOf<Source>({
 
 const EXPECTATIONS = keysOf<SourceExpectation>({ healthy: true, blocked: true });
 
-const STATUSES = keysOf<SourceStatus>({ ok: true, dead: true, error: true });
+const STATUSES = keysOf<SourceStatus>({ ok: true, degraded: true, dead: true, error: true });
 
 function keysOf<T extends string>(members: Record<T, true>): ReadonlySet<string> {
   return new Set(Object.keys(members));

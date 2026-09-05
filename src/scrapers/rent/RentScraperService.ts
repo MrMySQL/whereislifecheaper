@@ -27,7 +27,29 @@ interface CountryRow {
  */
 export type SourceExpectation = 'healthy' | 'blocked';
 
-export type SourceStatus = 'ok' | 'dead' | 'error';
+/**
+ * 'ok'       - scraped, normalized and stored a complete sample.
+ * 'degraded' - stored real listings, but the source refused partway through
+ *              pagination, so the sample is a truncated slice of the results
+ *              rather than the whole search. Deliberately not 'ok': the list
+ *              pages are ordered, so a truncated sample skews the median the
+ *              aggregate computes, and a source that half-refuses must not be
+ *              reported as having recovered.
+ * 'dead'     - returned nothing usable.
+ * 'error'    - threw.
+ */
+export type SourceStatus = 'ok' | 'degraded' | 'dead' | 'error';
+
+/**
+ * What a scraper hands back. The bare array is the common case; the object form
+ * lets a scraper say "these listings are real, but the source cut me off", which
+ * a bare array has no way to express.
+ */
+export interface ScrapeResult {
+  listings: ListingRaw[];
+  /** Why the sample is partial. Present only for a truncated scrape. */
+  degraded?: string;
+}
 
 export interface SourceOutcome {
   name: Source;
@@ -58,7 +80,7 @@ export interface RentScrapeSummary {
 
 interface SourceConfig {
   name: Source;
-  scrape: () => Promise<ListingRaw[]>;
+  scrape: () => Promise<ListingRaw[] | ScrapeResult>;
   expect: SourceExpectation;
 }
 
@@ -129,7 +151,9 @@ export async function scrapeRent(): Promise<RentScrapeSummary> {
 
       try {
         logger.info(`[rent] scraping ${target.countryCode}/${target.city}/${name}...`);
-        const raw = await scrape();
+        const result = await scrape();
+        const raw = Array.isArray(result) ? result : result.listings;
+        const degraded = Array.isArray(result) ? undefined : result.degraded;
         outcome.raw = raw.length;
         totalRaw += raw.length;
         const normalized: RentListingNormalized[] = [];
@@ -145,7 +169,8 @@ export async function scrapeRent(): Promise<RentScrapeSummary> {
         }
         const inserted = await repo.insertMany(country.id, target.city, normalized);
         outcome.inserted = inserted;
-        outcome.status = 'ok';
+        outcome.status = degraded ? 'degraded' : 'ok';
+        if (degraded) outcome.error = degraded;
         usableSources++;
         totalInserted += inserted;
         logger.info(

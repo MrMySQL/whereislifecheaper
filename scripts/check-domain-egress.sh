@@ -4,8 +4,10 @@
 # The headers are load-bearing: a bare curl gets a 403 from an IP that is
 # otherwise served just fine, so testing without them tells you nothing.
 # `Accept-Encoding: gzip, deflate, br` is the one that decides it - Akamai wants
-# Brotli advertised. Do NOT swap it for curl's --compressed, which omits `br`
-# and turns a working egress into a 403.
+# Brotli advertised. Both flags below are needed: the explicit -H is what goes
+# on the wire, and --compressed only makes curl decompress the reply so the
+# greps below see markup. Do NOT drop the -H and rely on --compressed alone -
+# it advertises `deflate, gzip`, turning a working egress into a 403.
 # 200 + a non-empty __NEXT_DATA__ count = this egress works for the scraper.
 URL='https://www.domain.com.au/rent/sydney-nsw-2000/?page=1'
 BODY=$(mktemp)
