@@ -27,7 +27,29 @@ interface CountryRow {
  */
 export type SourceExpectation = 'healthy' | 'blocked';
 
-export type SourceStatus = 'ok' | 'dead' | 'error';
+/**
+ * 'ok'       - scraped, normalized and stored a complete sample.
+ * 'degraded' - stored real listings, but the source refused partway through
+ *              pagination, so the sample is a truncated slice of the results
+ *              rather than the whole search. Deliberately not 'ok': the list
+ *              pages are ordered, so a truncated sample skews the median the
+ *              aggregate computes, and a source that half-refuses must not be
+ *              reported as having recovered.
+ * 'dead'     - returned nothing usable.
+ * 'error'    - threw.
+ */
+export type SourceStatus = 'ok' | 'degraded' | 'dead' | 'error';
+
+/**
+ * What a scraper hands back. The bare array is the common case; the object form
+ * lets a scraper say "these listings are real, but the source cut me off", which
+ * a bare array has no way to express.
+ */
+export interface ScrapeResult {
+  listings: ListingRaw[];
+  /** Why the sample is partial. Present only for a truncated scrape. */
+  degraded?: string;
+}
 
 export interface SourceOutcome {
   name: Source;
@@ -58,7 +80,7 @@ export interface RentScrapeSummary {
 
 interface SourceConfig {
   name: Source;
-  scrape: () => Promise<ListingRaw[]>;
+  scrape: () => Promise<ListingRaw[] | ScrapeResult>;
   expect: SourceExpectation;
 }
 
@@ -70,9 +92,17 @@ const SOURCES_BY_COUNTRY: Record<string, SourceConfig[]> = {
     { name: 'flatfy', scrape: () => scrapeFlatfy(), expect: 'blocked' },
   ],
   AU: [
-    // realestate.com.au answers 429 and domain.com.au 403 to the scraper's
-    // requests; neither has ever produced a listing, headless or headed.
+    // realestate.com.au sits behind Kasada (the 429 carries x-kpsdk-* headers),
+    // which no header set alone gets past.
     { name: 'realestateau', scrape: scrapeRealestateAu, expect: 'blocked' },
+    // domain.com.au works over plain HTTP with browser headers - ~227 Sydney
+    // listings from a residential IP - and is refused from this runner. A probe
+    // running both clients from one runner (Azure AS8075) settled which half is
+    // to blame: curl over h2 got a 200 that was a 2.7KB stub with no
+    // `__NEXT_DATA__`, curl over h1.1 got a 403, and Node's fetch got a 403.
+    // No client gets the real page from there, so it is the egress, not the
+    // request - a scraper change cannot fix it. It needs a non-datacenter
+    // egress; the 'recovered' check will flag it the first run one gets through.
     { name: 'domainau', scrape: scrapeDomainAu, expect: 'blocked' },
   ],
 };
@@ -121,7 +151,9 @@ export async function scrapeRent(): Promise<RentScrapeSummary> {
 
       try {
         logger.info(`[rent] scraping ${target.countryCode}/${target.city}/${name}...`);
-        const raw = await scrape();
+        const result = await scrape();
+        const raw = Array.isArray(result) ? result : result.listings;
+        const degraded = Array.isArray(result) ? undefined : result.degraded;
         outcome.raw = raw.length;
         totalRaw += raw.length;
         const normalized: RentListingNormalized[] = [];
@@ -137,7 +169,8 @@ export async function scrapeRent(): Promise<RentScrapeSummary> {
         }
         const inserted = await repo.insertMany(country.id, target.city, normalized);
         outcome.inserted = inserted;
-        outcome.status = 'ok';
+        outcome.status = degraded ? 'degraded' : 'ok';
+        if (degraded) outcome.error = degraded;
         usableSources++;
         totalInserted += inserted;
         logger.info(

@@ -73,6 +73,14 @@ function main(): void {
         `${label(s)} scraped ${s.normalized} listings but inserted 0 - ` +
           `already stored for today (a re-run), or nothing new was published`,
       );
+    } else if (s.status === 'degraded') {
+      // Real listings landed, but only part of an ordered result set, so the
+      // median the aggregate computes is skewed. Never a 'recovered' promotion.
+      annotate(
+        'warning',
+        `${label(s)} returned a partial sample (${s.inserted} inserted) - ` +
+          `${s.error ?? 'the source refused partway through pagination'}`,
+      );
     } else if (s.expected === 'blocked') {
       annotate(
         'warning',
