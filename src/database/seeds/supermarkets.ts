@@ -257,6 +257,16 @@ export const supermarketsData: SupermarketSeedData[] = [
     scraper_class: 'WoolworthsScraper',
     is_active: true,
   },
+  // NOTE: Coles is fronted by Imperva Incapsula. The scraper requires either
+  // (a) a real desktop Chrome session (xvfb in CI / headed locally) or
+  // (b) connection to an existing browser via COLES_CDP_URL env var.
+  {
+    country_code: 'AU',
+    name: 'Coles',
+    website_url: 'https://www.coles.com.au',
+    scraper_class: 'ColesScraper',
+    is_active: true,
+  },
 ];
 
 export async function seedSupermarkets(): Promise<void> {
