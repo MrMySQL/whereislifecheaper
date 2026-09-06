@@ -68,6 +68,7 @@ describe('MigrosScraper category accounting', () => {
     expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
     expect(scraper.getCategoryErrors()[0].message).toMatch(/Fruit.*HTTP 503 Service Unavailable/);
     expect(scraper.getCategoryErrors()[0].productUrl).toMatch(/\/fruit-c-\d+$|fruit$/);
+    expect(scraper.getErrors()).toEqual([]);
   });
 
   it('reports the category lost when the first page has no products array', async () => {
@@ -92,6 +93,7 @@ describe('MigrosScraper category accounting', () => {
     await scraper.scrapeProductList();
 
     expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
+    expect(scraper.getErrors()).toEqual([]);
     expect(scraper.getCategoryErrors()[0]).toEqual(expect.objectContaining({
       productUrl: 'https://www.migros.com.tr/rest/search/screens/fruit',
       message: expect.stringMatching(/Unexpected API response/),
@@ -105,6 +107,7 @@ describe('MigrosScraper category accounting', () => {
 
     expect(products).toHaveLength(1);
     expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 0 });
+    expect(scraper.getCategoryErrors()).toEqual([]);
     expect(scraper.getErrors()[0]).toEqual(expect.objectContaining({
       productUrl: 'https://www.migros.com.tr/rest/search/screens/fruit?sayfa=2',
       message: expect.stringMatching(/Unexpected API response/),
@@ -117,6 +120,7 @@ describe('MigrosScraper category accounting', () => {
     await scraper.scrapeProductList();
 
     expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 0 });
+    expect(scraper.getCategoryErrors()).toEqual([]);
     expect(scraper.getErrors().map(e => e.message)).toEqual([
       expect.stringMatching(/page 2 of Fruit/),
     ]);
