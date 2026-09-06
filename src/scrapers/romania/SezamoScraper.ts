@@ -180,17 +180,8 @@ export class SezamoScraper extends BaseScraper {
       while (hasMorePages) {
         const categoryResponse = await this.fetchCategoryProductIds(categoryId, page);
 
-        if (!categoryResponse) {
-          // fetchCategoryProductIds logged the cause and returned null: a
-          // failed request, not the end of the category. We give the category
-          // up here; BaseScraper decides whether that lost it or truncated it.
-          this.failCategory(
-            category,
-            `page ${page + 1} could not be fetched`,
-            `${this.API_BASE}/categories/normal/${categoryId}/products`
-          );
-          break;
-        }
+        // A failed request throws out to the catch below, which gives the
+        // category up with the real cause; an empty page is the end of it.
         if (categoryResponse.productIds.length === 0) {
           this.logger.debug(`No more products in category ${category.name} at page ${page}`);
           break;
@@ -241,32 +232,23 @@ export class SezamoScraper extends BaseScraper {
   private async fetchCategoryProductIds(
     categoryId: string,
     page: number
-  ): Promise<SezamoCategoryResponse | null> {
+  ): Promise<SezamoCategoryResponse> {
     if (!this.page) {
       throw new Error('Page not initialized');
     }
 
     const url = `${this.API_BASE}/categories/normal/${categoryId}/products?page=${page}&size=${this.PAGE_SIZE}&sort=recommended&filter=`;
 
-    try {
-      const response = await this.page.request.get(url, {
-        headers: {
-          Accept: 'application/json',
-          'Accept-Language': 'en-RO,en;q=0.9,ro;q=0.8',
-        },
-      });
-
-      if (!response.ok()) {
-        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
-        return null;
-      }
-
-      const data: SezamoCategoryResponse = await response.json();
-      return data;
-    } catch (error) {
-      this.logger.error(`Failed to fetch ${url}:`, error);
-      return null;
+    const response = await this.page.request.get(url, {
+      headers: {
+        Accept: 'application/json',
+        'Accept-Language': 'en-RO,en;q=0.9,ro;q=0.8',
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
+    return (await response.json()) as SezamoCategoryResponse;
   }
 
   private async fetchProductsWithPrices(productIds: number[]): Promise<SezamoProductWithPrice[]> {

@@ -51,6 +51,7 @@ describe('MigrosScraper category accounting', () => {
 
     expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
     expect(scraper.getCategoryErrors()[0].message).toMatch(/Fruit.*unsuccessful/);
+    expect(scraper.getErrors()).toEqual([]);
   });
 
   it('keeps a category that lost a later page, with the page error on record', async () => {

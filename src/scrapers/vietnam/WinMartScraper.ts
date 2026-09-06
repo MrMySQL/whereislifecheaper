@@ -137,16 +137,8 @@ export class WinMartScraper extends BaseScraper {
       try {
         const items = await this.fetchCategoryPage(category.url, pageNumber);
 
-        if (!items) {
-          // fetchCategoryPage logged the cause and returned null. We give the
-          // category up here; BaseScraper decides whether that lost it.
-          this.failCategory(
-            category,
-            `page ${pageNumber} could not be fetched`,
-            `${WinMartScraper.API_BASE}/it/api/web/v3/item/category?slug=${category.url}&pageNumber=${pageNumber}`
-          );
-          break;
-        }
+        // A failed request throws out to the catch below; an empty page is
+        // the end of the category.
         if (items.length === 0) {
           this.logger.info(`${category.name}: no more products at page ${pageNumber}`);
           break;
@@ -176,10 +168,12 @@ export class WinMartScraper extends BaseScraper {
         pageNumber++;
         await this.waitBetweenRequests();
       } catch (error) {
-        this.logError(
-          `Failed to scrape ${category.name} page ${pageNumber}`,
+        // Giving the category up; BaseScraper decides whether that lost it
+        // or truncated it.
+        this.failCategory(
+          category,
+          error,
           `${WinMartScraper.API_BASE}/it/api/web/v3/item/category?slug=${category.url}&pageNumber=${pageNumber}`,
-          error as Error,
         );
         break;
       }
@@ -195,8 +189,8 @@ export class WinMartScraper extends BaseScraper {
   private async fetchCategoryPage(
     slug: string,
     pageNumber: number,
-  ): Promise<WinMartProduct[] | null> {
-    if (!this.page) return null;
+  ): Promise<WinMartProduct[]> {
+    if (!this.page) throw new Error('Page not initialized');
 
     const url =
       `${WinMartScraper.API_BASE}/it/api/web/v3/item/category` +
@@ -207,24 +201,16 @@ export class WinMartScraper extends BaseScraper {
       `&storeCode=${WinMartScraper.STORE_CODE}` +
       `&storeGroupCode=${WinMartScraper.STORE_GROUP_CODE}`;
 
-    try {
-      const response = await this.page.request.get(url, {
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!response.ok()) {
-        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()} for ${url}`);
-        return null;
-      }
-
-      const data: WinMartCategoryResponse = await response.json();
-      return data.data?.items || null;
-    } catch (error) {
-      this.logger.error(`Failed to fetch ${url}:`, error);
-      return null;
+    const response = await this.page.request.get(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
+    const data: WinMartCategoryResponse = await response.json();
+    return data.data?.items ?? [];
   }
 
   /**

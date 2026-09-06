@@ -144,18 +144,6 @@ export class ArbuzScraper extends BaseScraper {
 
         const pageData = await this.fetchCategoryPage(categoryId, page, limit);
 
-        if (!pageData) {
-          // fetchCategoryPage logged the cause and returned null. We give the
-          // category up here; BaseScraper decides whether that lost it.
-          this.failCategory(
-            category,
-            `page ${page} could not be fetched`,
-            `${this.API_BASE}/shop/catalog/${categoryId}?page=${page}`
-          );
-          hasMore = false;
-          break;
-        }
-
         // API response structure: { data: { products: { data: [...] }, ... }, $layout: ... }
         const productsArray = pageData.data?.products?.data || [];
 
@@ -188,11 +176,9 @@ export class ArbuzScraper extends BaseScraper {
           page++;
         }
       } catch (error) {
-        this.logError(
-          `Failed to scrape page ${page} of ${categoryName}`,
-          `${this.API_BASE}/shop/catalog/${categoryId}?page=${page}`,
-          error as Error
-        );
+        // Giving the category up; BaseScraper decides whether that lost it
+        // or truncated it.
+        this.failCategory(category, error, `${this.API_BASE}/shop/catalog/${categoryId}?page=${page}`);
         hasMore = false;
       }
     }
@@ -208,33 +194,24 @@ export class ArbuzScraper extends BaseScraper {
     categoryId: string,
     page: number,
     limit: number
-  ): Promise<ArbuzApiResponse | null> {
+  ): Promise<ArbuzApiResponse> {
     if (!this.page) {
       throw new Error('Page not initialized');
     }
 
     const url = `${this.API_BASE}/shop/catalog/${categoryId}?where[available][e]=0&limit=${limit}&page=${page}`;
 
-    try {
-      // Use Playwright's request context (includes cookies from browser)
-      const response = await this.page.request.get(url, {
-        headers: {
-          'Accept': 'application/json',
-          'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
-        },
-      });
-
-      if (!response.ok()) {
-        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
-        return null;
-      }
-
-      const data: ArbuzApiResponse = await response.json();
-      return data;
-    } catch (error) {
-      this.logger.error(`Failed to fetch ${url}:`, error);
-      return null;
+    // Use Playwright's request context (includes cookies from browser)
+    const response = await this.page.request.get(url, {
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
+    return (await response.json()) as ArbuzApiResponse;
   }
 
   /**

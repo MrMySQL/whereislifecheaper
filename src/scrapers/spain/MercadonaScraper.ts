@@ -334,13 +334,9 @@ export class MercadonaScraper extends BaseScraper {
     const products: ProductData[] = [];
 
     try {
+      // Throws on a failed request, so the catch below records the real
+      // cause — Mercadona's seasonal 410 is told apart from a block.
       const categoryData = await this.fetchCategory(categoryId);
-
-      if (!categoryData) {
-        // fetchCategory logged the HTTP status or exception and returned null.
-        this.failCategory(category, 'API returned no data', `${this.API_BASE}/categories/${categoryId}/`);
-        return products;
-      }
 
       // Recursively collect products from nested categories
       const allProducts = this.collectProductsRecursively(categoryData);
@@ -374,32 +370,23 @@ export class MercadonaScraper extends BaseScraper {
   /**
    * Fetch a category from the API using browser context
    */
-  private async fetchCategory(categoryId: string): Promise<MercadonaCategoryResponse | null> {
+  private async fetchCategory(categoryId: string): Promise<MercadonaCategoryResponse> {
     if (!this.page) {
       throw new Error('Page not initialized');
     }
 
     const url = `${this.API_BASE}/categories/${categoryId}/`;
 
-    try {
-      // Use Playwright's request context (includes cookies from browser)
-      const response = await this.page.request.get(url, {
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!response.ok()) {
-        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
-        return null;
-      }
-
-      const data: MercadonaCategoryResponse = await response.json();
-      return data;
-    } catch (error) {
-      this.logger.error(`Failed to fetch ${url}:`, error);
-      return null;
+    // Use Playwright's request context (includes cookies from browser)
+    const response = await this.page.request.get(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
+    return (await response.json()) as MercadonaCategoryResponse;
   }
 
   /**
