@@ -239,7 +239,7 @@ export class CanonicalProductRepository {
     return result.rows;
   }
 
-  /** Only current, available, non-duplicate offers can enter country averages. */
+  /** Latest usable offers enter country averages; an age limit is opt-in. */
   async getComparison(
     filters: { search?: string; maxAgeDays?: number },
     pagination: { limit: number; offset: number }
@@ -248,11 +248,11 @@ export class CanonicalProductRepository {
     total: number;
     freshness: { newest: Date | null; oldest: Date | null };
   }> {
-    const maxAgeDays = filters.maxAgeDays ?? 7;
-    if (!Number.isInteger(maxAgeDays) || maxAgeDays < 1 || maxAgeDays > 365) {
+    const maxAgeDays = filters.maxAgeDays;
+    if (maxAgeDays !== undefined && (!Number.isInteger(maxAgeDays) || maxAgeDays < 1 || maxAgeDays > 365)) {
       throw new Error('Price freshness must be between 1 and 365 days');
     }
-    const params: unknown[] = [maxAgeDays];
+    const params: unknown[] = [maxAgeDays ?? null];
     const searchSql = filters.search ? 'AND cp.name ILIKE $2' : '';
     if (filters.search) params.push(`%${filters.search}%`);
     // This CTE visits only canonical-linked offers, then uses the existing
@@ -297,19 +297,21 @@ export class CanonicalProductRepository {
         AND (cp.show_per_unit_price OR pol.expected_quantity IS NULL
           OR (pr.quantity_info->>'contentQuantity')::numeric = pol.expected_quantity)
         ${searchSql}
-    ), current_offers AS (
+    ), comparison_offers AS (
       SELECT * FROM eligible_offers
-      WHERE last_checked_at >= CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')
+      WHERE $1::int IS NULL OR (
+        last_checked_at >= CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')
         AND scraped_at >= CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')
+      )
     ), eligible_canonical AS (
-      SELECT canonical_id, canonical_name FROM current_offers
+      SELECT canonical_id, canonical_name FROM comparison_offers
       GROUP BY canonical_id, canonical_name HAVING COUNT(DISTINCT country_id) >= 2
     )`;
     const [data, count, dates] = await Promise.all([
       query<CanonicalComparisonRow>(`${cte}, paged AS (
         SELECT canonical_id FROM eligible_canonical ORDER BY canonical_name, canonical_id
         LIMIT $${params.length + 1} OFFSET $${params.length + 2}
-      ) SELECT co.* FROM current_offers co JOIN paged USING (canonical_id)
+      ) SELECT co.* FROM comparison_offers co JOIN paged USING (canonical_id)
         ORDER BY co.canonical_name, co.country_name, co.product_id`,
       [...params, pagination.limit, pagination.offset]),
       query<{ total: number }>(`${cte} SELECT COUNT(*)::int AS total FROM eligible_canonical`, params),

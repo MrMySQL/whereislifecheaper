@@ -78,7 +78,6 @@ export default function Home() {
       canonicalApi.getComparison({
         search: debouncedSearch || undefined,
         limit: 100,
-        max_age_days: 7,
       }),
   });
 

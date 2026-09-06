@@ -16,8 +16,8 @@ const mappedProductsSchema = paginationSchema.extend({
 const comparisonSchema = paginationSchema.extend({
   limit: z.coerce.number().int().min(1).max(500).default(100),
   search: z.string().optional(),
-  // A missing current price is preferable to averaging an obsolete offer.
-  max_age_days: z.coerce.number().int().min(1).max(365).default(7),
+  // Keep older prices visible unless the caller explicitly requests an age limit.
+  max_age_days: z.coerce.number().int().min(1).max(365).optional(),
 });
 
 const productsByCountrySchema = paginationSchema.extend({
