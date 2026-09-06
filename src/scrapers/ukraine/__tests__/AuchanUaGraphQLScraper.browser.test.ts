@@ -176,9 +176,9 @@ describe('AuchanUaGraphQLScraper issues GraphQL requests from a real browser pag
     expect(page.goto).toHaveBeenCalledTimes(1);
   });
 
-  it('tolerates the auto-solve navigation landing on the very first snapshot', async () => {
+  it('tolerates a navigation landing on the very first snapshot', async () => {
     const { scraper, page } = scraperWith(JSON_PAGE);
-    page.goto.mockResolvedValue({ status: () => 503 });
+    page.goto.mockResolvedValue({ status: () => 200 });
     page.content
       .mockRejectedValueOnce(new Error('Execution context was destroyed, most likely because of a navigation'))
       .mockResolvedValue(STOREFRONT_PAGE);
@@ -186,6 +186,24 @@ describe('AuchanUaGraphQLScraper issues GraphQL requests from a real browser pag
     await scraper.initialize();
 
     expect(page.goto).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers through the retry when the interstitial itself was never readable', async () => {
+    // First attempt: 503, the auto-solve tears down the only read, then the
+    // storefront appears. No interstitial was observed, so the 503 stands and
+    // the attempt fails. The retry re-navigates with the clearance cookie the
+    // solve left behind and gets the storefront outright.
+    const { scraper, page } = scraperWith(JSON_PAGE, { maxRetries: 1 });
+    page.goto
+      .mockResolvedValueOnce({ status: () => 503 })
+      .mockResolvedValueOnce({ status: () => 200 });
+    page.content
+      .mockRejectedValueOnce(new Error('Execution context was destroyed, most likely because of a navigation'))
+      .mockResolvedValue(STOREFRONT_PAGE);
+
+    await scraper.initialize();
+
+    expect(page.goto).toHaveBeenCalledTimes(2);
   });
 
   it('names a challenge that persists past the settle window', async () => {
@@ -208,6 +226,18 @@ describe('AuchanUaGraphQLScraper issues GraphQL requests from a real browser pag
     await scraper.initialize();
 
     expect(page.goto).toHaveBeenCalledTimes(2);
+  });
+
+  it('still reports a 5xx when the torn-down first read settles on a non-Cloudflare body', async () => {
+    // A first read that throws is not evidence of a challenge. If what
+    // settles is an ordinary origin error, the status must still count.
+    const { scraper, page } = scraperWith(JSON_PAGE);
+    page.goto.mockResolvedValue({ status: () => 503 });
+    page.content
+      .mockRejectedValueOnce(new Error('Execution context was destroyed, most likely because of a navigation'))
+      .mockResolvedValue('<html><body>Service Unavailable</body></html>');
+
+    await expect(scraper.initialize()).rejects.toThrow(/HTTP 503/);
   });
 
   it('refuses to scrape before initialize has opened a page', async () => {

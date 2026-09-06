@@ -334,8 +334,12 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
 
     const settleDeadline = Date.now() + envConfig.scraper.timeout;
     let state = await snapshot();
-    const sawChallenge = state === 'navigating' || state?.kind === 'challenge';
+    // Only an interstitial actually seen counts as a challenge. A torn-down
+    // read alone is not evidence of one: if the page then settles on an
+    // ordinary origin error, its status must still be reported below.
+    let sawChallenge = false;
     while ((state === 'navigating' || state?.kind === 'challenge') && Date.now() < settleDeadline) {
+      if (state !== 'navigating') sawChallenge = true;
       await sleep(CHALLENGE_POLL_MS);
       state = await snapshot();
     }
