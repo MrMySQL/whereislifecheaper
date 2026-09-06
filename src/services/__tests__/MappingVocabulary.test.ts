@@ -51,5 +51,8 @@ test('failed vocabulary retains the original diagnostic cause without exposing i
  expect(error.message).toBe('Translation unavailable');
  expect(error.cause).toBe(cause);
  expect(Object.getOwnPropertyDescriptor(error, 'cause')).toMatchObject({writable:true,enumerable:false,configurable:true});
+ const diagnostic = new Error('updated diagnostic');
+ error.cause = diagnostic;
+ expect(error.cause).toBe(diagnostic);
  expect(JSON.stringify(error)).not.toContain('provider secret');
 });
