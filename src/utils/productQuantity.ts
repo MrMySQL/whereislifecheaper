@@ -83,13 +83,21 @@ function textCandidates(
     const quantity = normalized ? count * each * normalized.factor : null;
     const start = match.index!;
     multipackRanges.push([start, start + match[0].length]);
-    if (!Number.isFinite(count) || !Number.isFinite(each) || !Number.isFinite(quantity)) {
+    // A non-positive pack total is malformed, and it must not silently drop the quantity:
+    // this range is excluded from the plain scan below, so raw metadata would win unchallenged.
+    if (
+      !Number.isFinite(count) ||
+      !Number.isFinite(each) ||
+      quantity === null ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
       invalid = true;
       evidence.push(`${source}: invalid quantity ${match[0]}`);
     } else if (isAmbiguousSeparatedNumber(eachToken)) {
       ambiguous = true;
       evidence.push(`${source}: ambiguous quantity ${match[0]}`);
-    } else if (normalized && quantity !== null && quantity > 0) {
+    } else if (normalized) {
       const candidate = {
         quantity,
         unit: normalized.unit,

@@ -70,9 +70,10 @@ integration('maintenance pagination PostgreSQL', () => {
     await query("UPDATE product_mappings SET raw_observation=$2,quantity_info=$3,last_checked_at=now(),availability_status='available' WHERE id=$1", [mapping.id,JSON.stringify(raw),JSON.stringify(quantity)]);
     await query("INSERT INTO prices(product_mapping_id,price,currency,quantity_info,scraped_at) VALUES($1,3,'EUR',$2,now()-interval '1 minute')", [mapping.id,JSON.stringify(quantity)]);
     await query('UPDATE products SET canonical_product_id=$2 WHERE id=$1', [mapping.product_id,canonicals[0]]);
-    const coverage = await repository.coverage({country,gapsOnly:false,limit:200});
-    const observed = coverage.coverage.find(row=>row.canonical_product_id===canonicals[0]);
-    // Covered rows sort last, so use a direct target query for the assertion.
+    // Stale rows sort behind every missing row, so read the last coverage page to reach this one.
+    const total = (await repository.coverage({country,gapsOnly:false,limit:1})).total;
+    const coverage = await repository.coverage({country,gapsOnly:false,limit:200,offset:Math.max(0,total-200)});
+    const observed = coverage.coverage.find(row=>row.canonical_product_id===canonicals[0])!;
     const target = (await repository.targets(10000)).find(row=>row.canonical_product_id===canonicals[0] && row.supermarket_id===store)!;
     await query('UPDATE products SET canonical_product_id=NULL WHERE id=$1', [mapping.product_id]);
     const candidates = await repository.candidates({...target,name:'Water 5 l',aliases:[]});
@@ -80,8 +81,8 @@ integration('maintenance pagination PostgreSQL', () => {
     const { ProductMaintenanceService } = require('../../services/ProductMaintenanceService');
     const review = new ProductMaintenanceService(repository).review(String(suggestion.id),'approve','integration');
     await expect(review).rejects.toThrow('classification conflict');
-    expect(target.fresh_count).toBe(0);
-    expect(observed?.fresh_count ?? target.fresh_count).toBe(0);
+    expect(target).toMatchObject({fresh_count:0,status:'stale'});
+    expect(observed).toMatchObject({fresh_count:0,status:'stale'});
     expect(candidates).toEqual([]);
     await query('DELETE FROM prices WHERE product_mapping_id=$1', [mapping.id]);
   });

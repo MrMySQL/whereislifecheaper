@@ -145,6 +145,15 @@ describe('interpretProductQuantity', () => {
     });
   });
 
+  test.each([
+    ['zero pack count', 'Water 0 x 1.5 L'],
+    ['zero pack size', 'Water 2 x 0 L'],
+  ])('does not verify raw metadata when the multipack has a %s', (_label, name) => {
+    expect(interpretProductQuantity({ name, unit: 'l', unitQuantity: 1.5, price: 6 })).toMatchObject({
+      status: 'unknown', comparablePrice: null,
+    });
+  });
+
   test('does not verify raw metadata when the explicit text quantity overflows', () => {
     expect(interpretProductQuantity({
       name: `Water ${'9'.repeat(400)} L`, unit: 'l', unitQuantity: 1, price: 6,

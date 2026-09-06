@@ -1,7 +1,6 @@
 import { getClient } from '../config/database';
 import { ProductRepository, ProductMappingRepository, PriceRepository } from '../repositories';
 import { productRepository as defaultProductRepo, productMappingRepository as defaultMappingRepo, priceRepository as defaultPriceRepo } from '../repositories';
-import { QuantityInterpretation } from '../utils/productQuantity';
 import { ProductData } from '../types/scraper.types';
 import { ProductWithPricesResult, ProductWithCategory, SupermarketProductEntry } from '../types/db.types';
 import { normalizeProductName } from '../utils/normalizer';
@@ -162,20 +161,6 @@ export class ProductService {
     } finally {
       client.release();
     }
-  }
-
-  async recordPrice(
-    productMappingId: string,
-    priceData: {
-      price: number;
-      currency: string;
-      originalPrice?: number;
-      isOnSale: boolean;
-      pricePerUnit?: number;
-      quantityInfo?: QuantityInterpretation;
-    }
-  ): Promise<void> {
-    return this.priceRepository.recordPrice(productMappingId, priceData);
   }
 
   async bulkSaveProducts(

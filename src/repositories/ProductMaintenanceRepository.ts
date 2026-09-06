@@ -23,6 +23,10 @@ const coverageSql = `SELECT cp.id::text canonical_product_id,cp.name,cp.show_per
  LEFT JOIN product_maintenance_policies pol ON pol.canonical_product_id=cp.id
  WHERE NOT COALESCE(cp.disabled,false) AND s.is_active
  GROUP BY cp.id,c.id,s.id,pol.canonical_product_id`;
+// Single source of the coverage classification: both targets() and coverage() read it from here.
+const coverageWithStatusSql = `SELECT base.*,
+ CASE WHEN base.fresh_count>0 THEN 'covered' WHEN base.mapped_count>0 THEN 'stale' ELSE 'missing' END status
+ FROM (${coverageSql}) base`;
 const candidateSql = `SELECT pm.id::text mapping_id,p.id::text product_id,
  CASE WHEN pm.raw_observation IS NOT NULL THEN pm.raw_observation->>'name' ELSE p.name END name,
  CASE WHEN pm.raw_observation IS NOT NULL THEN pm.raw_observation->>'description' ELSE p.description END description,
@@ -54,21 +58,18 @@ export class ProductMaintenanceRepository {
         }
     }
     async targets(limit = 1000, gapsOnly = false): Promise<MaintenanceTarget[]> {
-        const rows = (await this.boundedRead<MaintenanceTarget>(`WITH coverage AS (${coverageSql})
+        const rows = (await this.boundedRead<MaintenanceTarget>(`WITH coverage AS (${coverageWithStatusSql})
           SELECT coverage.* FROM coverage
           LEFT JOIN product_maintenance_checks mc ON mc.canonical_product_id=coverage.canonical_product_id::int
             AND mc.supermarket_id=coverage.supermarket_id::int
           WHERE NOT $2::boolean OR fresh_count=0
           ORDER BY mc.checked_at ASC NULLS FIRST,coverage.canonical_product_id::int,coverage.supermarket_id::int
           LIMIT $1`, [limit, gapsOnly])).rows;
-        return rows.map(r => ({ ...r, status: r.fresh_count > 0 ? 'covered' : r.mapped_count > 0 ? 'stale' : 'missing' }));
+        return rows;
     }
     async coverage({ limit = 100, offset = 0, country, gapsOnly = false }: CoverageOptions = {}): Promise<CoveragePage> {
-        const result = await this.boundedRead<Omit<CoveragePage, 'limit' | 'offset'>>(`WITH coverage AS (${coverageSql}),
-          country_coverage AS (
-            SELECT coverage.*, CASE WHEN fresh_count>0 THEN 'covered' WHEN mapped_count>0 THEN 'stale' ELSE 'missing' END status
-            FROM coverage WHERE $3::int IS NULL OR country_id::int=$3
-          ), filtered AS (SELECT * FROM country_coverage WHERE NOT $4::boolean OR fresh_count=0),
+        const result = await this.boundedRead<Omit<CoveragePage, 'limit' | 'offset'>>(`WITH coverage AS (${coverageWithStatusSql}),
+          country_coverage AS (SELECT * FROM coverage WHERE $3::int IS NULL OR country_id::int=$3), filtered AS (SELECT * FROM country_coverage WHERE NOT $4::boolean OR fresh_count=0),
           page AS (SELECT * FROM filtered
             ORDER BY CASE status WHEN 'missing' THEN 0 WHEN 'stale' THEN 1 ELSE 2 END,canonical_product_id::int,supermarket_id::int
             LIMIT $1 OFFSET $2)
