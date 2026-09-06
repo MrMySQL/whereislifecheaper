@@ -51,5 +51,6 @@ describe('MercadonaScraper category accounting', () => {
 
     expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
     expect(scraper.getCategoryErrors()[0].message).toMatch(/no products or categories array/);
+    expect(scraper.getErrors()).toEqual([]);
   });
 });

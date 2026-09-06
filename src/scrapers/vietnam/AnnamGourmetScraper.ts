@@ -195,27 +195,33 @@ export class AnnamGourmetScraper extends BaseScraper {
           // Retry the same page once before giving up on it
           await this.waitBetweenRequests();
           const retryHtml = await this.fetchAjaxPage(ajaxUrl);
-          if (retryHtml && retryHtml.length >= MIN_HTML_LENGTH && !retryHtml.includes(NO_PRODUCTS_MARKER)) {
-            // Retry succeeded — process this page normally below
+          if (retryHtml && retryHtml.includes(NO_PRODUCTS_MARKER)) {
+            this.logger.info(`${category.name}: no more products at page ${page} (retry)`);
+            break;
+          }
+          if (retryHtml && retryHtml.length >= MIN_HTML_LENGTH) {
+            // Retry succeeded — same handling as the main path below.
             const retryProducts = this.parseProductsFromHtml(retryHtml, category.name);
-            if (retryProducts.length > 0) {
-              consecutiveEmpty = 0;
-              if (this.onPageScraped) {
-                const saved = await this.onPageScraped(retryProducts, {
-                  categoryId: category.id,
-                  categoryName: category.name,
-                  pageNumber: page,
-                  totalProductsOnPage: retryProducts.length,
-                });
-                this.logger.info(
-                  `${category.name} page ${page} (retry): Saved ${saved}/${retryProducts.length} products`
-                );
-              }
-              allProducts.push(...retryProducts);
-              page++;
-              await this.waitBetweenRequests();
-              continue;
+            if (retryProducts.length === 0) {
+              this.logger.info(`${category.name}: 0 products parsed at page ${page} (retry), stopping`);
+              break;
             }
+            consecutiveEmpty = 0;
+            if (this.onPageScraped) {
+              const saved = await this.onPageScraped(retryProducts, {
+                categoryId: category.id,
+                categoryName: category.name,
+                pageNumber: page,
+                totalProductsOnPage: retryProducts.length,
+              });
+              this.logger.info(
+                `${category.name} page ${page} (retry): Saved ${saved}/${retryProducts.length} products`
+              );
+            }
+            allProducts.push(...retryProducts);
+            page++;
+            await this.waitBetweenRequests();
+            continue;
           }
 
           consecutiveEmpty++;

@@ -144,9 +144,9 @@ describe('ScraperService category failure reporting', () => {
 
     await service.runScraper('1', { deadlineMs: 10_000 });
 
-    expect(update).toHaveBeenCalledWith('log-1', 'success', expect.objectContaining({
-      error: undefined,
-    }));
+    const successWrite = update.mock.calls.find(c => c[1] === 'success')!;
+    expect(successWrite).toBeDefined();
+    expect((successWrite[2] as { error?: string }).error).toBeUndefined();
   });
 
   it('reports a duration that includes the final scrape_logs write', async () => {

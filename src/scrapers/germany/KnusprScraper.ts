@@ -337,25 +337,6 @@ export class KnusprScraper extends BaseScraper {
     return results;
   }
 
-  /** GET a JSON endpoint; any failure is a RequestFailure naming the URL. */
-  private async getJson<T>(url: string): Promise<T> {
-    if (!this.page) throw new RequestFailure(url, 'Page not initialized');
-    let response;
-    try {
-      response = await this.page.request.get(url, { headers: { Accept: 'application/json' } });
-    } catch (error) {
-      throw new RequestFailure(url, error instanceof Error ? error.message : String(error));
-    }
-    if (!response.ok()) {
-      throw new RequestFailure(url, `HTTP ${response.status()} ${response.statusText()}`);
-    }
-    try {
-      return (await response.json()) as T;
-    } catch (error) {
-      throw new RequestFailure(url, `unreadable JSON: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
   /**
    * Convert Knuspr API product to ProductData format
    */

@@ -539,6 +539,30 @@ export abstract class BaseScraper {
   }
 
   /**
+   * GET a JSON endpoint through the page's request context (so it carries
+   * the session's cookies). Any failure — transport, non-2xx, unreadable
+   * body — is a RequestFailure naming the URL, so a catch around several
+   * parallel requests can still say which one failed.
+   */
+  protected async getJson<T>(url: string, headers: Record<string, string> = { Accept: 'application/json' }): Promise<T> {
+    if (!this.page) throw new RequestFailure(url, 'Page not initialized');
+    let response;
+    try {
+      response = await this.page.request.get(url, { headers });
+    } catch (error) {
+      throw new RequestFailure(url, error instanceof Error ? error.message : String(error));
+    }
+    if (!response.ok()) {
+      throw new RequestFailure(url, `HTTP ${response.status()} ${response.statusText()}`);
+    }
+    try {
+      return (await response.json()) as T;
+    } catch (error) {
+      throw new RequestFailure(url, `unreadable JSON: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
    * Build scrape result
    */
   protected buildScrapeResult(products: ProductData[]): ScrapeResult {

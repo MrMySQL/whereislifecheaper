@@ -122,17 +122,14 @@ export class AuchanUaScraper extends BaseScraper {
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
     const fullUrl = `${this.config.baseUrl}${category.url}`;
-    return this.scrapeCategoryPages(fullUrl, category.id, category.name);
+    return this.scrapeCategoryPages(fullUrl, category);
   }
 
   /**
    * Scrape all pages of a category
    */
-  private async scrapeCategoryPages(
-    baseUrl: string,
-    categoryId: string,
-    categoryName: string
-  ): Promise<ProductData[]> {
+  private async scrapeCategoryPages(baseUrl: string, category: CategoryConfig): Promise<ProductData[]> {
+    const { id: categoryId, name: categoryName } = category;
     const allProducts: ProductData[] = [];
     let currentPage = 1;
     let hasMorePages = true;
@@ -161,7 +158,13 @@ export class AuchanUaScraper extends BaseScraper {
         this.logger.debug(`Found ${pageProducts.length} products on page ${currentPage}`);
 
         if (pageProducts.length === 0) {
-          // No products found, stop pagination
+          // Pagination follows hasNextPage(), so an empty page is not the
+          // probe past the end: on the first page it is the category not
+          // loading at all (the 2026-09-04 Cloudflare block looked exactly
+          // like this), and the category is given up with that reason.
+          if (currentPage === 1) {
+            this.failCategory(category, 'no product links on the first page', pageUrl);
+          }
           hasMorePages = false;
           break;
         }
@@ -189,11 +192,9 @@ export class AuchanUaScraper extends BaseScraper {
           await this.waitBetweenRequests();
         }
       } catch (error) {
-        this.logError(
-          `Failed to scrape page ${currentPage} of ${categoryName}`,
-          baseUrl,
-          error as Error
-        );
+        // Giving the category up; BaseScraper decides whether that lost it
+        // or truncated it.
+        this.failCategory(category, error, baseUrl);
         // Continue to next category instead of stopping
         break;
       }
@@ -261,9 +262,9 @@ export class AuchanUaScraper extends BaseScraper {
       await this.page.waitForSelector('a[href*="/ua/"][href$="/"]', {
         timeout: 10000,
       }).catch(() => {
-        // Through the buffer: a category with no products after this is lost
-        // (the 2026-09-04 Cloudflare block looked exactly like this).
-        this.logError('Product links not found on page', this.page?.url());
+        // Plain logger: the page loop reports an empty first page as the
+        // category being given up, and a later empty page as its end.
+        this.logger.warn('Product links not found on page');
       });
 
       // Get all product containers by looking for elements with price info
