@@ -99,8 +99,15 @@ export function deliveryMarketFor(configuration: MarketConfiguration, zip: strin
 const MARKET_POLL_ATTEMPTS = 30;
 const MARKET_POLL_INTERVAL_MS = 500;
 
-/** Marks a configuration read the endpoint refused, as opposed to one the reload tore down. */
-const CONFIGURATION_HTTP_ERROR = 'marketselection/configuration answered HTTP';
+/**
+ * A configuration read that failed because the shop was reloading under it:
+ * Playwright tearing down the execution context or frame, or the in-page
+ * fetch being aborted by the navigation ("Failed to fetch"). These mean "not
+ * yet". Anything else — an HTTP error status, malformed JSON, a closed
+ * target — is the cause and is reported at once.
+ */
+const CONFIGURATION_READ_NOT_YET =
+  /Execution context was destroyed|Cannot find context|Frame was detached|navigat|Failed to fetch|NetworkError/i;
 
 /**
  * Raised when REWE has no delivery market for the session. Without one every
@@ -480,10 +487,9 @@ export class ReweScraper extends BaseScraper {
    * The 201 from userselections does not carry it: the app then reloads the
    * shop, and only that navigation leaves the session with the market. Read
    * once right after the response and it still says null. So poll — a read
-   * torn down by that navigation throws, which just means "not yet". An
-   * endpoint that answers with an error is a different matter: that is the
-   * cause, and it is reported at once rather than retried and then blamed on
-   * a missing market.
+   * torn down by that navigation throws, which just means "not yet". Any
+   * other failure of the read is the cause, and it is reported at once
+   * rather than retried and then blamed on a missing market.
    */
   private async awaitDeliveryMarket(): Promise<string> {
     if (!this.page) throw new ReweMarketError('Browser page is not initialized');
@@ -497,7 +503,7 @@ export class ReweScraper extends BaseScraper {
         lastReadError = null;
       } catch (error) {
         const readError = error instanceof Error ? error : new Error(String(error));
-        if (readError.message.includes(CONFIGURATION_HTTP_ERROR)) {
+        if (!CONFIGURATION_READ_NOT_YET.test(readError.message)) {
           throw new ReweMarketError(`Could not read the market for ${this.POSTAL_CODE}: ${readError.message}`);
         }
         lastReadError = readError;
@@ -523,8 +529,6 @@ export class ReweScraper extends BaseScraper {
         credentials: 'include',
       });
       if (!response.ok) {
-        // Runs in the browser, so it cannot see CONFIGURATION_HTTP_ERROR;
-        // the literal must stay in step with it.
         throw new Error(`marketselection/configuration answered HTTP ${response.status}`);
       }
       return (await response.json()) as MarketConfiguration;
@@ -582,8 +586,13 @@ export class ReweScraper extends BaseScraper {
   }
 
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
-    // No point loading page after page of location-dependent prices.
-    if (this.marketLost) throw this.marketLost;
+    // No point loading page after page of location-dependent prices. Skipped
+    // rather than failed: only the category that lost the market is the
+    // failure, and scrapeProductList reports it once.
+    if (this.marketLost) {
+      this.logger.warn(`Skipping ${category.name}: ${this.marketLost.message}`);
+      return [];
+    }
     try {
       return await this.scrapeCategoryPages(category);
     } catch (error) {

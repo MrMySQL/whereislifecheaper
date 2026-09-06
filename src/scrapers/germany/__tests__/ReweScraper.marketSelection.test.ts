@@ -158,6 +158,18 @@ describe('ReweScraper.selectDeliveryMarket', () => {
     expect(page.readCount).toBe(2);
   });
 
+  it('fails at once when the read breaks for a reason that is not the reload', async () => {
+    // Malformed JSON, a closed target — anything but a read torn down by the
+    // navigation is the cause, not "not yet".
+    const page = fakePage([NO_MARKET, new SyntaxError('Unexpected token < in JSON at position 0')]);
+    const scraper = scraperWith(page);
+
+    await expect(
+      (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket()
+    ).rejects.toThrow(/Unexpected token/);
+    expect(page.readCount).toBe(2);
+  });
+
   it('walks zip → submit → Lieferservice and accepts the market the site then reports', async () => {
     const page = fakePage([NO_MARKET, BERLIN_DELIVERY]);
     const scraper = scraperWith(page);
@@ -240,11 +252,13 @@ describe('ReweScraper.scrapeProductList when the market is lost mid-run', () => 
     await expect(scraper.scrapeProductList()).rejects.toThrow(ReweMarketError);
   });
 
-  it('does not keep loading categories once the market is gone', async () => {
+  it('skips the remaining categories without counting each as a failure of its own', async () => {
     const scraper = new LosesMarketAtB({ ...config(), categories });
 
     await scraper.scrapeProductList().catch(() => undefined);
 
     expect(scraper.scraped).toEqual(['a', 'b']);
+    // BaseScraper's per-category catch counts a failure per throw; only b lost the market.
+    expect(scraper.getStats().productsFailed).toBe(1);
   });
 });
