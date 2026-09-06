@@ -1,4 +1,4 @@
-import { BaseScraper } from '../base/BaseScraper';
+import { BaseScraper, RequestFailure } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 
 /**
@@ -258,53 +258,71 @@ export class SezamoScraper extends BaseScraper {
 
     const results: SezamoProductWithPrice[] = [];
 
+    // Process in batches to avoid too-long URLs
     for (let i = 0; i < productIds.length; i += this.BATCH_SIZE) {
       const batch = productIds.slice(i, i + this.BATCH_SIZE);
       const productsParam = batch.map((id) => `products=${id}`).join('&');
       const productsUrl = `${this.API_BASE}/products?${productsParam}`;
       const pricesUrl = `${this.API_BASE}/products/prices?${productsParam}`;
 
+      let productsData: SezamoProductData[];
+      let pricesData: SezamoPriceData[];
       try {
-        const [productsResponse, pricesResponse] = await Promise.all([
-          this.page.request.get(productsUrl, { headers: { Accept: 'application/json' } }),
-          this.page.request.get(pricesUrl, { headers: { Accept: 'application/json' } }),
+        // Fetch product details and prices in parallel
+        [productsData, pricesData] = await Promise.all([
+          this.getJson<SezamoProductData[]>(productsUrl),
+          this.getJson<SezamoPriceData[]>(pricesUrl),
         ]);
-
-        if (!productsResponse.ok() || !pricesResponse.ok()) {
-          this.logError(
-            `Failed to fetch product batch: products=${productsResponse.status()}, prices=${pricesResponse.status()}`,
-            productsResponse.ok() ? pricesUrl : productsUrl
-          );
-          continue;
-        }
-
-        const productsData: SezamoProductData[] = await productsResponse.json();
-        const pricesData: SezamoPriceData[] = await pricesResponse.json();
-
-        const priceMap = new Map<number, SezamoPriceData>();
-        for (const price of pricesData) {
-          priceMap.set(price.productId, price);
-        }
-
-        for (const product of productsData) {
-          const priceInfo = priceMap.get(product.id);
-          if (priceInfo) {
-            results.push({ product, priceInfo });
-          } else {
-            this.logger.debug(`No price found for product ${product.id}: ${product.name}`);
-          }
-        }
       } catch (error) {
-        // Either request may have thrown; both are named so the failing one can be found.
-        this.logError(`Failed to fetch product batch (${productsUrl} or ${pricesUrl})`, undefined, error as Error);
+        // The failure names the request it came from.
+        const url = error instanceof RequestFailure ? error.url : undefined;
+        const detail = error instanceof Error ? error.message : String(error);
+        this.logError(`Failed to fetch product batch: ${detail}`, url, error as Error);
+        continue;
       }
 
+      // Create a map of prices by productId
+      const priceMap = new Map<number, SezamoPriceData>();
+      for (const price of pricesData) {
+        priceMap.set(price.productId, price);
+      }
+
+      // Combine products with their prices
+      for (const product of productsData) {
+        const priceInfo = priceMap.get(product.id);
+        if (priceInfo) {
+          results.push({ product, priceInfo });
+        } else {
+          this.logger.debug(`No price found for product ${product.id}: ${product.name}`);
+        }
+      }
+
+      // Small delay between batches
       if (i + this.BATCH_SIZE < productIds.length) {
         await this.page.waitForTimeout(100);
       }
     }
 
     return results;
+  }
+
+  /** GET a JSON endpoint; any failure is a RequestFailure naming the URL. */
+  private async getJson<T>(url: string): Promise<T> {
+    if (!this.page) throw new RequestFailure(url, 'Page not initialized');
+    let response;
+    try {
+      response = await this.page.request.get(url, { headers: { Accept: 'application/json' } });
+    } catch (error) {
+      throw new RequestFailure(url, error instanceof Error ? error.message : String(error));
+    }
+    if (!response.ok()) {
+      throw new RequestFailure(url, `HTTP ${response.status()} ${response.statusText()}`);
+    }
+    try {
+      return (await response.json()) as T;
+    } catch (error) {
+      throw new RequestFailure(url, `unreadable JSON: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private convertApiProduct(

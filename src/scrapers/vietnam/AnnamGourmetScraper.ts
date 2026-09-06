@@ -219,7 +219,13 @@ export class AnnamGourmetScraper extends BaseScraper {
           }
 
           consecutiveEmpty++;
-          this.logger.debug(`${category.name}: empty response at page ${page} after retry (${consecutiveEmpty} consecutive)`);
+          // The page is given up here. A category that ends with no products
+          // after this counts as lost; a genuinely empty one is answered with
+          // NO_PRODUCTS_MARKER above, not with blank pages.
+          this.logError(
+            `${category.name} page ${page}: empty or failed response after retry (${consecutiveEmpty} consecutive)`,
+            ajaxUrl
+          );
           if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
             this.logger.info(`${category.name}: ${MAX_CONSECUTIVE_EMPTY} consecutive empty pages, stopping`);
             break;
@@ -287,7 +293,9 @@ export class AnnamGourmetScraper extends BaseScraper {
     }, url);
 
     if ('error' in result) {
-      this.logError(`Ajax request failed: HTTP ${result.error}`, url);
+      // Plain logger: the caller retries the page once and records it only
+      // if the retry fails too.
+      this.logger.warn(`Ajax request failed: HTTP ${result.error} for ${url}`);
       return null;
     }
 

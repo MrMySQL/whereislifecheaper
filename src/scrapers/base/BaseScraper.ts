@@ -30,6 +30,17 @@ export class FatalScrapeError extends Error {
 }
 
 /**
+ * A failed HTTP request that knows which URL it was for, so a catch that
+ * covers several parallel requests can still report the one that failed.
+ */
+export class RequestFailure extends Error {
+  constructor(public readonly url: string, message: string) {
+    super(message);
+    this.name = 'RequestFailure';
+  }
+}
+
+/**
  * Abstract base class for all scrapers
  * Provides common functionality for browser management, error handling, and logging
  */

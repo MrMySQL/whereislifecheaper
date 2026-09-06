@@ -386,7 +386,11 @@ export class MercadonaScraper extends BaseScraper {
     if (!response.ok()) {
       throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
-    return (await response.json()) as MercadonaCategoryResponse;
+    const data = (await response.json()) as MercadonaCategoryResponse;
+    if (!Array.isArray(data?.products) && !Array.isArray(data?.categories)) {
+      throw new Error('Unexpected API response: no products or categories array');
+    }
+    return data;
   }
 
   /**

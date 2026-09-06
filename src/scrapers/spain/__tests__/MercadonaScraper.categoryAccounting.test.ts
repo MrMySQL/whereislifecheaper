@@ -14,7 +14,7 @@ class FixtureScraper extends MercadonaScraper {
     super({
       ...mercadonaConfig,
       supermarketId: '1',
-      categories: [{ id: '112', name: 'Turrones', url: '/categories/112' }],
+      categories: [{ id: '833', name: 'Turrones', url: '/categories/833/' }],
       waitTimes: { pageLoad: 0, dynamicContent: 0, betweenRequests: 0, betweenPages: 0 },
     } as ScraperConfig);
     this.page = {
@@ -42,5 +42,14 @@ describe('MercadonaScraper category accounting', () => {
     expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
     expect(scraper.getCategoryErrors()[0].message).toMatch(/Turrones.*HTTP 410 Gone/);
     expect(scraper.getErrors()).toEqual([]);
+  });
+
+  it('records a 2xx body with neither products nor categories as a lost category', async () => {
+    const scraper = new FixtureScraper(200, 'OK');
+
+    await scraper.scrapeProductList();
+
+    expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
+    expect(scraper.getCategoryErrors()[0].message).toMatch(/no products or categories array/);
   });
 });
