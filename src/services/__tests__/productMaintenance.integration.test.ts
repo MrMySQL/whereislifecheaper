@@ -2,6 +2,8 @@
 import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
+import express from 'express';
+import request from 'supertest';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -97,7 +99,7 @@ integration('offer observations and current comparisons (PostgreSQL)', () => {
     expect(Number((await client.query('SELECT count(*) FROM prices')).rows[0].count)).toBe(2);
   });
 
-  test('current comparisons omit unavailable, stale, duplicate and quantity-conflicting offers', async () => {
+  test('comparisons omit unavailable, superseded, duplicate and quantity-conflicting offers', async () => {
     await products.bulkSaveProducts([bottle(),bottle({externalId:'duplicate',productUrl:'https://a.example/duplicate'}),bottle({externalId:'stale',productUrl:'https://a.example/stale'}),bottle({externalId:'unknown',productUrl:'https://a.example/unknown',name:'Water bottle',unitQuantity:1})],store,'TRY');
     await products.bulkSaveProducts([bottle({price:10,currency:'EUR',productUrl:'https://b.example/water'})],secondStore,'EUR');
     await linkAll();
@@ -134,18 +136,34 @@ integration('offer observations and current comparisons (PostgreSQL)', () => {
     expect((await canonical.getComparison({}, {limit:100,offset:0})).total).toBe(0);
   });
 
-  test('freshness still reports a stopped pipeline after all eligible prices expire', async () => {
+  test('default comparisons retain old prices and report their age when the pipeline stops', async () => {
     await products.bulkSaveProducts([bottle()],store,'TRY');
     await products.bulkSaveProducts([bottle({currency:'EUR',price:10})],secondStore,'EUR');
     await linkAll();
     await client.query("UPDATE product_mappings SET last_checked_at=NOW()-INTERVAL '60 days'");
     await client.query("UPDATE prices SET scraped_at=NOW()-INTERVAL '59 days'");
     const result = await canonical.getComparison({}, {limit:100,offset:0});
-    expect(result.total).toBe(0);
-    expect(result.data).toEqual([]);
+    expect(result.total).toBe(1);
+    expect(result.data).toHaveLength(2);
     expect(result.freshness.newest).not.toBeNull();
     expect(result.freshness.newest!.getTime()).toBeLessThan(Date.now()-58*86400000);
     expect(result.freshness.oldest).toEqual(result.freshness.newest);
+
+    const app = express();
+    app.use('/canonical', (await import('../../api/routes/canonical')).default);
+    const response = await request(app).get('/canonical/comparison?search=Water&limit=1');
+    expect(response.status).toBe(200);
+    expect(response.body.total).toBe(1);
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].country_count).toBe(2);
+    expect(response.body.freshness.max_age_days).toBeNull();
+    expect(response.body.freshness.newest_age_days).toBeGreaterThanOrEqual(58);
+
+    const filtered = await request(app).get('/canonical/comparison?search=Water&max_age_days=7');
+    expect(filtered.status).toBe(200);
+    expect(filtered.body.total).toBe(0);
+    expect(filtered.body.data).toEqual([]);
+    expect(filtered.body.freshness.newest_age_days).toBeGreaterThanOrEqual(58);
   });
 
   test('individual saves commit an available observation and its price together', async () => {
