@@ -224,7 +224,7 @@ export class WoolworthsScraper extends BaseScraper {
       if (!response || !response.Success) {
         // Giving the category up; BaseScraper decides whether that lost it
         // or truncated it.
-        this.failCategory(category, `empty or failed response on page ${pageNumber}`);
+        this.failCategory(category, `empty or failed response on page ${pageNumber}`, this.API_URL);
         break;
       }
 

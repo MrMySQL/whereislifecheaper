@@ -135,12 +135,12 @@ export class AuchanUaScraper extends BaseScraper {
     let hasMorePages = true;
 
     while (hasMorePages && currentPage <= this.MAX_PAGES_PER_CATEGORY) {
-      try {
-        // Build URL for current page
-        const pageUrl = currentPage === 1
-          ? baseUrl
-          : `${baseUrl}l/page-${currentPage}/`;
+      // Built outside the try so the catch can name the page that failed.
+      const pageUrl = currentPage === 1
+        ? baseUrl
+        : `${baseUrl}l/page-${currentPage}/`;
 
+      try {
         this.logger.debug(`Scraping page ${currentPage}: ${pageUrl}`);
 
         await this.navigateToUrl(pageUrl);
@@ -163,7 +163,7 @@ export class AuchanUaScraper extends BaseScraper {
           // loading at all (the 2026-09-04 Cloudflare block looked exactly
           // like this), and the category is given up with that reason.
           if (currentPage === 1) {
-            this.failCategory(category, 'no product links on the first page', pageUrl);
+            this.failCategory(category, 'no products extracted from the first page', pageUrl);
           }
           hasMorePages = false;
           break;
@@ -194,7 +194,7 @@ export class AuchanUaScraper extends BaseScraper {
       } catch (error) {
         // Giving the category up; BaseScraper decides whether that lost it
         // or truncated it.
-        this.failCategory(category, error, baseUrl);
+        this.failCategory(category, error, pageUrl);
         // Continue to next category instead of stopping
         break;
       }

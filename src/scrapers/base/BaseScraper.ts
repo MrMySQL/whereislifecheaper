@@ -505,10 +505,13 @@ export abstract class BaseScraper {
    * Outside scrapeProductList (a scraper that overrides it) there is nothing
    * to defer to, and the report counts as a lost category immediately.
    */
-  protected failCategory(category: CategoryConfig, error?: unknown, productUrl?: string): void {
+  protected failCategory(category: CategoryConfig, error?: unknown, url?: string): void {
     const cause = error instanceof Error ? error : undefined;
     const detail = cause ? cause.message : typeof error === 'string' ? error : undefined;
     const message = `Failed to scrape category: ${category.name}${detail ? ` (${detail})` : ''}`;
+    // A RequestFailure names the request it came from; use that when the
+    // caller had nothing more specific.
+    const productUrl = url ?? (error instanceof RequestFailure ? error.url : undefined);
 
     this.logger.error(message, {
       productUrl,

@@ -295,36 +295,41 @@ export class GurkeralScraper extends BaseScraper {
       const productsUrl = `${this.API_BASE}/products?${productsParam}`;
       const pricesUrl = `${this.API_BASE}/products/prices?${productsParam}`;
 
-      let productsData: GurkeralProductData[];
-      let pricesData: GurkeralPriceData[];
+      // One try around fetch and merge: a bad batch is recorded and the next
+      // batch still runs, whether the request failed or the body was odd.
       try {
         // Fetch product details and prices in parallel
-        [productsData, pricesData] = await Promise.all([
+        const [productsData, pricesData] = await Promise.all([
           this.getJson<GurkeralProductData[]>(productsUrl),
           this.getJson<GurkeralPriceData[]>(pricesUrl),
         ]);
+        if (!Array.isArray(productsData)) {
+          throw new RequestFailure(productsUrl, 'Unexpected API response: not a product array');
+        }
+        if (!Array.isArray(pricesData)) {
+          throw new RequestFailure(pricesUrl, 'Unexpected API response: not a price array');
+        }
+
+        // Create a map of prices by productId
+        const priceMap = new Map<number, GurkeralPriceData>();
+        for (const price of pricesData) {
+          priceMap.set(price.productId, price);
+        }
+
+        // Combine products with their prices
+        for (const product of productsData) {
+          const priceInfo = priceMap.get(product.id);
+          if (priceInfo) {
+            results.push({ product, priceInfo });
+          } else {
+            this.logger.debug(`No price found for product ${product.id}: ${product.name}`);
+          }
+        }
       } catch (error) {
         // The failure names the request it came from.
         const url = error instanceof RequestFailure ? error.url : undefined;
         const detail = error instanceof Error ? error.message : String(error);
         this.logError(`Failed to fetch product batch: ${detail}`, url, error as Error);
-        continue;
-      }
-
-      // Create a map of prices by productId
-      const priceMap = new Map<number, GurkeralPriceData>();
-      for (const price of pricesData) {
-        priceMap.set(price.productId, price);
-      }
-
-      // Combine products with their prices
-      for (const product of productsData) {
-        const priceInfo = priceMap.get(product.id);
-        if (priceInfo) {
-          results.push({ product, priceInfo });
-        } else {
-          this.logger.debug(`No price found for product ${product.id}: ${product.name}`);
-        }
       }
 
       // Small delay between batches
