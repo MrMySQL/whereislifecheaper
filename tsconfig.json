@@ -27,6 +27,7 @@
     "node_modules",
     "dist",
     "scripts",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "**/__tests__/**"
   ]
 }
