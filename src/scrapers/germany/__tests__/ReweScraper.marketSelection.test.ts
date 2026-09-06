@@ -170,6 +170,17 @@ describe('ReweScraper.selectDeliveryMarket', () => {
     expect(page.readCount).toBe(2);
   });
 
+  it('does not mistake a crashed page for the reload', async () => {
+    // Playwright words a crash as a navigation failure; it is not "not yet".
+    const page = fakePage([NO_MARKET, new Error('Navigation failed because the page has crashed!')]);
+    const scraper = scraperWith(page);
+
+    await expect(
+      (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket()
+    ).rejects.toThrow(/crashed/);
+    expect(page.readCount).toBe(2);
+  });
+
   it('walks zip → submit → Lieferservice and accepts the market the site then reports', async () => {
     const page = fakePage([NO_MARKET, BERLIN_DELIVERY]);
     const scraper = scraperWith(page);

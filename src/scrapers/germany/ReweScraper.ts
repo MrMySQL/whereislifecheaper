@@ -107,7 +107,7 @@ const MARKET_POLL_INTERVAL_MS = 500;
  * target — is the cause and is reported at once.
  */
 const CONFIGURATION_READ_NOT_YET =
-  /Execution context was destroyed|Cannot find context|Frame was detached|navigat|Failed to fetch|NetworkError/i;
+  /Execution context was destroyed|Cannot find context|Frame was detached|Failed to fetch/;
 
 /**
  * Raised when REWE has no delivery market for the session. Without one every
