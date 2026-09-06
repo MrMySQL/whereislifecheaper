@@ -65,8 +65,9 @@ export async function mappingVocabulary(target: MaintenanceTarget): Promise<stri
  if (!aliases.length) {
   const error = new Error('Translation unavailable');
   const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-  // Preserve diagnostics for callers without leaking provider details in messages or JSON.
-  Object.defineProperty(error, 'cause', { value: failure?.reason, configurable: true });
+  // Match standard Error.cause descriptors while retaining the ES2020 TypeScript target.
+  // Provider details stay out of messages and JSON.
+  Object.defineProperty(error, 'cause', { value: failure?.reason, writable: true, configurable: true });
   throw error;
  }
  return [...new Set(aliases)];

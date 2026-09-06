@@ -50,5 +50,6 @@ test('failed vocabulary retains the original diagnostic cause without exposing i
  const error=await mappingVocabulary({name:'Sugar 1 kg',country_code:'UZ'} as MaintenanceTarget).catch(e=>e);
  expect(error.message).toBe('Translation unavailable');
  expect(error.cause).toBe(cause);
+ expect(Object.getOwnPropertyDescriptor(error, 'cause')).toMatchObject({writable:true,enumerable:false,configurable:true});
  expect(JSON.stringify(error)).not.toContain('provider secret');
 });
