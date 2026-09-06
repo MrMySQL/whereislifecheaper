@@ -12,6 +12,8 @@ import { config as envConfig } from '../../config/env';
 const STOREFRONT_ORIGIN = 'https://express.auchan.ua';
 const GRAPHQL_URL = `${STOREFRONT_ORIGIN}/graphql/`;
 const REQUEST_TIMEOUT_MS = 30000;
+/** How often to re-read the storefront while a Cloudflare challenge is auto-solving. */
+const CHALLENGE_POLL_MS = 500;
 
 /**
  * GraphQL category configuration with API IDs
@@ -192,7 +194,14 @@ function snippet(body: string): string {
  * Telling them apart in the log is what stops the next person from reading
  * "<!DOCTYPE html>" as a parse error again (Daily Scrape 2026-09-04).
  */
-export function describeCloudflarePage(body: string): string | null {
+export type CloudflarePageKind = 'block' | 'challenge' | 'error';
+
+export interface CloudflarePage {
+  kind: CloudflarePageKind;
+  description: string;
+}
+
+export function classifyCloudflarePage(body: string): CloudflarePage | null {
   const head = body.substring(0, 20000);
   const rayId =
     head.match(/Cloudflare Ray ID:\s*<strong[^>]*>([0-9a-f]+)/i)?.[1] ??
@@ -200,15 +209,22 @@ export function describeCloudflarePage(body: string): string | null {
   const ray = rayId ? ` (Ray ID ${rayId})` : '';
 
   if (/data-translate="block_headline"|Sorry, you have been blocked/i.test(head)) {
-    return `Cloudflare block page "Sorry, you have been blocked" (error 1020)${ray}`;
+    return {
+      kind: 'block',
+      description: `Cloudflare block page "Sorry, you have been blocked" (error 1020)${ray}`,
+    };
   }
   if (/cdn-cgi\/challenge-platform|Just a moment|cf-chl|challenge-running/i.test(head)) {
-    return `Cloudflare challenge page "Just a moment..."${ray}`;
+    return { kind: 'challenge', description: `Cloudflare challenge page "Just a moment..."${ray}` };
   }
   if (/Attention Required! \| Cloudflare|cf-error-details|id="cf-wrapper"/i.test(head)) {
-    return `Cloudflare error page${ray}`;
+    return { kind: 'error', description: `Cloudflare error page${ray}` };
   }
   return null;
+}
+
+export function describeCloudflarePage(body: string): string | null {
+  return classifyCloudflarePage(body)?.description ?? null;
 }
 
 /**
@@ -241,7 +257,13 @@ export function interpretGraphQLResponse(res: GraphQLHttpResponse): GraphQLSearc
   // query's shape, an error envelope without `errors`) must not pass as an
   // empty category.
   const search = data?.data?.search;
-  if (!search || !Array.isArray(search.items) || !search.page_info) {
+  const totalPages = search?.page_info?.total_pages;
+  if (
+    !search ||
+    !Array.isArray(search.items) ||
+    !Number.isInteger(totalPages) ||
+    totalPages < 0
+  ) {
     throw new Error(
       `Unexpected GraphQL payload from express.auchan.ua/graphql/ (HTTP ${res.status}): ${snippet(res.body)}`
     );
@@ -276,18 +298,22 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
     await this.launchBrowser();
     this.page = await this.createPage();
 
-    const status = await this.retryOnFailure(() => this.openStorefront(), 'Open storefront');
+    const outcome = await this.retryOnFailure(() => this.openStorefront(), 'Open storefront');
 
-    this.logger.info(`Auchan Ukraine GraphQL scraper initialized (storefront open, HTTP ${status})`);
+    this.logger.info(`Auchan Ukraine GraphQL scraper initialized (storefront open, ${outcome})`);
   }
 
   /**
    * Navigate to the storefront and make sure what loaded is the storefront.
+   *
    * The body is inspected regardless of status: Cloudflare normally serves
-   * its block/challenge pages with 403/503, but the markup is the reliable
-   * signal, and goto() can return no response object at all.
+   * its pages with 403/503, but the markup is the reliable signal, and goto()
+   * can return no response object at all. A managed challenge ("Just a
+   * moment...") is something a real browser solves on its own a few seconds
+   * after domcontentloaded, so that one is given time to clear; a 1020 block
+   * never clears and fails at once.
    */
-  private async openStorefront(): Promise<number> {
+  private async openStorefront(): Promise<string> {
     const page = this.page!;
     const response = await page.goto(`${STOREFRONT_ORIGIN}/`, {
       waitUntil: 'domcontentloaded',
@@ -295,16 +321,32 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
     });
     const status = response?.status() ?? 0;
 
-    const cloudflare = describeCloudflarePage(await page.content());
+    const settleDeadline = Date.now() + envConfig.scraper.timeout;
+    let cloudflare = classifyCloudflarePage(await page.content());
+    const sawChallenge = cloudflare?.kind === 'challenge';
+    while (cloudflare?.kind === 'challenge' && Date.now() < settleDeadline) {
+      await sleep(CHALLENGE_POLL_MS);
+      try {
+        cloudflare = classifyCloudflarePage(await page.content());
+      } catch {
+        // The auto-solve navigates away mid-read; the next poll sees the new page.
+      }
+    }
+
     if (cloudflare) {
       throw new Error(
-        `Blocked by Cloudflare when opening ${STOREFRONT_ORIGIN}: HTTP ${status}, ${cloudflare}`
+        `Blocked by Cloudflare when opening ${STOREFRONT_ORIGIN}: HTTP ${status}, ${cloudflare.description}`
       );
+    }
+    if (sawChallenge) {
+      // The status belongs to the interstitial (usually 403/503), not to the
+      // storefront the browser navigated to after solving it.
+      return `challenge cleared, first load was HTTP ${status}`;
     }
     if (status >= 400) {
       throw new Error(`HTTP ${status} when opening ${STOREFRONT_ORIGIN}`);
     }
-    return status;
+    return `HTTP ${status}`;
   }
 
   /**

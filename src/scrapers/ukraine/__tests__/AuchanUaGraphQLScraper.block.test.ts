@@ -110,6 +110,9 @@ describe('AuchanUaGraphQLScraper when Cloudflare answers instead of the API', ()
     ['data is null', JSON.stringify({ data: null })],
     ['search is missing', JSON.stringify({ data: {} })],
     ['items is not a list', JSON.stringify({ data: { search: { page_info: { page_size: 100, total_pages: 1 }, items: null } } })],
+    // Math.min(undefined, 100) is NaN: only page 1 would be scraped, reported as success.
+    ['total_pages is missing', JSON.stringify({ data: { search: { page_info: { page_size: 100 }, items: [] } } })],
+    ['total_pages is not a number', JSON.stringify({ data: { search: { page_info: { page_size: 100, total_pages: '3' }, items: [] } } })],
   ])('fails a 200 JSON payload without the expected shape (%s)', async (_label, body) => {
     // A well-formed JSON body that is not a search result used to log
     // "No data returned" and return [], which counts as a clean, empty

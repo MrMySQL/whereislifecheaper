@@ -151,9 +151,27 @@ describe('AuchanUaGraphQLScraper issues GraphQL requests from a real browser pag
     page.content.mockResolvedValue(BLOCK_PAGE);
 
     await expect(scraper.initialize()).rejects.toThrow(/Cloudflare.*403|403.*Cloudflare/);
+    // A 1020 block never clears on its own: no settle wait, one snapshot.
+    expect(page.content).toHaveBeenCalledTimes(1);
   });
 
-  it('names a challenge served with HTTP 200 on the storefront navigation', async () => {
+  it('waits for a managed challenge to clear instead of failing on the interstitial', async () => {
+    // A real browser auto-solves "Just a moment..." a few seconds after
+    // domcontentloaded, then navigates to the storefront. The first snapshot
+    // still shows the interstitial; that is not a failure yet.
+    const { scraper, page } = scraperWith(JSON_PAGE);
+    page.goto.mockResolvedValue({ status: () => 503 });
+    page.content
+      .mockResolvedValueOnce(CHALLENGE_PAGE)
+      .mockRejectedValueOnce(new Error('Execution context was destroyed, most likely because of a navigation'))
+      .mockResolvedValue('<html><head><title>ДОДОму — швидка доставка</title></head></html>');
+
+    await scraper.initialize();
+
+    expect(page.goto).toHaveBeenCalledTimes(1);
+  });
+
+  it('names a challenge that persists past the settle window', async () => {
     // Cloudflare usually sends challenges as 403/503, but the body is the
     // reliable signal, and goto() can also return no response object at all.
     const { scraper, page } = scraperWith(JSON_PAGE);
@@ -161,6 +179,7 @@ describe('AuchanUaGraphQLScraper issues GraphQL requests from a real browser pag
     page.content.mockResolvedValue(CHALLENGE_PAGE);
 
     await expect(scraper.initialize()).rejects.toThrow(/Cloudflare challenge/);
+    expect(page.content.mock.calls.length).toBeGreaterThan(1);
   });
 
   it('retries a transient failure of the storefront navigation', async () => {
