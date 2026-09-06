@@ -26,6 +26,10 @@ const BLOCK_PAGE = fs.readFileSync(
   'utf8'
 );
 
+const CHALLENGE_PAGE = `<!DOCTYPE html><html lang="en-US"><head><title>Just a moment...</title>
+<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=a36a86f48add70a9"></script>
+</head><body><div id="challenge-running">Checking your browser</div></body></html>`;
+
 const JSON_PAGE: GraphQLHttpResponse = {
   status: 200,
   contentType: 'application/json',
@@ -74,13 +78,14 @@ function fakeBrowser(response: GraphQLHttpResponse) {
   return { browser, page };
 }
 
-function scraperWith(response: GraphQLHttpResponse) {
+function scraperWith(response: GraphQLHttpResponse, overrides: Partial<ScraperConfig> = {}) {
   const fake = fakeBrowser(response);
   launch.mockResolvedValue(fake.browser);
   const scraper = new AuchanUaGraphQLScraper({
     ...auchanUaGraphQLConfig,
     supermarketId: '1',
     maxRetries: 0,
+    ...overrides,
   } as ScraperConfig);
   const category = auchanUaGraphQLCategories[0];
   return {
@@ -106,7 +111,10 @@ describe('AuchanUaGraphQLScraper issues GraphQL requests from a real browser pag
     await scraper.initialize();
 
     expect(launch).toHaveBeenCalledTimes(1);
-    expect(page.goto).toHaveBeenCalledWith('https://express.auchan.ua/', expect.anything());
+    expect(page.goto).toHaveBeenCalledWith('https://express.auchan.ua/', {
+      waitUntil: 'domcontentloaded',
+      timeout: 1000, // config.scraper.timeout from the env mock above
+    });
   });
 
   it('posts the query through page.evaluate on the storefront origin', async () => {
@@ -121,6 +129,7 @@ describe('AuchanUaGraphQLScraper issues GraphQL requests from a real browser pag
       expect.objectContaining({
         url: 'https://express.auchan.ua/graphql/',
         body: expect.stringContaining('getCategoryProducts'),
+        timeoutMs: 30000,
       })
     );
   });
@@ -142,6 +151,27 @@ describe('AuchanUaGraphQLScraper issues GraphQL requests from a real browser pag
     page.content.mockResolvedValue(BLOCK_PAGE);
 
     await expect(scraper.initialize()).rejects.toThrow(/Cloudflare.*403|403.*Cloudflare/);
+  });
+
+  it('names a challenge served with HTTP 200 on the storefront navigation', async () => {
+    // Cloudflare usually sends challenges as 403/503, but the body is the
+    // reliable signal, and goto() can also return no response object at all.
+    const { scraper, page } = scraperWith(JSON_PAGE);
+    page.goto.mockResolvedValue({ status: () => 200 });
+    page.content.mockResolvedValue(CHALLENGE_PAGE);
+
+    await expect(scraper.initialize()).rejects.toThrow(/Cloudflare challenge/);
+  });
+
+  it('retries a transient failure of the storefront navigation', async () => {
+    const { scraper, page } = scraperWith(JSON_PAGE, { maxRetries: 1 });
+    page.goto
+      .mockRejectedValueOnce(new Error('page.goto: net::ERR_CONNECTION_RESET'))
+      .mockResolvedValueOnce({ status: () => 200 });
+
+    await scraper.initialize();
+
+    expect(page.goto).toHaveBeenCalledTimes(2);
   });
 
   it('refuses to scrape before initialize has opened a page', async () => {

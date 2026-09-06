@@ -237,6 +237,15 @@ export function interpretGraphQLResponse(res: GraphQLHttpResponse): GraphQLSearc
   if (data.errors && data.errors.length > 0) {
     throw new Error(`GraphQL error: ${data.errors[0].message}`);
   }
+  // Well-formed JSON that is not a search result (data: null, a different
+  // query's shape, an error envelope without `errors`) must not pass as an
+  // empty category.
+  const search = data?.data?.search;
+  if (!search || !Array.isArray(search.items) || !search.page_info) {
+    throw new Error(
+      `Unexpected GraphQL payload from express.auchan.ua/graphql/ (HTTP ${res.status}): ${snippet(res.body)}`
+    );
+  }
   return data;
 }
 
@@ -257,6 +266,8 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
   /**
    * Launch a browser and open the storefront, so that the GraphQL queries can
    * be issued as same-origin fetches from a page Cloudflare has let through.
+   * The navigation is retried like every GraphQL page is: a transient blip on
+   * the one request that gates the whole run must not end the run.
    */
   async initialize(): Promise<void> {
     this.logger.info(`Initializing Auchan Ukraine GraphQL scraper (browser context)...`);
@@ -265,21 +276,35 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
     await this.launchBrowser();
     this.page = await this.createPage();
 
-    const response = await this.page.goto(`${STOREFRONT_ORIGIN}/`, {
+    const status = await this.retryOnFailure(() => this.openStorefront(), 'Open storefront');
+
+    this.logger.info(`Auchan Ukraine GraphQL scraper initialized (storefront open, HTTP ${status})`);
+  }
+
+  /**
+   * Navigate to the storefront and make sure what loaded is the storefront.
+   * The body is inspected regardless of status: Cloudflare normally serves
+   * its block/challenge pages with 403/503, but the markup is the reliable
+   * signal, and goto() can return no response object at all.
+   */
+  private async openStorefront(): Promise<number> {
+    const page = this.page!;
+    const response = await page.goto(`${STOREFRONT_ORIGIN}/`, {
       waitUntil: 'domcontentloaded',
       timeout: envConfig.scraper.timeout,
     });
     const status = response?.status() ?? 0;
-    if (status >= 400) {
-      const cloudflare = describeCloudflarePage(await this.page.content());
+
+    const cloudflare = describeCloudflarePage(await page.content());
+    if (cloudflare) {
       throw new Error(
-        cloudflare
-          ? `Blocked by Cloudflare when opening ${STOREFRONT_ORIGIN}: HTTP ${status}, ${cloudflare}`
-          : `HTTP ${status} when opening ${STOREFRONT_ORIGIN}`
+        `Blocked by Cloudflare when opening ${STOREFRONT_ORIGIN}: HTTP ${status}, ${cloudflare}`
       );
     }
-
-    this.logger.info(`Auchan Ukraine GraphQL scraper initialized (storefront open, HTTP ${status})`);
+    if (status >= 400) {
+      throw new Error(`HTTP ${status} when opening ${STOREFRONT_ORIGIN}`);
+    }
+    return status;
   }
 
   /**
@@ -330,11 +355,6 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
       // First, get the first page to determine total pages
       const firstPage = await this.fetchProductsPage(categoryId, 1);
 
-      if (!firstPage?.data?.search) {
-        this.logger.warn(`No data returned for category ${categoryName}`);
-        return [];
-      }
-
       const totalPages = Math.min(
         firstPage.data.search.page_info.total_pages,
         this.MAX_PAGES_PER_CATEGORY
@@ -377,11 +397,6 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
             batch.map(async (pageNum) => {
               try {
                 const pageData = await this.fetchProductsPage(categoryId, pageNum);
-
-                if (!pageData?.data?.search?.items) {
-                  return { pageNum, products: [] };
-                }
-
                 const products = this.transformProducts(pageData.data.search.items);
                 return { pageNum, products };
               } catch (error) {
