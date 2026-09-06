@@ -209,7 +209,7 @@ export class VoliScraper extends BaseScraper {
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
     const fullUrl = `${this.config.baseUrl}${category.url}`;
-    return this.scrapeCategoryPage(fullUrl, category.id, category.name);
+    return this.scrapeCategoryPage(fullUrl, category);
   }
 
   /**
@@ -219,9 +219,9 @@ export class VoliScraper extends BaseScraper {
    */
   private async scrapeCategoryPage(
     url: string,
-    categoryId: string,
-    categoryName: string
+    category: CategoryConfig
   ): Promise<ProductData[]> {
+    const { id: categoryId, name: categoryName } = category;
     const products: ProductData[] = [];
 
     try {
@@ -254,11 +254,7 @@ export class VoliScraper extends BaseScraper {
 
       products.push(...pageProducts);
     } catch (error) {
-      this.logError(
-        `Failed to scrape category ${url}`,
-        url,
-        error as Error
-      );
+      this.failCategory(category, error, url);
     }
 
     return products;

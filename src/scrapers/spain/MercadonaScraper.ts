@@ -321,19 +321,16 @@ export class MercadonaScraper extends BaseScraper {
    * Scrape a single category using REST API
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
-    // Category URL format: the ID is in the URL (e.g., "112" from category config)
-    const categoryId = category.id;
-    return this.scrapeCategoryViaApi(categoryId, category.name);
+    return this.scrapeCategoryViaApi(category);
   }
 
   /**
    * Scrape a single category using REST API
    * Handles nested categories recursively
    */
-  private async scrapeCategoryViaApi(
-    categoryId: string,
-    categoryName: string
-  ): Promise<ProductData[]> {
+  private async scrapeCategoryViaApi(category: CategoryConfig): Promise<ProductData[]> {
+    // Category URL format: the ID is in the URL (e.g., "112" from category config)
+    const { id: categoryId, name: categoryName } = category;
     const products: ProductData[] = [];
 
     try {
@@ -367,11 +364,7 @@ export class MercadonaScraper extends BaseScraper {
 
       products.push(...parsedProducts);
     } catch (error) {
-      this.logError(
-        `Failed to scrape category ${categoryName}`,
-        `${this.API_BASE}/categories/${categoryId}/`,
-        error as Error
-      );
+      this.failCategory(category, error, `${this.API_BASE}/categories/${categoryId}/`);
     }
 
     return products;

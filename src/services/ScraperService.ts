@@ -8,24 +8,17 @@ import { ProductData, ScrapeResult, CategoryConfig, PageInfo } from '../types/sc
 import { ScrapeLogWithSupermarket, ScrapeLogLatestStats } from '../types/db.types';
 import { interpretProductQuantity } from '../utils/productQuantity';
 import { getScraperCategories, getScraperDeadlineMs } from '../scrapers/scraperRegistry';
+import { FALLBACK_SCRAPER_DEADLINE_MS } from '../scrapers/scraperDeadline';
 import { generateRunId } from '../utils/runId';
-import { CATEGORY_FAILURE_THRESHOLD } from './scrapeRunHealth';
+import { assessScrapeResult } from './scrapeRunHealth';
+
+export { FALLBACK_SCRAPER_DEADLINE_MS };
 
 export interface RunScraperOptions {
   categoryIds?: string[];
   /** Wall-clock budget for this scraper, in ms. Defaults to SCRAPER_DEADLINE_MS. */
   deadlineMs?: number;
 }
-
-/**
- * Wall-clock budget for a single scraper.
- *
- * Without this, one scraper that never returns holds the whole run open until
- * the CI job is killed — which is exactly what Woolworths did from 2026-04-28
- * to 2026-08-01, costing 33 consecutive runs. The default leaves room for the
- * slowest healthy scraper (Voli, ~28 min on the 2026-08-01 run) with margin.
- */
-export const FALLBACK_SCRAPER_DEADLINE_MS = 45 * 60 * 1000;
 
 /**
  * Resolve SCRAPER_DEADLINE_MS, falling back to the default rather than
@@ -222,40 +215,6 @@ export class ScraperService {
       // carried on; without this they never left it. A scraper that lost 15 of
       // 16 categories and stored one product reported "Errors: 0".
       const categoryStats = scraper.getCategoryStats();
-      const categoryErrors = scraper.getErrors();
-
-      // A scraper that returns cleanly but stores nothing is not a success —
-      // a swallowed API error, a captcha, or a dead category all look like
-      // this, and recording them as 'success' is what hid REWE's 0-product
-      // runs for three months. Losing most of the categories is the same kind
-      // of non-success: real rows stored, for a fraction of the catalog.
-      const categoriesLost =
-        categoryStats.attempted > 0 &&
-        categoryStats.failed / categoryStats.attempted >= CATEGORY_FAILURE_THRESHOLD;
-      const status = totalStoredCount === 0 || categoriesLost ? 'partial' : 'success';
-      if (status === 'partial') {
-        scraperLogger.warn(
-          totalStoredCount === 0
-            ? `${supermarket.name} completed without storing any products — recording as 'partial'`
-            : `${supermarket.name} lost ${categoryStats.failed} of ${categoryStats.attempted} ` +
-              `categories — recording as 'partial'`
-        );
-      }
-
-      if (scrapeLogId) {
-        // onlyIfRunning: reapStaleRuns is a second writer, in another
-        // process. The database is the only place the two can be ordered.
-        await this.scrapeLogRepository.update(scrapeLogId, status, {
-          productsScraped: totalStoredCount,
-          error: status !== 'partial'
-            ? undefined
-            : totalStoredCount === 0
-              ? 'Completed but stored 0 products'
-              : `${categoryStats.failed} of ${categoryStats.attempted} categories failed`,
-          duration: Date.now() - startTime,
-          onlyIfRunning: true,
-        });
-      }
 
       const result: ScrapeResult = {
         supermarketId,
@@ -269,10 +228,35 @@ export class ScraperService {
         productsScraped: totalStoredCount,
         productsFailed: products.length - totalStoredCount,
         errors: [],
-        categoryErrors,
+        categoryErrors: scraper.getCategoryErrors(),
         categoriesAttempted: categoryStats.attempted,
         categoriesFailed: categoryStats.failed,
       };
+
+      // A scraper that returns cleanly but stores nothing is not a success —
+      // a swallowed API error, a captcha, or a dead category all look like
+      // this, and recording them as 'success' is what hid REWE's 0-product
+      // runs for three months. Losing most of the categories is the same kind
+      // of non-success. The rules live in assessScrapeResult so that what
+      // fails the CI run and what scrape_logs records can never disagree.
+      const health = assessScrapeResult(result);
+      const status = health.degraded ? 'partial' : 'success';
+      if (health.degraded) {
+        scraperLogger.warn(
+          `${supermarket.name} degraded (${health.reasons.join('; ')}) — recording as 'partial'`
+        );
+      }
+
+      if (scrapeLogId) {
+        // onlyIfRunning: reapStaleRuns is a second writer, in another
+        // process. The database is the only place the two can be ordered.
+        await this.scrapeLogRepository.update(scrapeLogId, status, {
+          productsScraped: totalStoredCount,
+          error: health.degraded ? health.reasons.join('; ') : undefined,
+          duration: result.duration,
+          onlyIfRunning: true,
+        });
+      }
 
       scraperLogger.info(
         `Scraping completed for ${supermarket.name}: ${totalStoredCount} products stored`

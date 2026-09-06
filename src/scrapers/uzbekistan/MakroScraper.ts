@@ -214,16 +214,14 @@ export class MakroScraper extends BaseScraper {
    * Scrape a single category using REST API
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
-    return this.scrapeCategoryViaApi(category.id, category.name);
+    return this.scrapeCategoryViaApi(category);
   }
 
   /**
    * Scrape a single category using REST API
    */
-  private async scrapeCategoryViaApi(
-    categoryId: string,
-    categoryName: string
-  ): Promise<ProductData[]> {
+  private async scrapeCategoryViaApi(category: CategoryConfig): Promise<ProductData[]> {
+    const { id: categoryId, name: categoryName } = category;
     const products: ProductData[] = [];
 
     try {
@@ -257,11 +255,7 @@ export class MakroScraper extends BaseScraper {
 
       products.push(...parsedProducts);
     } catch (error) {
-      this.logError(
-        `Failed to scrape category ${categoryName}`,
-        `${this.API_BASE}?categoryId=${categoryId}`,
-        error as Error
-      );
+      this.failCategory(category, error, `${this.API_BASE}?categoryId=${categoryId}`);
     }
 
     return products;

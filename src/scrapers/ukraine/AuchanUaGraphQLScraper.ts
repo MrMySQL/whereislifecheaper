@@ -194,7 +194,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
       return [];
     }
 
-    return this.scrapeCategoryViaGraphQL(categoryId, category.id, category.name);
+    return this.scrapeCategoryViaGraphQL(categoryId, category);
   }
 
   /**
@@ -214,9 +214,9 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
    */
   private async scrapeCategoryViaGraphQL(
     categoryId: string,
-    categorySlug: string,
-    categoryName: string
+    category: CategoryConfig
   ): Promise<ProductData[]> {
+    const { id: categorySlug, name: categoryName } = category;
     const allProducts: ProductData[] = [];
 
     try {
@@ -319,15 +319,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
         `Category ${categoryName}: scraped ${allProducts.length} total products from ${totalPages} pages`
       );
     } catch (error) {
-      this.logger.error(
-        `Failed to scrape category ${categoryName}:`,
-        (error as Error).message
-      );
-      this.logError(
-        `Failed to scrape category: ${categoryName}`,
-        undefined,
-        error as Error
-      );
+      this.failCategory(category, error);
     }
 
     return allProducts;

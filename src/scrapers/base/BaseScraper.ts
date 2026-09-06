@@ -25,14 +25,21 @@ export abstract class BaseScraper {
   protected startTime: number = 0;
   protected productsScraped: number = 0;
   protected productsFailed: number = 0;
+  /** Page and product errors: logError(). A lost page is not a lost category. */
   protected errors: ScrapeError[] = [];
   /**
    * Category outcomes for this run. A scraper that loses most of its
    * categories but still stores something from the rest used to be
    * indistinguishable from a healthy run — see getCategoryStats().
+   *
+   * Kept in their own buffer, not mixed into `errors`: ScraperService reports
+   * this list as "categories failed", and a page error in there would name a
+   * category that actually came through.
    */
+  protected categoryErrors: ScrapeError[] = [];
   protected categoriesAttempted: number = 0;
   protected categoriesFailed: number = 0;
+  private failedCategoryIds = new Set<string>();
   protected onPageScraped?: OnPageScrapedCallback;
   protected logger: ReturnType<typeof createPrefixedLogger>;
 
@@ -96,11 +103,26 @@ export abstract class BaseScraper {
 
     for (const category of this.config.categories) {
       this.categoriesAttempted++;
+      const errorsBefore = this.errors.length;
       try {
         this.logger.info(`Scraping category: ${category.name} (${category.id})`);
 
         const categoryProducts = await this.scrapeCategory(category);
         allProducts.push(...categoryProducts);
+
+        // Most scrapers catch inside scrapeCategory and return what they
+        // have, so a throw is the exception rather than the rule. A category
+        // that came back empty after logging errors did not really run — the
+        // first page was the one that was blocked.
+        const errorsDuring = this.errors.length - errorsBefore;
+        if (categoryProducts.length === 0 && errorsDuring > 0) {
+          const last = this.errors[this.errors.length - 1];
+          this.failCategory(
+            category,
+            `${errorsDuring} error${errorsDuring === 1 ? '' : 's'}, last: ${last.message}`,
+            last.productUrl
+          );
+        }
 
         this.logger.info(
           `Scraped ${categoryProducts.length} products from ${category.name}`
@@ -109,12 +131,7 @@ export abstract class BaseScraper {
         // Wait between categories
         await this.waitBetweenRequests();
       } catch (error) {
-        this.categoriesFailed++;
-        this.logError(
-          `Failed to scrape category: ${category.name}`,
-          undefined,
-          error as Error
-        );
+        this.failCategory(category, error);
       }
     }
 
@@ -416,6 +433,37 @@ export abstract class BaseScraper {
   }
 
   /**
+   * Record that a whole category was lost.
+   *
+   * Call this from a scrapeCategory that catches its own failure and returns
+   * what it has (the common shape) instead of logError(): logError() records
+   * a page or product error, and nothing downstream reads those as "the
+   * category failed". Marking a category more than once — say, marking it
+   * and then rethrowing — counts it once.
+   */
+  protected failCategory(category: CategoryConfig, error?: unknown, productUrl?: string): void {
+    const cause = error instanceof Error ? error : undefined;
+    const detail = cause ? cause.message : typeof error === 'string' ? error : undefined;
+    const message = `Failed to scrape category: ${category.name}${detail ? ` (${detail})` : ''}`;
+
+    this.logger.error(message, {
+      productUrl,
+      error: cause?.message,
+      supermarket: this.config.name,
+    });
+
+    if (this.failedCategoryIds.has(category.id)) return;
+    this.failedCategoryIds.add(category.id);
+    this.categoriesFailed++;
+    this.categoryErrors.push({
+      productUrl,
+      message,
+      stack: cause?.stack,
+      timestamp: new Date(),
+    });
+  }
+
+  /**
    * Build scrape result
    */
   protected buildScrapeResult(products: ProductData[]): ScrapeResult {
@@ -433,6 +481,9 @@ export abstract class BaseScraper {
       productsScraped: this.productsScraped,
       productsFailed: this.productsFailed,
       errors: this.errors,
+      categoryErrors: this.categoryErrors,
+      categoriesAttempted: this.categoriesAttempted,
+      categoriesFailed: this.categoriesFailed,
     };
   }
 
@@ -454,11 +505,19 @@ export abstract class BaseScraper {
   }
 
   /**
-   * Errors collected during this run, including per-category failures that
-   * scrapeProductList caught and carried on from.
+   * Page and product errors collected during this run. Category failures are
+   * not in here — see getCategoryErrors().
    */
   public getErrors(): ScrapeError[] {
     return [...this.errors];
+  }
+
+  /**
+   * One entry per category this run lost, whether it threw, marked itself
+   * failed via failCategory(), or came back empty after logging errors.
+   */
+  public getCategoryErrors(): ScrapeError[] {
+    return [...this.categoryErrors];
   }
 
   /**

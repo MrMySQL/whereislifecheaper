@@ -245,11 +245,7 @@ export class GurkeralScraper extends BaseScraper {
 
       this.logger.info(`Category ${category.name}: Total ${products.length} products scraped`);
     } catch (error) {
-      this.logError(
-        `Failed to scrape category ${category.name}`,
-        `${this.API_BASE}/categories/normal/${categoryId}/products`,
-        error as Error
-      );
+      this.failCategory(category, error, `${this.API_BASE}/categories/normal/${categoryId}/products`);
     }
 
     return products;

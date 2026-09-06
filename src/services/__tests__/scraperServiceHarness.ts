@@ -20,6 +20,7 @@ export function fakeScraper(scrapeProductList: () => Promise<unknown[]>) {
     scrapeProductList: jest.fn(scrapeProductList),
     cleanup: jest.fn().mockResolvedValue(undefined),
     getErrors: jest.fn(() => [] as unknown[]),
+    getCategoryErrors: jest.fn(() => [] as unknown[]),
     getCategoryStats: jest.fn(() => ({ attempted: 0, failed: 0 })),
   };
 }

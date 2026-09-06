@@ -7,8 +7,15 @@ jest.mock('../../utils/logger', () => {
   const stub = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
   return { scraperLogger: stub, logger: stub, createPrefixedLogger: () => stub };
 });
+jest.mock('../scrapeRunHealth', () => {
+  const actual = jest.requireActual('../scrapeRunHealth');
+  return { ...actual, assessScrapeResult: jest.fn(actual.assessScrapeResult) };
+});
 
 import { fakeScraper, harness, PageCallback } from './scraperServiceHarness';
+import { assessScrapeResult } from '../scrapeRunHealth';
+
+const mockedAssess = assessScrapeResult as jest.MockedFunction<typeof assessScrapeResult>;
 
 /** A scraper that stores one product but lost most of its categories. */
 function mostlyBrokenScraper(attempted: number, failed: number) {
@@ -22,17 +29,24 @@ function mostlyBrokenScraper(attempted: number, failed: number) {
     registered = cb;
   });
   scraper.getCategoryStats.mockReturnValue({ attempted, failed });
-  scraper.getErrors.mockReturnValue(
+  scraper.getCategoryErrors.mockReturnValue(
     Array.from({ length: failed }, (_, i) => ({
       message: `Failed to scrape category: cat-${i}`,
       timestamp: new Date(),
     }))
   );
+  // Page-level noise that must not be mistaken for category failures.
+  scraper.getErrors.mockReturnValue([
+    { message: 'Failed to scrape page 3 of Dairy', timestamp: new Date() },
+  ]);
   return scraper;
 }
 
 describe('ScraperService category failure reporting', () => {
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => {
+    jest.clearAllMocks();
+    mockedAssess.mockImplementation(jest.requireActual('../scrapeRunHealth').assessScrapeResult);
+  });
 
   it('carries the scraper category failures into the run result', async () => {
     // Auchan UA lost 16 of 16 categories to a Cloudflare block and the run
@@ -45,6 +59,21 @@ describe('ScraperService category failure reporting', () => {
     expect(result.categoriesAttempted).toBe(16);
     expect(result.categoriesFailed).toBe(15);
     expect(result.categoryErrors).toHaveLength(15);
+  });
+
+  it('reports only category failures as categoryErrors, not page or product errors', async () => {
+    // getErrors() is every logError() call — a lost page in an otherwise
+    // healthy category included. Copying that buffer wholesale told readers
+    // a category had failed when a page had.
+    const scraper = mostlyBrokenScraper(16, 2);
+    const { service } = harness(scraper);
+
+    const result = await service.runScraper('1', { deadlineMs: 10_000 });
+
+    expect(result.categoryErrors!.map(e => e.message)).toEqual([
+      'Failed to scrape category: cat-0',
+      'Failed to scrape category: cat-1',
+    ]);
   });
 
   it('keeps run-level errors separate from category failures', async () => {
@@ -88,5 +117,35 @@ describe('ScraperService category failure reporting', () => {
 
     expect(result.categoriesFailed).toBe(0);
     expect(result.categoryErrors).toEqual([]);
+  });
+
+  it('takes the scrape_logs status from assessScrapeResult, not a copy of its rules', async () => {
+    // One definition of "degraded": whatever fails the CI run must also
+    // land in scrape_logs as 'partial', with the same reasons.
+    const scraper = mostlyBrokenScraper(16, 0);
+    const { service, update } = harness(scraper);
+    mockedAssess.mockReturnValue({ degraded: true, reasons: ['a rule only the helper knows'] });
+
+    await service.runScraper('1', { deadlineMs: 10_000 });
+
+    expect(mockedAssess).toHaveBeenCalledWith(expect.objectContaining({
+      productsScraped: 1,
+      categoriesAttempted: 16,
+      categoriesFailed: 0,
+    }));
+    expect(update).toHaveBeenCalledWith('log-1', 'partial', expect.objectContaining({
+      error: 'a rule only the helper knows',
+    }));
+  });
+
+  it('records a healthy run as success with no error text', async () => {
+    const scraper = mostlyBrokenScraper(16, 0);
+    const { service, update } = harness(scraper);
+
+    await service.runScraper('1', { deadlineMs: 10_000 });
+
+    expect(update).toHaveBeenCalledWith('log-1', 'success', expect.objectContaining({
+      error: undefined,
+    }));
   });
 });

@@ -212,15 +212,7 @@ export class CarrefourItScraper extends BaseScraper {
         `Category ${category.name}: scraped ${allProducts.length} total products from ${totalPages} pages`
       );
     } catch (error) {
-      this.logger.error(
-        `Failed to scrape category ${category.name}:`,
-        (error as Error).message
-      );
-      this.logError(
-        `Failed to scrape category: ${category.name}`,
-        undefined,
-        error as Error
-      );
+      this.failCategory(category, error);
     }
 
     return allProducts;

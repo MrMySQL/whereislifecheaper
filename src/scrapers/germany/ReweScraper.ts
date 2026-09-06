@@ -644,14 +644,9 @@ export class ReweScraper extends BaseScraper {
 
       this.logger.info(`Category ${category.name}: Total ${products.length} products scraped from ${totalPages} pages`);
     } catch (error) {
-      // Rethrown so BaseScraper counts the category as failed instead of
-      // taking an empty array for a scraped one.
+      // Rethrown so the run stops: a wrong market makes every category wrong.
       if (error instanceof ReweMarketError) throw error;
-      this.logError(
-        `Failed to scrape category ${category.name}`,
-        `${this.BASE_URL}${category.url}`,
-        error as Error
-      );
+      this.failCategory(category, error, `${this.BASE_URL}${category.url}`);
     }
 
     return products;

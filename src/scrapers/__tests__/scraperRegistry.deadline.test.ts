@@ -6,7 +6,7 @@ jest.mock('../../utils/logger', () => {
 });
 
 import { getScraperDeadlineMs } from '../scraperRegistry';
-import { FALLBACK_SCRAPER_DEADLINE_MS } from '../../services/ScraperService';
+import { FALLBACK_SCRAPER_DEADLINE_MS } from '../scraperDeadline';
 
 describe('per-scraper deadline overrides', () => {
   it('gives Woolworths a budget long enough to reach its last category', () => {
