@@ -64,7 +64,8 @@
     "allCountriesTooltip": "Show only products available in all selected countries",
     "searchProducts": "Search products...",
     "showingProducts": "Showing <strong>{{shown}}</strong> of <strong>{{total}}</strong> products",
-    "staleData": "Prices haven't refreshed in {{days}} days. The figures below are the most recent we have, not today's prices."
+    "staleData": "Prices haven't refreshed in {{days}} days. The figures below are the most recent we have, not today's prices.",
+    "noCurrentPrices": "No comparable products match your search and selected countries."
   },
   "comparison": {
     "product": "Product",
