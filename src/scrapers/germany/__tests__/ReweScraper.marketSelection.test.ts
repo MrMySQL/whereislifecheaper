@@ -10,6 +10,7 @@ import {
   ReweScraper,
   MarketConfiguration,
   assertPricedPage,
+  categoryPageUrl,
   deliveryMarketFor,
 } from '../ReweScraper';
 import { ScraperConfig } from '../../../types/scraper.types';
@@ -168,5 +169,17 @@ describe('assertPricedPage', () => {
 
   it('accepts an empty page — an empty category is not a lost market', () => {
     expect(() => assertPricedPage([], 'Tierbedarf', 1)).not.toThrow();
+  });
+});
+
+describe('categoryPageUrl', () => {
+  const category = 'https://www.rewe.de/shop/c/obst-gemuese/';
+
+  it('asks for 120 products per page — REWE lists 12,459 products, 312 pages at the default 40', () => {
+    expect(categoryPageUrl(category, 1)).toBe('https://www.rewe.de/shop/c/obst-gemuese/?objectsPerPage=120');
+  });
+
+  it("addresses later pages the way the site's own pagination links do", () => {
+    expect(categoryPageUrl(category, 3)).toBe('https://www.rewe.de/shop/c/obst-gemuese/?objectsPerPage=120&page=3');
   });
 });

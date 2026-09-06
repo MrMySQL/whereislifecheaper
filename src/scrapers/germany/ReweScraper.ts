@@ -130,6 +130,21 @@ export function assertPricedPage(
 }
 
 /**
+ * The largest page size the listing accepts. The default is 40, and with a
+ * market set the catalog is ~12,500 products: 312 pages at 40, or ~45 minutes
+ * at the ~9s a page costs here — the whole per-scraper budget.
+ */
+export const REWE_OBJECTS_PER_PAGE = 120;
+
+/** URL of one listing page, in the same form as the site's own pagination links. */
+export function categoryPageUrl(baseCategoryUrl: string, pageNumber: number): string {
+  const url = new URL(baseCategoryUrl);
+  url.searchParams.set('objectsPerPage', String(REWE_OBJECTS_PER_PAGE));
+  if (pageNumber > 1) url.searchParams.set('page', String(pageNumber));
+  return url.toString();
+}
+
+/**
  * Scraper for REWE Germany (www.rewe.de/shop/)
  *
  * This scraper uses playwright-extra with stealth plugin to bypass Cloudflare:
@@ -548,8 +563,9 @@ export class ReweScraper extends BaseScraper {
       }
 
       // Navigate to first page
-      this.logger.debug(`Navigating to ${baseCategoryUrl}`);
-      await this.page.goto(baseCategoryUrl, { waitUntil: 'domcontentloaded' });
+      const firstPageUrl = categoryPageUrl(baseCategoryUrl, 1);
+      this.logger.debug(`Navigating to ${firstPageUrl}`);
+      await this.page.goto(firstPageUrl, { waitUntil: 'domcontentloaded' });
       await this.waitForDynamicContent();
 
       // Handle cookie consent if it appears again
@@ -581,7 +597,7 @@ export class ReweScraper extends BaseScraper {
         try {
           // Navigate to page (skip for first page as we're already there)
           if (pageNum > 1) {
-            const pageUrl = `${baseCategoryUrl}?page=${pageNum}`;
+            const pageUrl = categoryPageUrl(baseCategoryUrl, pageNum);
             this.logger.debug(`Navigating to page ${pageNum}: ${pageUrl}`);
             await this.page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
             await this.waitForDynamicContent();
@@ -669,7 +685,7 @@ export class ReweScraper extends BaseScraper {
         const paginationNav = document.querySelector('nav[aria-label*="Suchergebnisse"], nav ul[aria-label*="Suchergebnisse"]');
         if (!paginationNav) {
           // Try alternative: look for page number buttons/links
-          const pageLinks = document.querySelectorAll('a[href*="?page="]');
+          const pageLinks = document.querySelectorAll('a[href*="page="]');
           if (pageLinks.length === 0) return 1;
 
           let maxPage = 1;
@@ -690,7 +706,7 @@ export class ReweScraper extends BaseScraper {
 
         pageItems.forEach(item => {
           // Check for page number in link or button
-          const link = item.querySelector('a[href*="?page="]');
+          const link = item.querySelector('a[href*="page="]');
           if (link) {
             const href = link.getAttribute('href') || '';
             const match = href.match(/[?&]page=(\d+)/);
