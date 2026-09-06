@@ -109,3 +109,17 @@ test.each([
  const response=await request(a).post('/maintenance/suggestions/1/approve').send({});
  expect(response.status).toBe(status);expect(response.body).toEqual({error:message});expect(errors).not.toHaveBeenCalled();
 });
+
+test.each([{country_id:'0'},{country_id:['2']},{country_id:'2',cursor:'x'},{cursor:'1:2'}])('rejects invalid country run scope %j',async(body)=>{
+ const {a,service}=app('admin');expect((await request(a).post('/maintenance/run').send(body)).status).toBe(400);expect(service.run).not.toHaveBeenCalled();
+});
+test('country run passes its continuation token',async()=>{
+ const {a,service}=app('admin');expect((await request(a).post('/maintenance/run').send({country_id:'2',cursor:'1:3',dry_run:false})).status).toBe(200);
+ expect(service.run).toHaveBeenCalledWith(10,false,{country:'2',cursor:'1:3'});
+});
+test.each([{ids:[],action:'approve'},{ids:['1','1'],action:'approve'},{ids:['0'],action:'approve'},{ids:['1'],action:'undo'},{ids:Array.from({length:51},(_,i)=>String(i+1)),action:'approve'}])('rejects invalid batch %j',async(body)=>{
+ expect((await request(app('admin').a).post('/maintenance/suggestions/batch').send(body)).status).toBe(400);
+});
+test('batch endpoint requires admin',async()=>{
+ expect((await request(app().a).post('/maintenance/suggestions/batch').send({ids:['1'],action:'approve'})).status).toBe(401);
+});

@@ -19,6 +19,10 @@ All new semantic mappings require review in this release. Freshness/availability
 
 Approvals re-read the listing and latest price inside a transaction. Changed, stale, unavailable or already classified products are rejected. Each decision records the actor and before/after classification. Undo refuses to overwrite subsequent product edits. Rejections and undone suggestions are remembered rather than repeatedly proposed. Pending suggestions can refresh when their evidence changes.
 
+## Country onboarding
+
+See [country-mapping.md](country-mapping.md) for multilingual discovery, resumable country scans, selected batch review, and the production-data replay results. Migration 018 is required for the vocabulary cache.
+
 ## Commands and scheduling
 
 ```sh
@@ -26,7 +30,7 @@ npm run products:maintain -- --dry-run --limit=25
 npm run products:maintain -- --apply --limit=25
 ```
 
-The default is dry-run. `--apply` creates review proposals; it does not approve mappings. Dry runs record run history but do not advance the live scanning cursor. Each run is bounded to 1–25 product/store combinations; repeated runs rotate through gaps. The UI can trigger the same bounded discovery operation.
+The default is dry-run. `--apply` creates review proposals; it does not approve mappings. Dry runs are read-only: they do not record run history, save vocabulary, persist proposals, or advance the live scanning cursor. They return preview evidence in the response. Each run is bounded to 1–25 product/store combinations; repeated runs rotate through gaps. The UI can trigger the same bounded discovery operation.
 
 `.github/workflows/product-maintenance.yml` runs after Daily Scrape completes and daily at 08:23 UTC, with concurrency protection. It uses the existing `DATABASE_URL` secret. No login session or admin browser automation is required by the scheduled worker. Failed runs appear in GitHub Actions and the admin run history; successful proposals appear in the review queue.
 
