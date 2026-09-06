@@ -239,7 +239,7 @@ export class CanonicalProductRepository {
     return result.rows;
   }
 
-  /** Only current, available, non-duplicate offers can enter country averages. */
+  /** Latest usable offers enter country averages; an age limit is opt-in. */
   async getComparison(
     filters: { search?: string; maxAgeDays?: number },
     pagination: { limit: number; offset: number }
@@ -248,18 +248,18 @@ export class CanonicalProductRepository {
     total: number;
     freshness: { newest: Date | null; oldest: Date | null };
   }> {
-    const maxAgeDays = filters.maxAgeDays ?? 7;
-    if (!Number.isInteger(maxAgeDays) || maxAgeDays < 1 || maxAgeDays > 365) {
+    const maxAgeDays = filters.maxAgeDays;
+    if (maxAgeDays !== undefined && (!Number.isInteger(maxAgeDays) || maxAgeDays < 1 || maxAgeDays > 365)) {
       throw new Error('Price freshness must be between 1 and 365 days');
     }
-    const params: unknown[] = [maxAgeDays];
+    const params: unknown[] = [maxAgeDays ?? null];
     const searchSql = filters.search ? 'AND cp.name ILIKE $2' : '';
     if (filters.search) params.push(`%${filters.search}%`);
     // This CTE visits only canonical-linked offers, then uses the existing
     // (product_mapping_id, scraped_at DESC) index once per offer. Never scan
     // all historical prices, and never fall back from an unusable latest price
     // to an older interpretation of a different package.
-    const cte = `WITH current_offers AS (
+    const cte = `WITH eligible_offers AS (
       SELECT cp.id AS canonical_id, cp.name AS canonical_name,
         cp.description AS canonical_description, cp.show_per_unit_price,
         cat.name AS category_name, p.id AS product_id, p.name AS product_name,
@@ -267,7 +267,7 @@ export class CanonicalProductRepository {
         c.id AS country_id, c.name AS country_name, c.code AS country_code, c.currency_code,
         CASE WHEN cp.show_per_unit_price THEN pr.quantity_info->>'contentUnit' ELSE p.unit END AS unit,
         CASE WHEN cp.show_per_unit_price THEN (pr.quantity_info->>'contentQuantity')::numeric ELSE p.unit_quantity END AS unit_quantity,
-        pr.price, pr.currency, pr.original_price, pr.is_on_sale, pr.scraped_at,
+        pr.price, pr.currency, pr.original_price, pr.is_on_sale, pr.scraped_at, pm.last_checked_at,
         CASE WHEN pr.quantity_info->>'status' = 'verified'
           THEN (pr.quantity_info->>'comparablePrice')::numeric ELSE NULL END AS price_per_unit
       FROM canonical_products cp
@@ -284,11 +284,10 @@ export class CanonicalProductRepository {
       ) pr
       WHERE cp.disabled IS NOT TRUE AND s.is_active
         AND pm.availability_status = 'available'
-        AND pm.last_checked_at >= CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')
         AND pm.duplicate_of_mapping_id IS NULL
         AND pm.quantity_info IS NOT DISTINCT FROM pr.quantity_info
         AND pr.price > 0
-        AND pr.scraped_at >= CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')
+        AND pr.scraped_at >= pm.last_checked_at
         AND (cp.show_per_unit_price IS NOT TRUE OR (
           pr.quantity_info->>'status' = 'verified'
           AND pr.quantity_info->>'contentUnit' IN ('kg', 'l')
@@ -298,21 +297,30 @@ export class CanonicalProductRepository {
         AND (cp.show_per_unit_price OR pol.expected_quantity IS NULL
           OR (pr.quantity_info->>'contentQuantity')::numeric = pol.expected_quantity)
         ${searchSql}
+    ), comparison_offers AS (
+      SELECT * FROM eligible_offers
+      WHERE $1::int IS NULL OR (
+        last_checked_at >= CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')
+        AND scraped_at >= CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')
+      )
     ), eligible_canonical AS (
-      SELECT canonical_id, canonical_name FROM current_offers
+      SELECT canonical_id, canonical_name FROM comparison_offers
       GROUP BY canonical_id, canonical_name HAVING COUNT(DISTINCT country_id) >= 2
     )`;
     const [data, count, dates] = await Promise.all([
       query<CanonicalComparisonRow>(`${cte}, paged AS (
         SELECT canonical_id FROM eligible_canonical ORDER BY canonical_name, canonical_id
         LIMIT $${params.length + 1} OFFSET $${params.length + 2}
-      ) SELECT co.* FROM current_offers co JOIN paged USING (canonical_id)
+      ) SELECT co.* FROM comparison_offers co JOIN paged USING (canonical_id)
         ORDER BY co.canonical_name, co.country_name, co.product_id`,
       [...params, pagination.limit, pagination.offset]),
       query<{ total: number }>(`${cte} SELECT COUNT(*)::int AS total FROM eligible_canonical`, params),
       query<{ newest: Date | null; oldest: Date | null }>(`${cte}
         SELECT MAX(co.scraped_at) AS newest, MIN(co.scraped_at) AS oldest
-        FROM current_offers co JOIN eligible_canonical ec USING (canonical_id)`, params),
+        FROM eligible_offers co JOIN (
+          SELECT canonical_id FROM eligible_offers
+          GROUP BY canonical_id HAVING COUNT(DISTINCT country_id) >= 2
+        ) ec USING (canonical_id)`, params),
     ]);
     return {
       data: data.rows, total: count.rows[0]?.total ?? 0,

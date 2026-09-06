@@ -7,14 +7,15 @@ jest.mock('../../../utils/logger', () => {
 });
 
 import {
-  ReweScraper,
   ReweMarketError,
+  ReweScraper,
   MarketConfiguration,
   assertPricedPage,
+  categoryPageUrl,
   deliveryMarketFor,
 } from '../ReweScraper';
 import { FatalScrapeError } from '../../base/BaseScraper';
-import { ScraperConfig } from '../../../types/scraper.types';
+import { ProductData, ScraperConfig } from '../../../types/scraper.types';
 
 const ZIP = '10115';
 
@@ -141,27 +142,54 @@ describe('ReweScraper.selectDeliveryMarket', () => {
     expect(page.readCount).toBe(4);
   });
 
-  it('keeps polling when a read lands mid-reload and throws', async () => {
-    // The reload the 201 triggers destroys the execution context; a read in
-    // flight rejects. That is "not yet", not "no market".
-    const page = fakePage([NO_MARKET, new Error('Execution context was destroyed'), BERLIN_DELIVERY]);
+  it('treats a read torn down by the reload as "not yet" and keeps polling', async () => {
+    const page = fakePage([
+      NO_MARKET,
+      new Error('Execution context was destroyed, most likely because of a navigation'),
+      new Error('Execution context was destroyed, most likely because of a navigation'),
+      BERLIN_DELIVERY,
+    ]);
     const scraper = scraperWith(page);
 
     await (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket();
 
     expect((scraper as unknown as { marketSelected: boolean }).marketSelected).toBe(true);
-    expect(page.readCount).toBe(3);
+    expect(page.readCount).toBe(4);
   });
 
-  it('names the last read error when the market never appears', async () => {
-    // A 403 from the configuration endpoint used to surface as "No delivery
-    // market set ... : null" after 15 seconds of polling, with the cause gone.
-    const page = fakePage([NO_MARKET, new Error('marketselection/configuration answered HTTP 403')]);
+  it('fails at once with the real cause when the configuration endpoint answers an error', async () => {
+    // A 503 is an answer, not "not yet": retrying it 30 times and then
+    // reporting "no delivery market: null" hides what actually went wrong.
+    const page = fakePage([NO_MARKET, new Error('marketselection/configuration answered HTTP 503')]);
     const scraper = scraperWith(page);
 
     await expect(
       (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket()
-    ).rejects.toThrow(/answered HTTP 403/);
+    ).rejects.toThrow(/HTTP 503/);
+    expect(page.readCount).toBe(2);
+  });
+
+  it('fails at once when the read breaks for a reason that is not the reload', async () => {
+    // Malformed JSON, a closed target — anything but a read torn down by the
+    // navigation is the cause, not "not yet".
+    const page = fakePage([NO_MARKET, new SyntaxError('Unexpected token < in JSON at position 0')]);
+    const scraper = scraperWith(page);
+
+    await expect(
+      (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket()
+    ).rejects.toThrow(/Unexpected token/);
+    expect(page.readCount).toBe(2);
+  });
+
+  it('does not mistake a crashed page for the reload', async () => {
+    // Playwright words a crash as a navigation failure; it is not "not yet".
+    const page = fakePage([NO_MARKET, new Error('Navigation failed because the page has crashed!')]);
+    const scraper = scraperWith(page);
+
+    await expect(
+      (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket()
+    ).rejects.toThrow(/crashed/);
+    expect(page.readCount).toBe(2);
   });
 
   it('walks zip → submit → Lieferservice and accepts the market the site then reports', async () => {
@@ -219,5 +247,54 @@ describe('assertPricedPage', () => {
 
   it('accepts an empty page — an empty category is not a lost market', () => {
     expect(() => assertPricedPage([], 'Tierbedarf', 1)).not.toThrow();
+  });
+});
+
+describe('categoryPageUrl', () => {
+  const category = 'https://www.rewe.de/shop/c/obst-gemuese/';
+
+  it('asks for 120 products per page — REWE lists 12,459 products, 312 pages at the default 40', () => {
+    expect(categoryPageUrl(category, 1)).toBe('https://www.rewe.de/shop/c/obst-gemuese/?objectsPerPage=120');
+  });
+
+  it("addresses later pages the way the site's own pagination links do", () => {
+    expect(categoryPageUrl(category, 3)).toBe('https://www.rewe.de/shop/c/obst-gemuese/?objectsPerPage=120&page=3');
+  });
+});
+
+describe('ReweScraper.scrapeProductList when the market is lost mid-run', () => {
+  const categories = [
+    { id: 'a', name: 'Obst & Gemüse', url: '/shop/c/a/' },
+    { id: 'b', name: 'Fleisch & Fisch', url: '/shop/c/b/' },
+    { id: 'c', name: 'Tierbedarf', url: '/shop/c/c/' },
+  ];
+
+  /** Category b comes back with no prices; a and c would scrape fine. */
+  class LosesMarketAtB extends ReweScraper {
+    scraped: string[] = [];
+    protected async scrapeCategoryPages(category: { id: string; name: string }): Promise<ProductData[]> {
+      this.scraped.push(category.id);
+      if (category.id === 'b') assertPricedPage([{ price: 0 }, { price: 0 }], category.name, 1);
+      return [{ name: `${category.name} product`, price: 1, currency: 'EUR' } as ProductData];
+    }
+  }
+
+  it('fails the run instead of returning a half catalog as a success', async () => {
+    // BaseScraper swallows per-category errors and ScraperService records
+    // success for any run that stored something — so a market lost after
+    // category 1 used to end as a successful, mostly-missing catalog.
+    const scraper = new LosesMarketAtB({ ...config(), categories });
+
+    await expect(scraper.scrapeProductList()).rejects.toThrow(ReweMarketError);
+  });
+
+  it('skips the remaining categories without counting each as a failure of its own', async () => {
+    const scraper = new LosesMarketAtB({ ...config(), categories });
+
+    await scraper.scrapeProductList().catch(() => undefined);
+
+    expect(scraper.scraped).toEqual(['a', 'b']);
+    // Market loss is fatal for the run; remaining categories are never attempted.
+    expect(scraper.getCategoryStats()).toEqual({ attempted: 2, failed: 0 });
   });
 });

@@ -32,7 +32,7 @@ export function configuredMaintenanceRanker(env = process.env, fetcher: typeof f
             }>;
         };
         if (result.status !== 'completed')
-            return [];
+            throw new Error('Incomplete ranking');
         const text = (result.output || []).flatMap(o => o.content || []).filter(c => c.type === 'output_text').map(c => c.text || '').join('');
         const parsed = JSON.parse(text) as {
             ranked?: Array<{
@@ -41,7 +41,7 @@ export function configuredMaintenanceRanker(env = process.env, fetcher: typeof f
             }>;
         };
         if (!Array.isArray(parsed.ranked))
-            return [];
+            throw new Error('Invalid ranking');
         return [...new Set(parsed.ranked.filter(r => typeof r.id === 'string' && ids.includes(r.id) && typeof r.reason === 'string').map(r => String(r.id)))];
     };
 }

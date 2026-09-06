@@ -1,11 +1,15 @@
 import { getClient } from '../config/database';
 import { ProductRepository, ProductMappingRepository, PriceRepository } from '../repositories';
 import { productRepository as defaultProductRepo, productMappingRepository as defaultMappingRepo, priceRepository as defaultPriceRepo } from '../repositories';
-import { QuantityInterpretation } from '../utils/productQuantity';
 import { ProductData } from '../types/scraper.types';
 import { ProductWithPricesResult, ProductWithCategory, SupermarketProductEntry } from '../types/db.types';
 import { normalizeProductName } from '../utils/normalizer';
 import { scraperLogger } from '../utils/logger';
+
+/** True when the product carries a name the products table can store. */
+function hasName(product: ProductData): boolean {
+  return typeof product.name === 'string' && product.name.trim().length > 0;
+}
 
 export class ProductService {
   private productRepository: ProductRepository;
@@ -102,7 +106,6 @@ export class ProductService {
         if (existingMappingByUrl) {
           productId = existingMappingByUrl.product_id;
           existingMappingId = existingMappingByUrl.id;
-          await this.productMappingRepository.updateMappingById(existingMappingId, { productUrl, externalId });
           await this.productMappingRepository.updateProduct(productId, {
             name: productData.name,
             normalizedName,
@@ -133,8 +136,9 @@ export class ProductService {
       const mappingId = existingMappingId ?? await this.productMappingRepository.createOrUpdateMapping(
         productId, supermarketId, { externalId, productUrl }
       );
-      await this.productMappingRepository.updateMappingById(mappingId, { productUrl, externalId });
-      await this.productMappingRepository.recordObservations([mappingId], [productData]);
+      if (existingMappingId) {
+        await this.productMappingRepository.updateMappingById(mappingId, { productUrl, externalId });
+      }
       return mappingId;
     } catch (error) {
       scraperLogger.error('Error in findOrCreateProduct:', error);
@@ -142,18 +146,26 @@ export class ProductService {
     }
   }
 
-  async recordPrice(
-    productMappingId: string,
-    priceData: {
-      price: number;
-      currency: string;
-      originalPrice?: number;
-      isOnSale: boolean;
-      pricePerUnit?: number;
-      quantityInfo?: QuantityInterpretation;
+  /** Save a single fallback sighting with the same atomic price snapshot as a batch. */
+  async saveProduct(product: ProductData, supermarketId: string, categoryId?: string): Promise<string> {
+    const mappingId = await this.findOrCreateProduct(product, supermarketId, categoryId);
+    await this.saveObservationsAndPrices([mappingId], [product], product.currency);
+    return mappingId;
+  }
+
+  private async saveObservationsAndPrices(mappingIds: string[], products: ProductData[], currency: string): Promise<void> {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      await this.productMappingRepository.recordObservations(mappingIds, products, client);
+      await this.priceRepository.batchInsertPrices(mappingIds, products, currency, client);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-  ): Promise<void> {
-    return this.priceRepository.recordPrice(productMappingId, priceData);
   }
 
   async bulkSaveProducts(
@@ -163,12 +175,34 @@ export class ProductService {
   ): Promise<number> {
     if (products.length === 0) return 0;
 
+    // products.name is NOT NULL. A scraper that hands over a nameless item
+    // (Auchan Express, 2026-09-01: four GraphQL items with name = null and
+    // nothing but an image URL) used to fail the whole UNNEST batch with
+    // 23502 and force the per-product fallback. Drop them here, at the last
+    // shared point before the batch insert, so every scraper is covered.
+    const named = products.filter(hasName);
+    if (named.length < products.length) {
+      const dropped = products.filter(p => !hasName(p));
+      scraperLogger.warn(
+        `Dropping ${dropped.length} product(s) without a name before save`,
+        {
+          supermarketId,
+          sample: dropped.slice(0, 3).map(p => ({
+            externalId: p.externalId,
+            productUrl: p.productUrl,
+            imageUrl: p.imageUrl,
+          })),
+        }
+      );
+    }
+    if (named.length === 0) return 0;
+
     const startTime = Date.now();
-    scraperLogger.debug(`Bulk saving ${products.length} products...`);
+    scraperLogger.debug(`Bulk saving ${named.length} products...`);
 
     try {
       // Prepare and normalize
-      const preparedProducts = products.map(p => {
+      const preparedProducts = named.map(p => {
         const normalizedUrl = this.normalizeProductUrl(p.productUrl);
         return {
           ...p,
@@ -278,18 +312,7 @@ export class ProductService {
         // Reviewers lock the offer row before reading its latest price. Commit
         // the observation and corresponding price together, so neither readers
         // nor approvals can see a new availability state with an old price.
-        const client = await getClient();
-        try {
-          await client.query('BEGIN');
-          await this.productMappingRepository.recordObservations(allMappingIds, allProducts, client);
-          await this.priceRepository.batchInsertPrices(allMappingIds, allProducts, currency, client);
-          await client.query('COMMIT');
-        } catch (error) {
-          await client.query('ROLLBACK');
-          throw error;
-        } finally {
-          client.release();
-        }
+        await this.saveObservationsAndPrices(allMappingIds, allProducts, currency);
       }
 
       const duration = Date.now() - startTime;

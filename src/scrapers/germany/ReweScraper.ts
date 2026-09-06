@@ -100,10 +100,19 @@ const MARKET_POLL_ATTEMPTS = 30;
 const MARKET_POLL_INTERVAL_MS = 500;
 
 /**
+ * A configuration read that failed because the shop was reloading under it:
+ * Playwright tearing down the execution context or frame, or the in-page
+ * fetch being aborted by the navigation ("Failed to fetch"). These mean "not
+ * yet". Anything else — an HTTP error status, malformed JSON, a closed
+ * target — is the cause and is reported at once.
+ */
+const CONFIGURATION_READ_NOT_YET =
+  /Execution context was destroyed|Cannot find context|Frame was detached|Failed to fetch/;
+
+/**
  * Raised when REWE has no delivery market for the session. Without one every
  * tile reads "Preis abhängig vom Standort", so this is fatal for the run, not
- * a per-page glitch to log and skip: BaseScraper stops at the first one
- * instead of paginating every remaining category to the same result.
+ * a per-page glitch to log and skip.
  */
 export class ReweMarketError extends FatalScrapeError {
   constructor(message: string) {
@@ -128,6 +137,21 @@ export function assertPricedPage(
     `${categoryName} page ${pageNumber}: ${products.length} products and none with a price — ` +
       'the delivery market is not set'
   );
+}
+
+/**
+ * The largest page size the listing accepts. The default is 40, and with a
+ * market set the catalog is ~12,500 products: 312 pages at 40, or ~45 minutes
+ * at the ~9s a page costs here — the whole per-scraper budget.
+ */
+export const REWE_OBJECTS_PER_PAGE = 120;
+
+/** URL of one listing page, in the same form as the site's own pagination links. */
+export function categoryPageUrl(baseCategoryUrl: string, pageNumber: number): string {
+  const url = new URL(baseCategoryUrl);
+  url.searchParams.set('objectsPerPage', String(REWE_OBJECTS_PER_PAGE));
+  if (pageNumber > 1) url.searchParams.set('page', String(pageNumber));
+  return url.toString();
 }
 
 /**
@@ -461,35 +485,34 @@ export class ReweScraper extends BaseScraper {
    * The 201 from userselections does not carry it: the app then reloads the
    * shop, and only that navigation leaves the session with the market. Read
    * once right after the response and it still says null. So poll — a read
-   * that lands mid-navigation throws, which just means "not yet".
+   * torn down by that navigation throws, which just means "not yet". Any
+   * other failure of the read is the cause, and it is reported at once
+   * rather than retried and then blamed on a missing market.
    */
   private async awaitDeliveryMarket(): Promise<string> {
     if (!this.page) throw new ReweMarketError('Browser page is not initialized');
 
     let configuration: MarketConfiguration | null = null;
-    let lastError: unknown = null;
+    let lastReadError: Error | null = null;
     for (let attempt = 0; attempt < MARKET_POLL_ATTEMPTS; attempt++) {
       if (attempt > 0) await this.page.waitForTimeout(MARKET_POLL_INTERVAL_MS);
       try {
         configuration = await this.readMarketConfiguration();
-        lastError = null;
+        lastReadError = null;
       } catch (error) {
-        // Every read error keeps the poll going: the reload that follows the
-        // 201 rejects a read in flight as a destroyed context or a failed
-        // fetch, and the next read works. A persistent cause (a 403 from the
-        // endpoint, say) still ends here after the poll budget, so it is
-        // kept and reported instead of dying as "configuration: null".
-        configuration = null;
-        lastError = error;
+        const readError = error instanceof Error ? error : new Error(String(error));
+        if (!CONFIGURATION_READ_NOT_YET.test(readError.message)) {
+          throw new ReweMarketError(`Could not read the market for ${this.POSTAL_CODE}: ${readError.message}`);
+        }
+        lastReadError = readError;
+        continue;
       }
-      const wwIdent = configuration && deliveryMarketFor(configuration, this.POSTAL_CODE);
+      const wwIdent = deliveryMarketFor(configuration, this.POSTAL_CODE);
       if (wwIdent) return wwIdent;
     }
-    const seen = lastError instanceof Error
-      ? `last read failed: ${lastError.message}`
-      : `last read: ${JSON.stringify(configuration)}`;
     throw new ReweMarketError(
-      `No delivery market set for ${this.POSTAL_CODE} after the zip flow (${seen})`
+      `No delivery market set for ${this.POSTAL_CODE} after the zip flow: ` +
+        (lastReadError ? `last read failed with "${lastReadError.message}"` : JSON.stringify(configuration))
     );
   }
 
@@ -546,10 +569,15 @@ export class ReweScraper extends BaseScraper {
   }
 
 
+  protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+    // BaseScraper stops the run when a ReweMarketError escapes this method.
+    return this.scrapeCategoryPages(category);
+  }
+
   /**
    * Scrape a single category with pagination support
    */
-  protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+  protected async scrapeCategoryPages(category: CategoryConfig): Promise<ProductData[]> {
     const products: ProductData[] = [];
 
     try {
@@ -564,8 +592,9 @@ export class ReweScraper extends BaseScraper {
       }
 
       // Navigate to first page
-      this.logger.debug(`Navigating to ${baseCategoryUrl}`);
-      await this.page.goto(baseCategoryUrl, { waitUntil: 'domcontentloaded' });
+      const firstPageUrl = categoryPageUrl(baseCategoryUrl, 1);
+      this.logger.debug(`Navigating to ${firstPageUrl}`);
+      await this.page.goto(firstPageUrl, { waitUntil: 'domcontentloaded' });
       await this.waitForDynamicContent();
 
       // Handle cookie consent if it appears again
@@ -597,7 +626,7 @@ export class ReweScraper extends BaseScraper {
         try {
           // Navigate to page (skip for first page as we're already there)
           if (pageNum > 1) {
-            const pageUrl = `${baseCategoryUrl}?page=${pageNum}`;
+            const pageUrl = categoryPageUrl(baseCategoryUrl, pageNum);
             this.logger.debug(`Navigating to page ${pageNum}: ${pageUrl}`);
             await this.page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
             await this.waitForDynamicContent();
@@ -661,7 +690,7 @@ export class ReweScraper extends BaseScraper {
           // errors that went through the buffer.
           this.logError(
             `Failed to scrape page ${pageNum} of ${category.name}`,
-            pageNum === 1 ? baseCategoryUrl : `${baseCategoryUrl}?page=${pageNum}`,
+            categoryPageUrl(baseCategoryUrl, pageNum),
             pageError as Error
           );
           // Continue to next page on error
@@ -691,7 +720,7 @@ export class ReweScraper extends BaseScraper {
         const paginationNav = document.querySelector('nav[aria-label*="Suchergebnisse"], nav ul[aria-label*="Suchergebnisse"]');
         if (!paginationNav) {
           // Try alternative: look for page number buttons/links
-          const pageLinks = document.querySelectorAll('a[href*="?page="]');
+          const pageLinks = document.querySelectorAll('a[href*="page="]');
           if (pageLinks.length === 0) return 1;
 
           let maxPage = 1;
@@ -712,7 +741,7 @@ export class ReweScraper extends BaseScraper {
 
         pageItems.forEach(item => {
           // Check for page number in link or button
-          const link = item.querySelector('a[href*="?page="]');
+          const link = item.querySelector('a[href*="page="]');
           if (link) {
             const href = link.getAttribute('href') || '';
             const match = href.match(/[?&]page=(\d+)/);

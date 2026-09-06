@@ -406,14 +406,7 @@ export class ScraperService {
       let storedCount = 0;
       for (const product of products) {
         try {
-          const mappingId = await this.productService.findOrCreateProduct(product, supermarketId);
-          if (product.isAvailable) await this.productService.recordPrice(mappingId, {
-            price: product.price,
-            currency: product.currency,
-            originalPrice: product.originalPrice,
-            isOnSale: product.isOnSale,
-            quantityInfo: interpretProductQuantity(product),
-          });
+          await this.productService.saveProduct(product, supermarketId);
           storedCount++;
         } catch (err) {
           scraperLogger.error(`Failed to store product: ${product.name}`, err);

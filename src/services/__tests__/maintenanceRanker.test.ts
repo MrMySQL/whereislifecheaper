@@ -6,3 +6,7 @@ test('provider cannot invent candidate ids and malformed entries are ignored',as
  expect(await ranker({name:'Apple'} as any,[{mapping_id:'3',name:'Apfel 1 kg'}] as any)).toEqual(['3']);
  expect(JSON.parse(fetcher.mock.calls[0][1].body).model).toBe('configured-model');
 });
+test('incomplete provider result signals failure so caller can retain deterministic suggestions',async()=>{
+ const fetcher=jest.fn().mockResolvedValue({ok:true,json:async()=>({status:'incomplete',output:[]})});
+ await expect(configuredMaintenanceRanker({OPENAI_API_KEY:'test',MAPPING_AI_MODEL:'configured-model'},fetcher as any)!({name:'Apple'} as any,[{mapping_id:'3',name:'Apfel'}] as any)).rejects.toThrow();
+});

@@ -171,7 +171,7 @@ export class ProductMappingRepository {
   }
 
   /** Persist explicit sightings only. Absence from a scrape is not an out-of-stock observation. */
-  async recordObservations(mappingIds: string[], products: ProductData[], client?: PoolClient): Promise<void> {
+  async recordObservations(mappingIds: string[], products: ProductData[], client: PoolClient): Promise<void> {
     if (mappingIds.length !== products.length) throw new Error('Observation mappings and products must align');
     if (mappingIds.length === 0) return;
     const observations = products.map((product, index) => ({
@@ -184,8 +184,7 @@ export class ProductMappingRepository {
         price_basis: product.priceBasis ?? null,
       },
     }));
-    const execute = client ? client.query.bind(client) : query;
-    await execute(
+    await client.query(
       `UPDATE product_mappings pm SET
         last_checked_at = CURRENT_TIMESTAMP,
         last_scraped_at = CURRENT_TIMESTAMP,
