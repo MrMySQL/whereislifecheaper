@@ -99,6 +99,9 @@ export function deliveryMarketFor(configuration: MarketConfiguration, zip: strin
 const MARKET_POLL_ATTEMPTS = 30;
 const MARKET_POLL_INTERVAL_MS = 500;
 
+/** Marks a configuration read the endpoint refused, as opposed to one the reload tore down. */
+const CONFIGURATION_HTTP_ERROR = 'marketselection/configuration answered HTTP';
+
 /**
  * Raised when REWE has no delivery market for the session. Without one every
  * tile reads "Preis abhängig vom Standort", so this is fatal for the run, not
@@ -167,6 +170,8 @@ export class ReweScraper extends BaseScraper {
   private readonly POSTAL_CODE = '10115'; // Berlin
   private marketSelected = false;
   private marketWwIdent: string | null = null;
+  /** Set when a category came back unpriced; fails the run after the loop. */
+  private marketLost: ReweMarketError | null = null;
   private browserContext: Awaited<ReturnType<typeof chromium.launchPersistentContext>> | null = null;
 
   constructor(config: ScraperConfig) {
@@ -475,20 +480,35 @@ export class ReweScraper extends BaseScraper {
    * The 201 from userselections does not carry it: the app then reloads the
    * shop, and only that navigation leaves the session with the market. Read
    * once right after the response and it still says null. So poll — a read
-   * that lands mid-navigation throws, which just means "not yet".
+   * torn down by that navigation throws, which just means "not yet". An
+   * endpoint that answers with an error is a different matter: that is the
+   * cause, and it is reported at once rather than retried and then blamed on
+   * a missing market.
    */
   private async awaitDeliveryMarket(): Promise<string> {
     if (!this.page) throw new ReweMarketError('Browser page is not initialized');
 
     let configuration: MarketConfiguration | null = null;
+    let lastReadError: Error | null = null;
     for (let attempt = 0; attempt < MARKET_POLL_ATTEMPTS; attempt++) {
       if (attempt > 0) await this.page.waitForTimeout(MARKET_POLL_INTERVAL_MS);
-      configuration = await this.readMarketConfiguration().catch(() => null);
-      const wwIdent = configuration && deliveryMarketFor(configuration, this.POSTAL_CODE);
+      try {
+        configuration = await this.readMarketConfiguration();
+        lastReadError = null;
+      } catch (error) {
+        const readError = error instanceof Error ? error : new Error(String(error));
+        if (readError.message.includes(CONFIGURATION_HTTP_ERROR)) {
+          throw new ReweMarketError(`Could not read the market for ${this.POSTAL_CODE}: ${readError.message}`);
+        }
+        lastReadError = readError;
+        continue;
+      }
+      const wwIdent = deliveryMarketFor(configuration, this.POSTAL_CODE);
       if (wwIdent) return wwIdent;
     }
     throw new ReweMarketError(
-      `No delivery market set for ${this.POSTAL_CODE} after the zip flow: ${JSON.stringify(configuration)}`
+      `No delivery market set for ${this.POSTAL_CODE} after the zip flow: ` +
+        (lastReadError ? `last read failed with "${lastReadError.message}"` : JSON.stringify(configuration))
     );
   }
 
@@ -503,6 +523,8 @@ export class ReweScraper extends BaseScraper {
         credentials: 'include',
       });
       if (!response.ok) {
+        // Runs in the browser, so it cannot see CONFIGURATION_HTTP_ERROR;
+        // the literal must stay in step with it.
         throw new Error(`marketselection/configuration answered HTTP ${response.status}`);
       }
       return (await response.json()) as MarketConfiguration;
@@ -546,9 +568,34 @@ export class ReweScraper extends BaseScraper {
 
 
   /**
+   * BaseScraper's loop catches per-category errors and carries on, and the
+   * run counts as a success with anything stored — so a market lost in
+   * category 8 would leave seven categories behind and be recorded as a
+   * successful catalog missing half its products. The loss is remembered
+   * here and turned into the run's failure once the loop is done; whatever
+   * was stored before it stays stored.
+   */
+  async scrapeProductList(): Promise<ProductData[]> {
+    const products = await super.scrapeProductList();
+    if (this.marketLost) throw this.marketLost;
+    return products;
+  }
+
+  protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+    // No point loading page after page of location-dependent prices.
+    if (this.marketLost) throw this.marketLost;
+    try {
+      return await this.scrapeCategoryPages(category);
+    } catch (error) {
+      if (error instanceof ReweMarketError) this.marketLost = error;
+      throw error;
+    }
+  }
+
+  /**
    * Scrape a single category with pagination support
    */
-  protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+  protected async scrapeCategoryPages(category: CategoryConfig): Promise<ProductData[]> {
     const products: ProductData[] = [];
 
     try {
@@ -626,9 +673,9 @@ export class ReweScraper extends BaseScraper {
 
           this.logger.info(`${category.name} page ${pageNum}/${totalPages}: Found ${pageProducts.length} products (${productsWithPrice} with price)`);
 
-          if (pageNum === 1) {
-            assertPricedPage(pageProducts, category.name, pageNum);
-          }
+          // Every page, not just the first: a market lost between pages
+          // would otherwise leave the rest of the category silently unpriced.
+          assertPricedPage(pageProducts, category.name, pageNum);
 
           // Parse products
           const parsedProducts = this.parseProducts(pageProducts, category.name);

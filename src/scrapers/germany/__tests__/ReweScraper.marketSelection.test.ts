@@ -7,13 +7,14 @@ jest.mock('../../../utils/logger', () => {
 });
 
 import {
+  ReweMarketError,
   ReweScraper,
   MarketConfiguration,
   assertPricedPage,
   categoryPageUrl,
   deliveryMarketFor,
 } from '../ReweScraper';
-import { ScraperConfig } from '../../../types/scraper.types';
+import { ProductData, ScraperConfig } from '../../../types/scraper.types';
 
 const ZIP = '10115';
 
@@ -46,11 +47,11 @@ function config(): ScraperConfig {
 
 /**
  * Stands in for Playwright's page during market selection. `configurations`
- * is what successive reads of the configuration endpoint return, the last one
- * repeating forever; the UI calls are recorded so a test can assert whether
- * the zip flow ran at all.
+ * is what successive reads of the configuration endpoint return (an Error
+ * entry makes that read throw), the last one repeating forever; the UI calls
+ * are recorded so a test can assert whether the zip flow ran at all.
  */
-function fakePage(configurations: MarketConfiguration[]) {
+function fakePage(configurations: (MarketConfiguration | Error)[]) {
   const reads = [...configurations];
   let readCount = 0;
   const calls: string[] = [];
@@ -67,7 +68,9 @@ function fakePage(configurations: MarketConfiguration[]) {
     $: async () => null,
     evaluate: async () => {
       readCount++;
-      return reads.length > 1 ? reads.shift() : reads[0];
+      const next = reads.length > 1 ? reads.shift() : reads[0];
+      if (next instanceof Error) throw next;
+      return next;
     },
     get readCount() { return readCount; },
     locator,
@@ -128,6 +131,33 @@ describe('ReweScraper.selectDeliveryMarket', () => {
     expect(page.readCount).toBe(4);
   });
 
+  it('treats a read torn down by the reload as "not yet" and keeps polling', async () => {
+    const page = fakePage([
+      NO_MARKET,
+      new Error('Execution context was destroyed, most likely because of a navigation'),
+      new Error('Execution context was destroyed, most likely because of a navigation'),
+      BERLIN_DELIVERY,
+    ]);
+    const scraper = scraperWith(page);
+
+    await (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket();
+
+    expect((scraper as unknown as { marketSelected: boolean }).marketSelected).toBe(true);
+    expect(page.readCount).toBe(4);
+  });
+
+  it('fails at once with the real cause when the configuration endpoint answers an error', async () => {
+    // A 503 is an answer, not "not yet": retrying it 30 times and then
+    // reporting "no delivery market: null" hides what actually went wrong.
+    const page = fakePage([NO_MARKET, new Error('marketselection/configuration answered HTTP 503')]);
+    const scraper = scraperWith(page);
+
+    await expect(
+      (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket()
+    ).rejects.toThrow(/HTTP 503/);
+    expect(page.readCount).toBe(2);
+  });
+
   it('walks zip → submit → Lieferservice and accepts the market the site then reports', async () => {
     const page = fakePage([NO_MARKET, BERLIN_DELIVERY]);
     const scraper = scraperWith(page);
@@ -181,5 +211,40 @@ describe('categoryPageUrl', () => {
 
   it("addresses later pages the way the site's own pagination links do", () => {
     expect(categoryPageUrl(category, 3)).toBe('https://www.rewe.de/shop/c/obst-gemuese/?objectsPerPage=120&page=3');
+  });
+});
+
+describe('ReweScraper.scrapeProductList when the market is lost mid-run', () => {
+  const categories = [
+    { id: 'a', name: 'Obst & Gemüse', url: '/shop/c/a/' },
+    { id: 'b', name: 'Fleisch & Fisch', url: '/shop/c/b/' },
+    { id: 'c', name: 'Tierbedarf', url: '/shop/c/c/' },
+  ];
+
+  /** Category b comes back with no prices; a and c would scrape fine. */
+  class LosesMarketAtB extends ReweScraper {
+    scraped: string[] = [];
+    protected async scrapeCategoryPages(category: { id: string; name: string }): Promise<ProductData[]> {
+      this.scraped.push(category.id);
+      if (category.id === 'b') assertPricedPage([{ price: 0 }, { price: 0 }], category.name, 1);
+      return [{ name: `${category.name} product`, price: 1, currency: 'EUR' } as ProductData];
+    }
+  }
+
+  it('fails the run instead of returning a half catalog as a success', async () => {
+    // BaseScraper swallows per-category errors and ScraperService records
+    // success for any run that stored something — so a market lost after
+    // category 1 used to end as a successful, mostly-missing catalog.
+    const scraper = new LosesMarketAtB({ ...config(), categories });
+
+    await expect(scraper.scrapeProductList()).rejects.toThrow(ReweMarketError);
+  });
+
+  it('does not keep loading categories once the market is gone', async () => {
+    const scraper = new LosesMarketAtB({ ...config(), categories });
+
+    await scraper.scrapeProductList().catch(() => undefined);
+
+    expect(scraper.scraped).toEqual(['a', 'b']);
   });
 });
