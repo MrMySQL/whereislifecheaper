@@ -1,4 +1,5 @@
 import { ScraperService } from '../src/services/ScraperService';
+import { assessScrapeResult } from '../src/services/scrapeRunHealth';
 import { scraperLogger } from '../src/utils/logger';
 import { query } from '../src/config/database';
 import { closePool } from '../src/config/database';
@@ -57,24 +58,35 @@ async function main() {
         console.log(`  Products failed: ${result.productsFailed}`);
         console.log(`  Duration: ${(result.duration / 1000).toFixed(2)}s`);
         console.log(`  Errors: ${result.errors.length}`);
+        console.log(`  Categories failed: ${result.categoriesFailed ?? 0}/${result.categoriesAttempted ?? 0}`);
         console.log('');
       }
 
       // runAllScrapers now returns a result for every active supermarket,
       // including ones that threw before producing one, so an empty run and a
-      // silently-swallowed rejection both land in `barren` rather than
-      // vanishing between the pool and this check.
-      const barren = results.filter(r => r.productsScraped === 0);
-      const errored = results.filter(r => r.errors.length > 0);
-      if (barren.length > 0 || errored.length > 0) {
+      // silently-swallowed rejection both reach this check rather than
+      // vanishing between the pool and here.
+      const assessed = results.map(r => ({ result: r, health: assessScrapeResult(r) }));
+      const unhealthy = assessed.filter(a => a.health.degraded);
+
+      // Category failures below the threshold are reported but not fatal —
+      // one seasonal category returning 410 must not paint every run red.
+      for (const { result: r } of assessed.filter(a => !a.health.degraded)) {
+        const failed = r.categoriesFailed ?? 0;
+        if (failed > 0) {
+          console.warn(
+            `ℹ️  ${r.supermarketId}: ${failed} of ${r.categoriesAttempted} categories failed (tolerated)`
+          );
+          for (const e of r.categoryErrors ?? []) console.warn(`   · ${e.message}`);
+        }
+      }
+
+      if (unhealthy.length > 0) {
         degraded = true;
-        console.error(
-          `⚠️  ${barren.length} scraper(s) stored 0 products, ${errored.length} reported errors ` +
-          `(of ${results.length} run).`
-        );
-        for (const r of barren) {
-          const why = r.errors[0]?.message ?? 'completed without storing anything';
-          console.error(`   · ${r.supermarketId}: ${why}`);
+        console.error(`⚠️  ${unhealthy.length} of ${results.length} scraper(s) degraded.`);
+        for (const { result: r, health } of unhealthy) {
+          console.error(`   · ${r.supermarketId}: ${health.reasons.join('; ')}`);
+          for (const e of r.categoryErrors ?? []) console.error(`       ${e.message}`);
         }
       }
     } else {
@@ -136,13 +148,22 @@ async function main() {
       console.log(`Duration: ${(result.duration / 1000).toFixed(2)}s`);
       console.log(`Errors: ${result.errors.length}`);
 
-      if (result.productsScraped === 0 || result.errors.length > 0) {
+      const health = assessScrapeResult(result);
+      if (health.degraded) {
         degraded = true;
+        console.error(`⚠️  Degraded: ${health.reasons.join('; ')}`);
       }
 
       if (result.errors.length > 0) {
         console.log('\nErrors:');
         result.errors.forEach((error, i) => {
+          console.log(`  ${i + 1}. ${error.message}`);
+        });
+      }
+
+      if ((result.categoriesFailed ?? 0) > 0) {
+        console.log(`\nCategory failures (${result.categoriesFailed}/${result.categoriesAttempted}):`);
+        (result.categoryErrors ?? []).forEach((error, i) => {
           console.log(`  ${i + 1}. ${error.message}`);
         });
       }

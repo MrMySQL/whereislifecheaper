@@ -234,6 +234,7 @@ export class SparAlbaniaScraper extends BaseScraper {
         }
       }
     } catch (error) {
+      // Plain logger: this rethrows, and the caller's catch records it once.
       this.logger.error('Failed to extract products from page:', error);
       await this.takeScreenshot('extract-products-error');
       throw error;

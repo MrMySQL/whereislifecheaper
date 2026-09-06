@@ -214,25 +214,19 @@ export class MakroScraper extends BaseScraper {
    * Scrape a single category using REST API
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
-    return this.scrapeCategoryViaApi(category.id, category.name);
+    return this.scrapeCategoryViaApi(category);
   }
 
   /**
    * Scrape a single category using REST API
    */
-  private async scrapeCategoryViaApi(
-    categoryId: string,
-    categoryName: string
-  ): Promise<ProductData[]> {
+  private async scrapeCategoryViaApi(category: CategoryConfig): Promise<ProductData[]> {
+    const { id: categoryId, name: categoryName } = category;
     const products: ProductData[] = [];
 
     try {
+      // Throws on a failed request, so the catch below records the real cause.
       const categoryData = await this.fetchCategory(categoryId);
-
-      if (!categoryData) {
-        this.logger.warn(`Failed to fetch category ${categoryName}`);
-        return products;
-      }
 
       // Recursively collect products from nested categories
       const allProducts = this.collectProductsRecursively(categoryData.payload.categories);
@@ -257,11 +251,8 @@ export class MakroScraper extends BaseScraper {
 
       products.push(...parsedProducts);
     } catch (error) {
-      this.logError(
-        `Failed to scrape category ${categoryName}`,
-        `${this.API_BASE}?categoryId=${categoryId}`,
-        error as Error
-      );
+      // The id travels in the POST body; this is the URL that was requested.
+      this.failCategory(category, error, `${this.API_BASE}?auto_translate=false`);
     }
 
     return products;
@@ -270,16 +261,15 @@ export class MakroScraper extends BaseScraper {
   /**
    * Fetch a category from the API using browser context
    */
-  private async fetchCategory(categoryId: string): Promise<YandexMenuResponse | null> {
+  private async fetchCategory(categoryId: string): Promise<YandexMenuResponse> {
     if (!this.page) {
       throw new Error('Page not initialized');
     }
 
     const url = `${this.API_BASE}?auto_translate=false`;
 
-    try {
-      // Use Playwright's request context (includes cookies from browser)
-      const response = await this.page.request.post(url, {
+    // Use Playwright's request context (includes cookies from browser)
+    const response = await this.page.request.post(url, {
         headers: {
           'Accept': 'application/json, text/plain, */*',
           'Content-Type': 'application/json;charset=UTF-8',
@@ -296,19 +286,11 @@ export class MakroScraper extends BaseScraper {
           category_uid: categoryId,
           maxDepth: 100,
         },
-      });
-
-      if (!response.ok()) {
-        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
-        return null;
-      }
-
-      const data: YandexMenuResponse = await response.json();
-      return data;
-    } catch (error) {
-      this.logger.error(`Failed to fetch category ${categoryId}:`, error);
-      return null;
+    });
+    if (!response.ok()) {
+      throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
+    return (await response.json()) as YandexMenuResponse;
   }
 
   /**

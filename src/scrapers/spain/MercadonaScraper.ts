@@ -321,28 +321,22 @@ export class MercadonaScraper extends BaseScraper {
    * Scrape a single category using REST API
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
-    // Category URL format: the ID is in the URL (e.g., "112" from category config)
-    const categoryId = category.id;
-    return this.scrapeCategoryViaApi(categoryId, category.name);
+    return this.scrapeCategoryViaApi(category);
   }
 
   /**
    * Scrape a single category using REST API
    * Handles nested categories recursively
    */
-  private async scrapeCategoryViaApi(
-    categoryId: string,
-    categoryName: string
-  ): Promise<ProductData[]> {
+  private async scrapeCategoryViaApi(category: CategoryConfig): Promise<ProductData[]> {
+    // Category URL format: the ID is in the URL (e.g., "112" from category config)
+    const { id: categoryId, name: categoryName } = category;
     const products: ProductData[] = [];
 
     try {
+      // Throws on a failed request, so the catch below records the real
+      // cause — Mercadona's seasonal 410 is told apart from a block.
       const categoryData = await this.fetchCategory(categoryId);
-
-      if (!categoryData) {
-        this.logger.warn(`Failed to fetch category ${categoryName}`);
-        return products;
-      }
 
       // Recursively collect products from nested categories
       const allProducts = this.collectProductsRecursively(categoryData);
@@ -367,11 +361,7 @@ export class MercadonaScraper extends BaseScraper {
 
       products.push(...parsedProducts);
     } catch (error) {
-      this.logError(
-        `Failed to scrape category ${categoryName}`,
-        `${this.API_BASE}/categories/${categoryId}/`,
-        error as Error
-      );
+      this.failCategory(category, error, `${this.API_BASE}/categories/${categoryId}/`);
     }
 
     return products;
@@ -380,32 +370,27 @@ export class MercadonaScraper extends BaseScraper {
   /**
    * Fetch a category from the API using browser context
    */
-  private async fetchCategory(categoryId: string): Promise<MercadonaCategoryResponse | null> {
+  private async fetchCategory(categoryId: string): Promise<MercadonaCategoryResponse> {
     if (!this.page) {
       throw new Error('Page not initialized');
     }
 
     const url = `${this.API_BASE}/categories/${categoryId}/`;
 
-    try {
-      // Use Playwright's request context (includes cookies from browser)
-      const response = await this.page.request.get(url, {
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!response.ok()) {
-        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
-        return null;
-      }
-
-      const data: MercadonaCategoryResponse = await response.json();
-      return data;
-    } catch (error) {
-      this.logger.error(`Failed to fetch ${url}:`, error);
-      return null;
+    // Use Playwright's request context (includes cookies from browser)
+    const response = await this.page.request.get(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
+    const data = (await response.json()) as MercadonaCategoryResponse;
+    if (!Array.isArray(data?.products) && !Array.isArray(data?.categories)) {
+      throw new Error('Unexpected API response: no products or categories array');
+    }
+    return data;
   }
 
   /**
@@ -436,7 +421,9 @@ export class MercadonaScraper extends BaseScraper {
     const products: ProductData[] = [];
 
     if (!apiProducts || !Array.isArray(apiProducts)) {
-      this.logger.warn(`No products array in API response`);
+      // logError, not a warning: a category that ends with no products after
+      // this must count as lost, and BaseScraper only sees the error buffer.
+      this.logError('Unexpected API response: no products array');
       return products;
     }
 

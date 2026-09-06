@@ -132,7 +132,9 @@ export class OrganicaScraper extends BaseScraper {
       try {
         const apiProducts = await this.fetchCategoryPage(category.url, page);
 
-        if (!apiProducts || apiProducts.length === 0) {
+        // A failed request throws out to the catch below; an empty page is
+        // the end of the category.
+        if (apiProducts.length === 0) {
           hasMore = false;
           break;
         }
@@ -162,11 +164,9 @@ export class OrganicaScraper extends BaseScraper {
           await this.waitBetweenRequests();
         }
       } catch (error) {
-        this.logError(
-          `Failed to scrape ${category.name} page ${page}`,
-          `${this.config.baseUrl}/collections/${category.url}/products.json?page=${page}`,
-          error as Error
-        );
+        // Giving the category up; BaseScraper decides whether that lost it
+        // or truncated it.
+        this.failCategory(category, error, `${this.config.baseUrl}/collections/${category.url}/products.json?page=${page}`);
         hasMore = false;
       }
     }
@@ -181,31 +181,26 @@ export class OrganicaScraper extends BaseScraper {
   private async fetchCategoryPage(
     collectionHandle: string,
     page: number
-  ): Promise<HaravanProduct[] | null> {
+  ): Promise<HaravanProduct[]> {
     if (!this.page) {
       throw new Error('Page not initialized');
     }
 
     const url = `${this.config.baseUrl}/collections/${collectionHandle}/products.json?page=${page}`;
 
-    try {
-      const response = await this.page.request.get(url, {
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!response.ok()) {
-        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()} for ${url}`);
-        return null;
-      }
-
-      const data: HaravanProductsResponse = await response.json();
-      return data.products || null;
-    } catch (error) {
-      this.logger.error(`Failed to fetch ${url}:`, error);
-      return null;
+    const response = await this.page.request.get(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
+    const data: HaravanProductsResponse = await response.json();
+    if (!Array.isArray(data?.products)) {
+      throw new Error('Unexpected API response: no products array');
+    }
+    return data.products;
   }
 
   /**

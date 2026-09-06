@@ -128,27 +128,31 @@ export class MigrosScraper extends BaseScraper {
    * Scrape a single category using REST API
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
-    return this.scrapeCategoryViaApi(category.url, category.id, category.name);
+    return this.scrapeCategoryViaApi(category);
   }
 
   /**
    * Scrape a single category using REST API with pagination
    */
-  private async scrapeCategoryViaApi(
-    categoryUrl: string,
-    categoryId: string,
-    categoryName: string
-  ): Promise<ProductData[]> {
+  private async scrapeCategoryViaApi(category: CategoryConfig): Promise<ProductData[]> {
+    const { url: categoryUrl, id: categoryId, name: categoryName } = category;
     const products: ProductData[] = [];
 
     // Convert URL like /meyve-sebze-c-2 to API slug meyve-sebze-c-2
     const categorySlug = categoryUrl.replace(/^\//, '');
 
     // First request to get total page count
-    const firstPageData = await this.fetchCategoryPage(categorySlug, 1);
-
-    if (!firstPageData?.successful) {
-      this.logger.warn(`Failed to fetch category ${categoryName}: API returned unsuccessful`);
+    // A failed request throws with its status; an API-level refusal comes
+    // back as successful=false. Both give the category up with the cause.
+    let firstPageData: MigrosApiResponse;
+    try {
+      firstPageData = await this.fetchCategoryPage(categorySlug, 1);
+    } catch (error) {
+      this.failCategory(category, error, this.pageUrl(categorySlug, 1));
+      return products;
+    }
+    if (!firstPageData.successful) {
+      this.failCategory(category, 'API returned unsuccessful for the first page', this.pageUrl(categorySlug, 1));
       return products;
     }
 
@@ -158,7 +162,10 @@ export class MigrosScraper extends BaseScraper {
     this.logger.info(`Category ${categoryName}: ${totalProducts} products across ${totalPages} pages`);
 
     // Process first page
-    const firstPageProducts = this.parseProducts(firstPageData.data.searchInfo.storeProductInfos);
+    const firstPageProducts = this.parseProducts(
+      firstPageData.data.searchInfo.storeProductInfos,
+      this.pageUrl(categorySlug, 1)
+    );
 
     // Save products after first page via callback
     if (this.onPageScraped && firstPageProducts.length > 0) {
@@ -182,12 +189,15 @@ export class MigrosScraper extends BaseScraper {
 
         const pageData = await this.fetchCategoryPage(categorySlug, page);
 
-        if (!pageData?.successful) {
-          this.logger.warn(`Failed to fetch page ${page} of ${categoryName}`);
+        if (!pageData.successful) {
+          this.logError(`Failed to fetch page ${page} of ${categoryName}: API returned unsuccessful`, this.pageUrl(categorySlug, page));
           continue;
         }
 
-        const pageProducts = this.parseProducts(pageData.data.searchInfo.storeProductInfos);
+        const pageProducts = this.parseProducts(
+          pageData.data.searchInfo.storeProductInfos,
+          this.pageUrl(categorySlug, page)
+        );
 
         // Save products after each page via callback
         if (this.onPageScraped && pageProducts.length > 0) {
@@ -206,8 +216,8 @@ export class MigrosScraper extends BaseScraper {
 
       } catch (error) {
         this.logError(
-          `Failed to scrape page ${page} of ${categoryName}`,
-          `${this.API_BASE}/${categorySlug}?sayfa=${page}`,
+          `Failed to scrape page ${page} of ${categoryName}: ${error instanceof Error ? error.message : String(error)}`,
+          this.pageUrl(categorySlug, page),
           error as Error
         );
       }
@@ -219,46 +229,56 @@ export class MigrosScraper extends BaseScraper {
   /**
    * Fetch a single category page from the API using browser context
    */
-  private async fetchCategoryPage(categorySlug: string, page: number): Promise<MigrosApiResponse | null> {
+  /** Page 1 is the bare category path; the API only takes ?sayfa= from page 2. */
+  private pageUrl(categorySlug: string, page: number): string {
+    return page === 1
+      ? `${this.API_BASE}/${categorySlug}`
+      : `${this.API_BASE}/${categorySlug}?sayfa=${page}`;
+  }
+
+  private async fetchCategoryPage(categorySlug: string, page: number): Promise<MigrosApiResponse> {
     if (!this.page) {
       throw new Error('Page not initialized');
     }
 
-    const url = page === 1
-      ? `${this.API_BASE}/${categorySlug}`
-      : `${this.API_BASE}/${categorySlug}?sayfa=${page}`;
-
-    try {
-      // Use Playwright's request context (includes cookies from browser)
-      const response = await this.page.request.get(url, {
-        headers: {
-          'Accept': 'application/json',
-          'X-PWA': 'true',
-          'X-FORWARDED-REST': 'true',
-        },
-      });
-
-      if (!response.ok()) {
-        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
-        return null;
-      }
-
-      const data: MigrosApiResponse = await response.json();
-      return data;
-    } catch (error) {
-      this.logger.error(`Failed to fetch ${url}:`, error);
-      return null;
+    // Use Playwright's request context (includes cookies from browser)
+    const response = await this.page.request.get(this.pageUrl(categorySlug, page), {
+      headers: {
+        'Accept': 'application/json',
+        'X-PWA': 'true',
+        'X-FORWARDED-REST': 'true',
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
+    const data = await response.json();
+    const searchInfo = data?.data?.searchInfo;
+    // Validate before leaving this boundary: callers still know the page URL
+    // here, whereas a later property-access error escapes to the category loop.
+    if (
+      typeof data?.successful !== 'boolean' ||
+      (data.successful && (
+        !searchInfo || typeof searchInfo !== 'object' ||
+        !Number.isInteger(searchInfo.pageCount) || searchInfo.pageCount < 0 ||
+        !Number.isInteger(searchInfo.hitCount) || searchInfo.hitCount < 0
+      ))
+    ) {
+      throw new Error('Unexpected API response: missing or invalid searchInfo pagination');
+    }
+    return data as MigrosApiResponse;
   }
 
   /**
    * Parse API product data into ProductData format
    */
-  private parseProducts(apiProducts: MigrosProduct[]): ProductData[] {
+  private parseProducts(apiProducts: MigrosProduct[], sourceUrl: string): ProductData[] {
     const products: ProductData[] = [];
 
     if (!apiProducts || !Array.isArray(apiProducts)) {
-      this.logger.warn(`No products array in API response`);
+      // logError, not a warning: a category that ends with no products after
+      // this must count as lost, and BaseScraper only sees the error buffer.
+      this.logError('Unexpected API response: no products array', sourceUrl);
       return products;
     }
 

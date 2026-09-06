@@ -380,7 +380,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
       return [];
     }
 
-    return this.scrapeCategoryViaGraphQL(categoryId, category.id, category.name);
+    return this.scrapeCategoryViaGraphQL(categoryId, category);
   }
 
   /**
@@ -400,9 +400,9 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
    */
   private async scrapeCategoryViaGraphQL(
     categoryId: string,
-    categorySlug: string,
-    categoryName: string
+    category: CategoryConfig
   ): Promise<ProductData[]> {
+    const { id: categorySlug, name: categoryName } = category;
     const allProducts: ProductData[] = [];
 
     // No try/catch here on purpose: a category that cannot even load its first
@@ -459,11 +459,8 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
                 const products = this.transformProducts(pageData.data.search.items);
                 return { pageNum, products };
               } catch (error) {
-                this.logger.warn(
-                  `Failed to fetch page ${pageNum} of ${categoryName}:`,
-                  (error as Error).message
-                );
-                this.productsFailed++;
+                // logError counts the failure and keeps it where BaseScraper looks.
+                this.logError(`Failed to fetch page ${pageNum} of ${categoryName}`, undefined, error as Error);
                 return { pageNum, products: [] };
               }
             })

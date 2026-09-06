@@ -1,4 +1,4 @@
-import { BaseScraper } from '../base/BaseScraper';
+import { BaseScraper, FatalScrapeError } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { config } from '../../config/env';
 import { chromium } from 'playwright-extra';
@@ -114,7 +114,7 @@ const CONFIGURATION_READ_NOT_YET =
  * tile reads "Preis abhängig vom Standort", so this is fatal for the run, not
  * a per-page glitch to log and skip.
  */
-export class ReweMarketError extends Error {
+export class ReweMarketError extends FatalScrapeError {
   constructor(message: string) {
     super(message);
     this.name = 'ReweMarketError';
@@ -177,8 +177,6 @@ export class ReweScraper extends BaseScraper {
   private readonly POSTAL_CODE = '10115'; // Berlin
   private marketSelected = false;
   private marketWwIdent: string | null = null;
-  /** Set when a category came back unpriced; fails the run after the loop. */
-  private marketLost: ReweMarketError | null = null;
   private browserContext: Awaited<ReturnType<typeof chromium.launchPersistentContext>> | null = null;
 
   constructor(config: ScraperConfig) {
@@ -571,34 +569,9 @@ export class ReweScraper extends BaseScraper {
   }
 
 
-  /**
-   * BaseScraper's loop catches per-category errors and carries on, and the
-   * run counts as a success with anything stored — so a market lost in
-   * category 8 would leave seven categories behind and be recorded as a
-   * successful catalog missing half its products. The loss is remembered
-   * here and turned into the run's failure once the loop is done; whatever
-   * was stored before it stays stored.
-   */
-  async scrapeProductList(): Promise<ProductData[]> {
-    const products = await super.scrapeProductList();
-    if (this.marketLost) throw this.marketLost;
-    return products;
-  }
-
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
-    // No point loading page after page of location-dependent prices. Skipped
-    // rather than failed: only the category that lost the market is the
-    // failure, and scrapeProductList reports it once.
-    if (this.marketLost) {
-      this.logger.warn(`Skipping ${category.name}: ${this.marketLost.message}`);
-      return [];
-    }
-    try {
-      return await this.scrapeCategoryPages(category);
-    } catch (error) {
-      if (error instanceof ReweMarketError) this.marketLost = error;
-      throw error;
-    }
+    // BaseScraper stops the run when a ReweMarketError escapes this method.
+    return this.scrapeCategoryPages(category);
   }
 
   /**
@@ -636,7 +609,7 @@ export class ReweScraper extends BaseScraper {
         this.logger.warn(`Cloudflare challenge detected for ${category.name}, attempting to solve...`);
         const solved = await this.solveCloudflareChallenge();
         if (!solved) {
-          this.logger.error(`Could not solve Cloudflare challenge for ${category.name}, skipping`);
+          this.failCategory(category, 'Could not solve Cloudflare challenge', baseCategoryUrl);
           return products;
         }
         // Update title after solving
@@ -664,7 +637,9 @@ export class ReweScraper extends BaseScraper {
               this.logger.warn(`Cloudflare challenge on page ${pageNum}, attempting to solve...`);
               const solved = await this.solveCloudflareChallenge();
               if (!solved) {
-                this.logger.error(`Could not solve Cloudflare on page ${pageNum}, stopping pagination`);
+                // Giving the category up; BaseScraper decides whether that
+                // lost it or truncated it.
+                this.failCategory(category, `could not solve Cloudflare on page ${pageNum}`, pageUrl);
                 break;
               }
               pageTitle = await this.page.title();
@@ -682,8 +657,9 @@ export class ReweScraper extends BaseScraper {
 
           this.logger.info(`${category.name} page ${pageNum}/${totalPages}: Found ${pageProducts.length} products (${productsWithPrice} with price)`);
 
-          // Every page, not just the first: a market lost between pages
-          // would otherwise leave the rest of the category silently unpriced.
+          // Every page, not just the first: a market that drops mid-category
+          // leaves later pages full of unpriced tiles that parseProducts
+          // would otherwise discard without a word.
           assertPricedPage(pageProducts, category.name, pageNum);
 
           // Parse products
@@ -709,21 +685,24 @@ export class ReweScraper extends BaseScraper {
         } catch (pageError) {
           // A lost market is not a page glitch: every page after it is empty too.
           if (pageError instanceof ReweMarketError) throw pageError;
-          this.logger.error(`Failed to scrape page ${pageNum} of ${category.name}:`, pageError);
+          // logError, not logger.error: a category whose every page failed
+          // this way must come back as lost, and the base class only sees
+          // errors that went through the buffer.
+          this.logError(
+            `Failed to scrape page ${pageNum} of ${category.name}`,
+            categoryPageUrl(baseCategoryUrl, pageNum),
+            pageError as Error
+          );
           // Continue to next page on error
         }
       }
 
       this.logger.info(`Category ${category.name}: Total ${products.length} products scraped from ${totalPages} pages`);
     } catch (error) {
-      // Rethrown so BaseScraper counts the category as failed instead of
-      // taking an empty array for a scraped one.
+      // Fatal: BaseScraper rethrows it out of scrapeProductList, so the run
+      // ends here rather than crawling every remaining category unpriced.
       if (error instanceof ReweMarketError) throw error;
-      this.logError(
-        `Failed to scrape category ${category.name}`,
-        `${this.BASE_URL}${category.url}`,
-        error as Error
-      );
+      this.failCategory(category, error, `${this.BASE_URL}${category.url}`);
     }
 
     return products;

@@ -1,13 +1,18 @@
 import {
-  ScraperService,
   ScraperDeadlineError,
   resolveDeadlineMs,
   FALLBACK_SCRAPER_DEADLINE_MS,
   REAP_INTERVAL_MS,
 } from '../ScraperService';
-import { ScraperFactory } from '../../scrapers/base/ScraperFactory';
+import { getScraperDeadlineMs } from '../../scrapers/scraperRegistry';
+import { fakeScraper, harness, PageCallback } from './scraperServiceHarness';
 
 jest.mock('../../scrapers/base/ScraperFactory');
+// Stubbed rather than requireActual'd: the real module imports every scraper.
+jest.mock('../../scrapers/scraperRegistry', () => ({
+  getScraperCategories: jest.fn(() => []),
+  getScraperDeadlineMs: jest.fn(() => undefined),
+}));
 jest.mock('../../utils/logger', () => {
   const stub = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
   return {
@@ -17,49 +22,7 @@ jest.mock('../../utils/logger', () => {
   };
 });
 
-const mockedFactory = ScraperFactory as jest.Mocked<typeof ScraperFactory>;
-
-type PageCallback = (products: unknown[], pageInfo: unknown) => Promise<number>;
-
-/** Minimal BaseScraper stand-in whose scrapeProductList we control. */
-function fakeScraper(scrapeProductList: () => Promise<unknown[]>) {
-  return {
-    setRunId: jest.fn(),
-    setOnPageScrapedCallback: jest.fn(),
-    initialize: jest.fn().mockResolvedValue(undefined),
-    scrapeProductList: jest.fn(scrapeProductList),
-    cleanup: jest.fn().mockResolvedValue(undefined),
-  };
-}
-
-function harness(scraper: ReturnType<typeof fakeScraper>) {
-  const update = jest.fn().mockResolvedValue(undefined);
-  const supermarketRepo = {
-    findById: jest.fn().mockResolvedValue({
-      id: '1', name: 'Testmarket', is_active: true, scraper_class: 'TestScraper',
-    }),
-  };
-  // Models the SQL guard: onlyIfRunning refuses a row past 'running'.
-  const status = { current: 'running' };
-  update.mockImplementation(async (_id: string, next: string, data?: { onlyIfRunning?: boolean }) => {
-    if (data?.onlyIfRunning && status.current !== 'running') return 0;
-    status.current = next;
-    return 1;
-  });
-  const create = jest.fn().mockResolvedValue('log-1');
-  const reapStaleRuns = jest.fn().mockResolvedValue(0);
-  const scrapeLogRepo = { create, update, reapStaleRuns };
-
-  mockedFactory.createFromSupermarket = jest.fn().mockReturnValue(scraper) as never;
-
-  const productService = { bulkSaveProducts: jest.fn(async (products: unknown[]) => products.length) };
-  const service = new ScraperService(
-    productService as never,
-    supermarketRepo as never,
-    scrapeLogRepo as never,
-  );
-  return { service, update, scraper, status, create, reapStaleRuns };
-}
+const mockedDeadlineFor = getScraperDeadlineMs as jest.MockedFunction<typeof getScraperDeadlineMs>;
 
 describe('ScraperService per-scraper deadline', () => {
   afterEach(() => jest.clearAllMocks());
@@ -259,6 +222,36 @@ describe('ScraperService per-scraper deadline', () => {
 
   it('ScraperDeadlineError reports the budget it blew', () => {
     expect(new ScraperDeadlineError(45 * 60 * 1000).message).toContain('45 minute');
+  });
+});
+
+describe('per-scraper deadline overrides', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('uses the budget registered for the scraper class when none is passed in', async () => {
+    // Woolworths needs hours; the fallback gives it 45 minutes and cuts it
+    // mid-catalog. The registry is what tells the service which is which.
+    mockedDeadlineFor.mockReturnValue(50);
+    const scraper = fakeScraper(() => new Promise(resolve => setTimeout(() => resolve([]), 200)));
+    const { service, update } = harness(scraper);
+
+    const result = await service.runScraper('1');
+
+    expect(mockedDeadlineFor).toHaveBeenCalledWith('TestScraper');
+    expect(result.errors[0].message).toMatch(/deadline/i);
+    expect(update).toHaveBeenCalledWith('log-1', 'failed', expect.objectContaining({
+      error: expect.stringMatching(/deadline/i),
+    }));
+  });
+
+  it('lets an explicit deadlineMs override the registered budget', async () => {
+    mockedDeadlineFor.mockReturnValue(50);
+    const scraper = fakeScraper(() => new Promise(resolve => setTimeout(() => resolve([]), 200)));
+    const { service } = harness(scraper);
+
+    const result = await service.runScraper('1', { deadlineMs: 10_000 });
+
+    expect(result.errors).toEqual([]);
   });
 });
 

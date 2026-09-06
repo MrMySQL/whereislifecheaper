@@ -106,6 +106,23 @@ describe('AuchanUaGraphQLScraper when Cloudflare answers instead of the API', ()
     await expect(scraper.run()).rejects.toThrow();
   });
 
+  it('reports every blocked category through the full product-list loop', async () => {
+    const scraper = new FixtureScraper(() => ({ status: 403, contentType: 'text/html', body: BLOCK_PAGE }));
+
+    await expect(scraper.scrapeProductList()).resolves.toEqual([]);
+
+    expect(scraper.getCategoryStats()).toEqual({
+      attempted: auchanUaGraphQLCategories.length,
+      failed: auchanUaGraphQLCategories.length,
+    });
+    expect(scraper.getCategoryErrors()).toHaveLength(auchanUaGraphQLCategories.length);
+    expect(scraper.getErrors()).toEqual([]);
+    for (const error of scraper.getCategoryErrors()) {
+      expect(error.message).toMatch(/Cloudflare.*403/);
+      expect(error.message).toContain('a36a86609964f7ef');
+    }
+  });
+
   it.each([
     ['data is null', JSON.stringify({ data: null })],
     ['search is missing', JSON.stringify({ data: {} })],

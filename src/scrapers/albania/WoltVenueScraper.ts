@@ -177,7 +177,7 @@ export abstract class WoltVenueScraper extends BaseScraper {
         products.push(...mapped);
       }
     } catch (error) {
-      this.logError(`Failed to scrape category: ${category.name}`, categoryUrl, error as Error);
+      this.failCategory(category, error, categoryUrl);
     }
 
     return products;

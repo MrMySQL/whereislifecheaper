@@ -1,4 +1,4 @@
-import { BaseScraper } from '../base/BaseScraper';
+import { BaseScraper, RequestFailure } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 
 /**
@@ -180,7 +180,9 @@ export class SezamoScraper extends BaseScraper {
       while (hasMorePages) {
         const categoryResponse = await this.fetchCategoryProductIds(categoryId, page);
 
-        if (!categoryResponse || categoryResponse.productIds.length === 0) {
+        // A failed request throws out to the catch below, which gives the
+        // category up with the real cause; an empty page is the end of it.
+        if (categoryResponse.productIds.length === 0) {
           this.logger.debug(`No more products in category ${category.name} at page ${page}`);
           break;
         }
@@ -221,11 +223,9 @@ export class SezamoScraper extends BaseScraper {
 
       this.logger.info(`Category ${category.name}: Total ${products.length} products scraped`);
     } catch (error) {
-      this.logError(
-        `Failed to scrape category ${category.name}`,
-        `${this.API_BASE}/categories/normal/${categoryId}/products`,
-        error as Error
-      );
+      this.failCategory(category, error, error instanceof RequestFailure
+        ? undefined
+        : `${this.API_BASE}/categories/normal/${categoryId}/products`);
     }
 
     return products;
@@ -234,32 +234,13 @@ export class SezamoScraper extends BaseScraper {
   private async fetchCategoryProductIds(
     categoryId: string,
     page: number
-  ): Promise<SezamoCategoryResponse | null> {
-    if (!this.page) {
-      throw new Error('Page not initialized');
-    }
-
+  ): Promise<SezamoCategoryResponse> {
     const url = `${this.API_BASE}/categories/normal/${categoryId}/products?page=${page}&size=${this.PAGE_SIZE}&sort=recommended&filter=`;
 
-    try {
-      const response = await this.page.request.get(url, {
-        headers: {
-          Accept: 'application/json',
-          'Accept-Language': 'en-RO,en;q=0.9,ro;q=0.8',
-        },
-      });
-
-      if (!response.ok()) {
-        this.logger.warn(`API request failed: ${response.status()} ${response.statusText()}`);
-        return null;
-      }
-
-      const data: SezamoCategoryResponse = await response.json();
-      return data;
-    } catch (error) {
-      this.logger.error(`Failed to fetch ${url}:`, error);
-      return null;
-    }
+    return this.getJson<SezamoCategoryResponse>(url, {
+      Accept: 'application/json',
+      'Accept-Language': 'en-RO,en;q=0.9,ro;q=0.8',
+    });
   }
 
   private async fetchProductsWithPrices(productIds: number[]): Promise<SezamoProductWithPrice[]> {
@@ -269,33 +250,35 @@ export class SezamoScraper extends BaseScraper {
 
     const results: SezamoProductWithPrice[] = [];
 
+    // Process in batches to avoid too-long URLs
     for (let i = 0; i < productIds.length; i += this.BATCH_SIZE) {
       const batch = productIds.slice(i, i + this.BATCH_SIZE);
       const productsParam = batch.map((id) => `products=${id}`).join('&');
+      const productsUrl = `${this.API_BASE}/products?${productsParam}`;
+      const pricesUrl = `${this.API_BASE}/products/prices?${productsParam}`;
 
+      // One try around fetch and merge: a bad batch is recorded and the next
+      // batch still runs, whether the request failed or the body was odd.
       try {
-        const [productsResponse, pricesResponse] = await Promise.all([
-          this.page.request.get(`${this.API_BASE}/products?${productsParam}`, {
-            headers: { Accept: 'application/json' },
-          }),
-          this.page.request.get(`${this.API_BASE}/products/prices?${productsParam}`, {
-            headers: { Accept: 'application/json' },
-          }),
+        // Fetch product details and prices in parallel
+        const [productsData, pricesData] = await Promise.all([
+          this.getJson<SezamoProductData[]>(productsUrl),
+          this.getJson<SezamoPriceData[]>(pricesUrl),
         ]);
-
-        if (!productsResponse.ok() || !pricesResponse.ok()) {
-          this.logger.warn(`Failed to fetch batch: products=${productsResponse.status()}, prices=${pricesResponse.status()}`);
-          continue;
+        if (!Array.isArray(productsData)) {
+          throw new RequestFailure(productsUrl, 'Unexpected API response: not a product array');
+        }
+        if (!Array.isArray(pricesData)) {
+          throw new RequestFailure(pricesUrl, 'Unexpected API response: not a price array');
         }
 
-        const productsData: SezamoProductData[] = await productsResponse.json();
-        const pricesData: SezamoPriceData[] = await pricesResponse.json();
-
+        // Create a map of prices by productId
         const priceMap = new Map<number, SezamoPriceData>();
         for (const price of pricesData) {
           priceMap.set(price.productId, price);
         }
 
+        // Combine products with their prices
         for (const product of productsData) {
           const priceInfo = priceMap.get(product.id);
           if (priceInfo) {
@@ -305,9 +288,13 @@ export class SezamoScraper extends BaseScraper {
           }
         }
       } catch (error) {
-        this.logger.error(`Failed to fetch product batch:`, error);
+        // The failure names the request it came from.
+        const url = error instanceof RequestFailure ? error.url : undefined;
+        const detail = error instanceof Error ? error.message : String(error);
+        this.logError(`Failed to fetch product batch: ${detail}`, url, error as Error);
       }
 
+      // Small delay between batches
       if (i + this.BATCH_SIZE < productIds.length) {
         await this.page.waitForTimeout(100);
       }

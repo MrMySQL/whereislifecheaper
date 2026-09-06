@@ -14,6 +14,7 @@ import {
   categoryPageUrl,
   deliveryMarketFor,
 } from '../ReweScraper';
+import { FatalScrapeError } from '../../base/BaseScraper';
 import { ProductData, ScraperConfig } from '../../../types/scraper.types';
 
 const ZIP = '10115';
@@ -47,19 +48,26 @@ function config(): ScraperConfig {
 
 /**
  * Stands in for Playwright's page during market selection. `configurations`
- * is what successive reads of the configuration endpoint return (an Error
- * entry makes that read throw), the last one repeating forever; the UI calls
- * are recorded so a test can assert whether the zip flow ran at all.
+ * is what successive reads of the configuration endpoint return, the last one
+ * repeating forever; the UI calls are recorded so a test can assert whether
+ * the zip flow ran at all. An Error in that list makes that read reject, the
+ * way page.evaluate does when the shop's reload after the 201 tears down the
+ * execution context. A locator's `hasText` filter is folded into the
+ * recorded selector, so a test can tell Lieferservice from Abholservice.
+ * `selectionStatus` is what /userselections answers the click with.
  */
-function fakePage(configurations: (MarketConfiguration | Error)[]) {
+function fakePage(configurations: Array<MarketConfiguration | Error>, selectionStatus = 201) {
   const reads = [...configurations];
   let readCount = 0;
   const calls: string[] = [];
-  const locator = (selector: string) => ({
-    waitFor: async () => { calls.push(`waitFor ${selector}`); },
-    fill: async (value: string) => { calls.push(`fill ${selector} ${value}`); },
-    click: async () => { calls.push(`click ${selector}`); },
-  });
+  const locator = (selector: string, options?: { hasText?: string }) => {
+    const key = options?.hasText ? `${selector}[hasText=${options.hasText}]` : selector;
+    return {
+      waitFor: async () => { calls.push(`waitFor ${key}`); },
+      fill: async (value: string) => { calls.push(`fill ${key} ${value}`); },
+      click: async () => { calls.push(`click ${key}`); },
+    };
+  };
   return {
     calls,
     goto: async () => { calls.push('goto'); },
@@ -68,13 +76,16 @@ function fakePage(configurations: (MarketConfiguration | Error)[]) {
     $: async () => null,
     evaluate: async () => {
       readCount++;
-      const next = reads.length > 1 ? reads.shift() : reads[0];
-      if (next instanceof Error) throw next;
-      return next;
+      const read = reads.length > 1 ? reads.shift() : reads[0];
+      if (read instanceof Error) throw read;
+      return read;
     },
     get readCount() { return readCount; },
     locator,
-    waitForResponse: async () => ({ ok: () => true, status: () => 200 }),
+    waitForResponse: async () => ({
+      ok: () => selectionStatus >= 200 && selectionStatus < 300,
+      status: () => selectionStatus,
+    }),
   };
 }
 
@@ -192,9 +203,23 @@ describe('ReweScraper.selectDeliveryMarket', () => {
       expect.arrayContaining([
         `fill [data-testid="zip-code-input"] ${ZIP}`,
         'click [data-testid="gbmc_zipCodeSubmit"]',
-        expect.stringMatching(/^click .*service-btn/),
+        'click button[data-testid="service-btn"][hasText=Lieferservice]',
       ])
     );
+  });
+
+  it('throws when REWE rejects the market selection', async () => {
+    const page = fakePage([NO_MARKET], 403);
+    const scraper = scraperWith(page);
+
+    await expect(
+      (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket()
+    ).rejects.toThrow(/rejected the market selection: HTTP 403/);
+    expect((scraper as unknown as { marketSelected: boolean }).marketSelected).toBe(false);
+  });
+
+  it('reports a lost market as fatal so BaseScraper stops the run', () => {
+    expect(new ReweMarketError('gone')).toBeInstanceOf(FatalScrapeError);
   });
 
   it('skips the zip flow when the persistent session already has the market', async () => {
@@ -269,7 +294,7 @@ describe('ReweScraper.scrapeProductList when the market is lost mid-run', () => 
     await scraper.scrapeProductList().catch(() => undefined);
 
     expect(scraper.scraped).toEqual(['a', 'b']);
-    // BaseScraper's per-category catch counts a failure per throw; only b lost the market.
-    expect(scraper.getStats().productsFailed).toBe(1);
+    // Market loss is fatal for the run; remaining categories are never attempted.
+    expect(scraper.getCategoryStats()).toEqual({ attempted: 2, failed: 0 });
   });
 });
