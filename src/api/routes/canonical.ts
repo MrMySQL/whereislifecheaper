@@ -4,7 +4,6 @@ import { canonicalProductRepository } from '../../repositories';
 import { CanonicalComparisonRow } from '../../types/db.types';
 import { isAdmin } from '../../auth';
 import { validateQuery, validateBody, paginationSchema } from '../middleware/validate';
-import { calculatePricePerUnit } from '../../utils/normalizer';
 
 const router = Router();
 
@@ -17,10 +16,8 @@ const mappedProductsSchema = paginationSchema.extend({
 const comparisonSchema = paginationSchema.extend({
   limit: z.coerce.number().int().min(1).max(500).default(100),
   search: z.string().optional(),
-  // Opt-in freshness bound. Off by default: switching it on while the scrape
-  // pipeline is down would empty the table rather than show stale prices, and
-  // the response's `freshness` block already tells callers how old the data is.
-  max_age_days: z.coerce.number().int().min(1).max(365).optional(),
+  // A missing current price is preferable to averaging an obsolete offer.
+  max_age_days: z.coerce.number().int().min(1).max(365).default(7),
 });
 
 const productsByCountrySchema = paginationSchema.extend({
@@ -195,14 +192,10 @@ router.get('/comparison', validateQuery(comparisonSchema), async (req, res, next
           const totalPrice = products.reduce((sum, p) => sum + p.price, 0);
           const avgPrice = totalPrice / productCount;
 
-          // Derive per-unit price for products missing it (e.g. unit=kg with no quantity,
-          // where the raw price IS the per-kg price).
+          // Only observation-time interpretations are usable. Never guess a
+          // historical package size from the product's current unit fields.
           const pricesPerUnit = products
-            .map(p =>
-              p.price_per_unit ??
-              calculatePricePerUnit(p.price, p.unit_quantity ?? undefined, p.unit ?? undefined) ??
-              null
-            )
+            .map(p => p.price_per_unit)
             .filter((v): v is number => v != null);
           const avgPricePerUnit =
             pricesPerUnit.length > 0

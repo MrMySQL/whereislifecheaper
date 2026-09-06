@@ -1,5 +1,7 @@
+import { getClient } from '../config/database';
 import { ProductRepository, ProductMappingRepository, PriceRepository } from '../repositories';
 import { productRepository as defaultProductRepo, productMappingRepository as defaultMappingRepo, priceRepository as defaultPriceRepo } from '../repositories';
+import { QuantityInterpretation } from '../utils/productQuantity';
 import { ProductData } from '../types/scraper.types';
 import { ProductWithPricesResult, ProductWithCategory, SupermarketProductEntry } from '../types/db.types';
 import { normalizeProductName } from '../utils/normalizer';
@@ -128,9 +130,12 @@ export class ProductService {
         scraperLogger.debug(`Created new product: ${productData.name} (${productId})`);
       }
 
-      if (existingMappingId) return existingMappingId;
-
-      return this.productMappingRepository.createOrUpdateMapping(productId, supermarketId, { externalId, productUrl });
+      const mappingId = existingMappingId ?? await this.productMappingRepository.createOrUpdateMapping(
+        productId, supermarketId, { externalId, productUrl }
+      );
+      await this.productMappingRepository.updateMappingById(mappingId, { productUrl, externalId });
+      await this.productMappingRepository.recordObservations([mappingId], [productData]);
+      return mappingId;
     } catch (error) {
       scraperLogger.error('Error in findOrCreateProduct:', error);
       throw error;
@@ -145,6 +150,7 @@ export class ProductService {
       originalPrice?: number;
       isOnSale: boolean;
       pricePerUnit?: number;
+      quantityInfo?: QuantityInterpretation;
     }
   ): Promise<void> {
     return this.priceRepository.recordPrice(productMappingId, priceData);
@@ -269,7 +275,21 @@ export class ProductService {
       const allProducts = [...existingProducts.map(ep => ep.product), ...newProducts];
 
       if (allMappingIds.length > 0) {
-        await this.priceRepository.batchInsertPrices(allMappingIds, allProducts, currency);
+        // Reviewers lock the offer row before reading its latest price. Commit
+        // the observation and corresponding price together, so neither readers
+        // nor approvals can see a new availability state with an old price.
+        const client = await getClient();
+        try {
+          await client.query('BEGIN');
+          await this.productMappingRepository.recordObservations(allMappingIds, allProducts, client);
+          await this.priceRepository.batchInsertPrices(allMappingIds, allProducts, currency, client);
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
+        }
       }
 
       const duration = Date.now() - startTime;

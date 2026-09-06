@@ -6,7 +6,7 @@ import { supermarketRepository as defaultSupermarketRepo, scrapeLogRepository as
 import { scraperLogger } from '../utils/logger';
 import { ProductData, ScrapeResult, CategoryConfig, PageInfo } from '../types/scraper.types';
 import { ScrapeLogWithSupermarket, ScrapeLogLatestStats } from '../types/db.types';
-import { calculatePricePerUnit } from '../utils/normalizer';
+import { interpretProductQuantity } from '../utils/productQuantity';
 import { getScraperCategories } from '../scrapers/scraperRegistry';
 import { generateRunId } from '../utils/runId';
 
@@ -225,7 +225,7 @@ export class ScraperService {
         products: products.map(p => ({
           ...p,
           normalizedName: p.name,
-          pricePerUnit: calculatePricePerUnit(p.price, p.unitQuantity, p.unit),
+          pricePerUnit: interpretProductQuantity(p).comparablePrice ?? undefined,
         })),
         scrapedAt: new Date(),
         duration: Date.now() - startTime,
@@ -381,12 +381,12 @@ export class ScraperService {
       for (const product of products) {
         try {
           const mappingId = await this.productService.findOrCreateProduct(product, supermarketId);
-          await this.productService.recordPrice(mappingId, {
+          if (product.isAvailable) await this.productService.recordPrice(mappingId, {
             price: product.price,
             currency: product.currency,
             originalPrice: product.originalPrice,
             isOnSale: product.isOnSale,
-            pricePerUnit: calculatePricePerUnit(product.price, product.unitQuantity, product.unit),
+            quantityInfo: interpretProductQuantity(product),
           });
           storedCount++;
         } catch (err) {

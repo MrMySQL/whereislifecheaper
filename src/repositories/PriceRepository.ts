@@ -1,6 +1,7 @@
+import { PoolClient } from 'pg';
 import { query } from '../config/database';
 import { ProductData } from '../types/scraper.types';
-import { calculatePricePerUnit } from '../utils/normalizer';
+import { interpretProductQuantity, QuantityInterpretation } from '../utils/productQuantity';
 import {
   LatestPriceEntry,
   CountryStatsEntry,
@@ -17,19 +18,22 @@ export class PriceRepository {
       originalPrice?: number;
       isOnSale: boolean;
       pricePerUnit?: number;
+      quantityInfo?: QuantityInterpretation;
     }
   ): Promise<void> {
+    if (!Number.isFinite(priceData.price) || priceData.price <= 0) return;
     await query(
       `INSERT INTO prices (
-        product_mapping_id, price, currency, original_price, is_on_sale, price_per_unit, scraped_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+        product_mapping_id, price, currency, original_price, is_on_sale, price_per_unit, quantity_info, scraped_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, CURRENT_TIMESTAMP)`,
       [
         productMappingId,
         priceData.price,
         priceData.currency,
         priceData.originalPrice || null,
         priceData.isOnSale,
-        priceData.pricePerUnit || null,
+        priceData.quantityInfo?.comparablePrice ?? priceData.pricePerUnit ?? null,
+        priceData.quantityInfo ? JSON.stringify(priceData.quantityInfo) : null,
       ]
     );
   }
@@ -37,30 +41,28 @@ export class PriceRepository {
   async batchInsertPrices(
     mappingIds: string[],
     products: ProductData[],
-    currency: string
+    currency: string,
+    client?: PoolClient
   ): Promise<void> {
-    if (mappingIds.length === 0) return;
-
-    const mappingIdsInt = mappingIds.map(id => parseInt(id, 10));
-    const prices = products.map(p => p.price);
-    const currencies = products.map(() => currency);
-    const originalPrices = products.map(p => p.originalPrice || null);
-    const isOnSales = products.map(p => p.isOnSale);
-    const pricePerUnits = products.map(
-      p => calculatePricePerUnit(p.price, p.unitQuantity, p.unit) || null
-    );
-
-    await query(
-      `INSERT INTO prices (product_mapping_id, price, currency, original_price, is_on_sale, price_per_unit, scraped_at)
-       SELECT
-         unnest($1::int[]),
-         unnest($2::numeric[]),
-         unnest($3::text[]),
-         unnest($4::numeric[]),
-         unnest($5::boolean[]),
-         unnest($6::numeric[]),
-         CURRENT_TIMESTAMP`,
-      [mappingIdsInt, prices, currencies, originalPrices, isOnSales, pricePerUnits]
+    if (mappingIds.length !== products.length) throw new Error('Price mappings and products must align');
+    const observations = products.flatMap((product, index) => {
+      if (!product.isAvailable || !Number.isFinite(product.price) || product.price <= 0) return [];
+      const quantity = interpretProductQuantity(product);
+      return [{
+        mapping_id: Number(mappingIds[index]), price: product.price,
+        currency: product.currency || currency,
+        original_price: product.originalPrice ?? null, is_on_sale: product.isOnSale,
+        price_per_unit: quantity.comparablePrice, quantity_info: quantity,
+      }];
+    });
+    if (observations.length === 0) return;
+    const execute = client ? client.query.bind(client) : query;
+    await execute(
+      `INSERT INTO prices (product_mapping_id, price, currency, original_price, is_on_sale, price_per_unit, quantity_info, scraped_at)
+       SELECT mapping_id, price, currency, original_price, is_on_sale, price_per_unit, quantity_info, CURRENT_TIMESTAMP
+       FROM jsonb_to_recordset($1::jsonb) AS o(mapping_id int, price numeric, currency text,
+         original_price numeric, is_on_sale boolean, price_per_unit numeric, quantity_info jsonb)`,
+      [JSON.stringify(observations)]
     );
   }
 
