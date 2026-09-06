@@ -210,7 +210,10 @@ export class WinMartScraper extends BaseScraper {
       throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
     const data: WinMartCategoryResponse = await response.json();
-    return data.data?.items ?? [];
+    if (!Array.isArray(data?.data?.items)) {
+      throw new Error('Unexpected API response: no items array');
+    }
+    return data.data.items;
   }
 
   /**

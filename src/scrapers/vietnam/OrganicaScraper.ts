@@ -197,7 +197,10 @@ export class OrganicaScraper extends BaseScraper {
       throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
     const data: HaravanProductsResponse = await response.json();
-    return data.products ?? [];
+    if (!Array.isArray(data?.products)) {
+      throw new Error('Unexpected API response: no products array');
+    }
+    return data.products;
   }
 
   /**

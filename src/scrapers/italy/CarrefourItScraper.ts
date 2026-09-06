@@ -126,8 +126,8 @@ export class CarrefourItScraper extends BaseScraper {
       const firstPage = await this.fetchPage(category.id, 0, this.PAGE_SIZE);
 
       if (!firstPage || !firstPage.productIds) {
-        this.failCategory(category, 'API returned no data for the first page');
-        return [];
+        // Out to the catch below, which gives the category up with this cause.
+        throw new Error('Unexpected API response: no productIds on the first page');
       }
 
       const totalProducts = firstPage.countResult;

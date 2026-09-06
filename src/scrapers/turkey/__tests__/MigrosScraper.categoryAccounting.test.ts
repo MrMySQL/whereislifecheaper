@@ -8,7 +8,7 @@ import { MigrosScraper, migrosConfig } from '../MigrosScraper';
 import { ScraperConfig } from '../../../types/scraper.types';
 import { Page } from 'playwright';
 
-type ApiAnswer = { successful: boolean; data?: unknown };
+type ApiAnswer = { successful: boolean; data?: unknown } | { httpStatus: number };
 
 /** One category; each request answers with the next entry, the last repeating. */
 class FixtureScraper extends MigrosScraper {
@@ -22,10 +22,16 @@ class FixtureScraper extends MigrosScraper {
     const queue = [...answers];
     this.page = {
       request: {
-        get: async () => ({
-          ok: () => true,
-          json: async () => (queue.length > 1 ? queue.shift() : queue[0]),
-        }),
+        get: async () => {
+          const answer = (queue.length > 1 ? queue.shift() : queue[0]) as ApiAnswer;
+          const status = 'httpStatus' in answer ? answer.httpStatus : 200;
+          return {
+            ok: () => status < 400,
+            status: () => status,
+            statusText: () => (status === 503 ? 'Service Unavailable' : 'OK'),
+            json: async () => answer,
+          };
+        },
       },
     } as unknown as Page;
   }
@@ -52,6 +58,16 @@ describe('MigrosScraper category accounting', () => {
     expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
     expect(scraper.getCategoryErrors()[0].message).toMatch(/Fruit.*unsuccessful/);
     expect(scraper.getErrors()).toEqual([]);
+  });
+
+  it('records the HTTP status when the first page request fails', async () => {
+    const scraper = new FixtureScraper([{ httpStatus: 503 }]);
+
+    await scraper.scrapeProductList();
+
+    expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
+    expect(scraper.getCategoryErrors()[0].message).toMatch(/Fruit.*HTTP 503 Service Unavailable/);
+    expect(scraper.getCategoryErrors()[0].productUrl).toMatch(/\/fruit-c-\d+$|fruit$/);
   });
 
   it('reports the category lost when the first page has no products array', async () => {

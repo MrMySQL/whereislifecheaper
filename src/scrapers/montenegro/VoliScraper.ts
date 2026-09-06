@@ -334,7 +334,8 @@ export class VoliScraper extends BaseScraper {
         }
       }
     } catch (error) {
-      this.logError('Failed to extract products from page', this.page?.url(), error as Error);
+      // Plain logger: this rethrows, and the caller's catch records it once.
+      this.logger.error('Failed to extract products from page:', error);
       await this.takeScreenshot('extract-products-error');
       throw error;
     }

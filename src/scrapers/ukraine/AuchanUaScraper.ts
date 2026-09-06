@@ -299,7 +299,8 @@ export class AuchanUaScraper extends BaseScraper {
         }
       }
     } catch (error) {
-      this.logError('Failed to extract products from page', this.page?.url(), error as Error);
+      // Plain logger: this rethrows, and the caller's catch records it once.
+      this.logger.error('Failed to extract products from page:', error);
       await this.takeScreenshot('auchan-extract-products-error');
       throw error;
     }

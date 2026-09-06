@@ -145,7 +145,10 @@ export class ArbuzScraper extends BaseScraper {
         const pageData = await this.fetchCategoryPage(categoryId, page, limit);
 
         // API response structure: { data: { products: { data: [...] }, ... }, $layout: ... }
-        const productsArray = pageData.data?.products?.data || [];
+        const productsArray = pageData.data?.products?.data;
+        if (!Array.isArray(productsArray)) {
+          throw new Error('Unexpected API response: no products array');
+        }
 
         if (productsArray.length === 0) {
           hasMore = false;

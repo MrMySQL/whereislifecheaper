@@ -293,22 +293,20 @@ export class KnusprScraper extends BaseScraper {
     for (let i = 0; i < productIds.length; i += this.BATCH_SIZE) {
       const batch = productIds.slice(i, i + this.BATCH_SIZE);
       const productsParam = batch.map((id) => `products=${id}`).join('&');
+      const productsUrl = `${this.API_BASE}/products?${productsParam}`;
+      const pricesUrl = `${this.API_BASE}/products/prices?${productsParam}`;
 
       try {
         // Fetch product details and prices in parallel
         const [productsResponse, pricesResponse] = await Promise.all([
-          this.page.request.get(`${this.API_BASE}/products?${productsParam}`, {
-            headers: { Accept: 'application/json' },
-          }),
-          this.page.request.get(`${this.API_BASE}/products/prices?${productsParam}`, {
-            headers: { Accept: 'application/json' },
-          }),
+          this.page.request.get(productsUrl, { headers: { Accept: 'application/json' } }),
+          this.page.request.get(pricesUrl, { headers: { Accept: 'application/json' } }),
         ]);
 
         if (!productsResponse.ok() || !pricesResponse.ok()) {
           this.logError(
             `Failed to fetch product batch: products=${productsResponse.status()}, prices=${pricesResponse.status()}`,
-            `${this.API_BASE}/products?${productsParam}`
+            productsResponse.ok() ? pricesUrl : productsUrl
           );
           continue;
         }
@@ -332,7 +330,8 @@ export class KnusprScraper extends BaseScraper {
           }
         }
       } catch (error) {
-        this.logError('Failed to fetch product batch', `${this.API_BASE}/products?${productsParam}`, error as Error);
+        // Either request may have thrown; both are named so the failing one can be found.
+        this.logError(`Failed to fetch product batch (${productsUrl} or ${pricesUrl})`, undefined, error as Error);
       }
 
       // Small delay between batches
