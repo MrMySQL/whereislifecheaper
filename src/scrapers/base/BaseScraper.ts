@@ -1,3 +1,4 @@
+import { interpretProductQuantity } from '../../utils/productQuantity';
 import { Browser, Page, chromium } from 'playwright';
 import { createPrefixedLogger } from '../../utils/logger';
 import { retry, sleep } from '../../utils/retry';
@@ -25,6 +26,13 @@ export abstract class BaseScraper {
   protected productsScraped: number = 0;
   protected productsFailed: number = 0;
   protected errors: ScrapeError[] = [];
+  /**
+   * Category outcomes for this run. A scraper that loses most of its
+   * categories but still stores something from the rest used to be
+   * indistinguishable from a healthy run — see getCategoryStats().
+   */
+  protected categoriesAttempted: number = 0;
+  protected categoriesFailed: number = 0;
   protected onPageScraped?: OnPageScrapedCallback;
   protected logger: ReturnType<typeof createPrefixedLogger>;
 
@@ -87,6 +95,7 @@ export abstract class BaseScraper {
     );
 
     for (const category of this.config.categories) {
+      this.categoriesAttempted++;
       try {
         this.logger.info(`Scraping category: ${category.name} (${category.id})`);
 
@@ -100,6 +109,7 @@ export abstract class BaseScraper {
         // Wait between categories
         await this.waitBetweenRequests();
       } catch (error) {
+        this.categoriesFailed++;
         this.logError(
           `Failed to scrape category: ${category.name}`,
           undefined,
@@ -108,6 +118,11 @@ export abstract class BaseScraper {
       }
     }
 
+    if (this.categoriesFailed > 0) {
+      this.logger.warn(
+        `${this.categoriesFailed} of ${this.categoriesAttempted} categories failed`
+      );
+    }
     this.logger.info(`Total products scraped: ${allProducts.length}`);
     return allProducts;
   }
@@ -411,9 +426,7 @@ export abstract class BaseScraper {
       products: products.map((p) => ({
         ...p,
         normalizedName: p.name, // Will be normalized by the service
-        pricePerUnit: p.unitQuantity
-          ? p.price / p.unitQuantity
-          : undefined,
+        pricePerUnit: interpretProductQuantity(p).comparablePrice ?? undefined,
       })),
       scrapedAt: new Date(),
       duration,
@@ -438,6 +451,25 @@ export abstract class BaseScraper {
     }
 
     this.logger.info(`Browser closed for ${this.config.name}`);
+  }
+
+  /**
+   * Errors collected during this run, including per-category failures that
+   * scrapeProductList caught and carried on from.
+   */
+  public getErrors(): ScrapeError[] {
+    return [...this.errors];
+  }
+
+  /**
+   * How many categories this run attempted, and how many of them failed.
+   *
+   * A scraper that overrides scrapeProductList without keeping the counters
+   * reports 0 attempted, which callers read as "no category signal" rather
+   * than as a clean run.
+   */
+  public getCategoryStats(): { attempted: number; failed: number } {
+    return { attempted: this.categoriesAttempted, failed: this.categoriesFailed };
   }
 
   /**

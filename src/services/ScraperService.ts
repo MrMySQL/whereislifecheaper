@@ -9,6 +9,7 @@ import { ScrapeLogWithSupermarket, ScrapeLogLatestStats } from '../types/db.type
 import { interpretProductQuantity } from '../utils/productQuantity';
 import { getScraperCategories, getScraperDeadlineMs } from '../scrapers/scraperRegistry';
 import { generateRunId } from '../utils/runId';
+import { CATEGORY_FAILURE_THRESHOLD } from './scrapeRunHealth';
 
 export interface RunScraperOptions {
   categoryIds?: string[];
@@ -217,14 +218,27 @@ export class ScraperService {
         `Scraped ${products.length} products from ${supermarket.name}, stored ${totalStoredCount}`
       );
 
+      // Per-category failures live on the scraper, which caught them and
+      // carried on; without this they never left it. A scraper that lost 15 of
+      // 16 categories and stored one product reported "Errors: 0".
+      const categoryStats = scraper.getCategoryStats();
+      const categoryErrors = scraper.getErrors();
+
       // A scraper that returns cleanly but stores nothing is not a success —
       // a swallowed API error, a captcha, or a dead category all look like
       // this, and recording them as 'success' is what hid REWE's 0-product
-      // runs for three months.
-      const status = totalStoredCount === 0 ? 'partial' : 'success';
+      // runs for three months. Losing most of the categories is the same kind
+      // of non-success: real rows stored, for a fraction of the catalog.
+      const categoriesLost =
+        categoryStats.attempted > 0 &&
+        categoryStats.failed / categoryStats.attempted >= CATEGORY_FAILURE_THRESHOLD;
+      const status = totalStoredCount === 0 || categoriesLost ? 'partial' : 'success';
       if (status === 'partial') {
         scraperLogger.warn(
-          `${supermarket.name} completed without storing any products — recording as 'partial'`
+          totalStoredCount === 0
+            ? `${supermarket.name} completed without storing any products — recording as 'partial'`
+            : `${supermarket.name} lost ${categoryStats.failed} of ${categoryStats.attempted} ` +
+              `categories — recording as 'partial'`
         );
       }
 
@@ -233,7 +247,11 @@ export class ScraperService {
         // process. The database is the only place the two can be ordered.
         await this.scrapeLogRepository.update(scrapeLogId, status, {
           productsScraped: totalStoredCount,
-          error: status === 'partial' ? 'Completed but stored 0 products' : undefined,
+          error: status !== 'partial'
+            ? undefined
+            : totalStoredCount === 0
+              ? 'Completed but stored 0 products'
+              : `${categoryStats.failed} of ${categoryStats.attempted} categories failed`,
           duration: Date.now() - startTime,
           onlyIfRunning: true,
         });
@@ -251,6 +269,9 @@ export class ScraperService {
         productsScraped: totalStoredCount,
         productsFailed: products.length - totalStoredCount,
         errors: [],
+        categoryErrors,
+        categoriesAttempted: categoryStats.attempted,
+        categoriesFailed: categoryStats.failed,
       };
 
       scraperLogger.info(

@@ -60,6 +60,8 @@ export interface ProductData {
   description?: string;
   categoryName?: string;
   isAvailable: boolean;
+  /** Basis of the quoted price when explicitly provided by the retailer. */
+  priceBasis?: 'package' | 'kg' | 'l' | 'piece' | 'unknown';
 }
 
 export interface ScrapedProduct extends ProductData {
@@ -74,7 +76,16 @@ export interface ScrapeResult {
   duration: number;
   productsScraped: number;
   productsFailed: number;
+  /** The run itself failed — a throw, or the deadline. Callers treat it as fatal. */
   errors: ScrapeError[];
+  /**
+   * Categories the scraper failed on and carried past. Kept apart from
+   * `errors` because losing one seasonal category is not losing the run —
+   * see assessScrapeResult() for where the line is drawn.
+   */
+  categoryErrors?: ScrapeError[];
+  categoriesAttempted?: number;
+  categoriesFailed?: number;
 }
 
 export interface ScrapeError {

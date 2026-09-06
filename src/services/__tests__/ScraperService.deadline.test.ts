@@ -1,12 +1,11 @@
 import {
-  ScraperService,
   ScraperDeadlineError,
   resolveDeadlineMs,
   FALLBACK_SCRAPER_DEADLINE_MS,
   REAP_INTERVAL_MS,
 } from '../ScraperService';
-import { ScraperFactory } from '../../scrapers/base/ScraperFactory';
 import { getScraperDeadlineMs } from '../../scrapers/scraperRegistry';
+import { fakeScraper, harness, PageCallback } from './scraperServiceHarness';
 
 jest.mock('../../scrapers/base/ScraperFactory');
 // Stubbed rather than requireActual'd: the real module imports every scraper.
@@ -23,50 +22,7 @@ jest.mock('../../utils/logger', () => {
   };
 });
 
-const mockedFactory = ScraperFactory as jest.Mocked<typeof ScraperFactory>;
 const mockedDeadlineFor = getScraperDeadlineMs as jest.MockedFunction<typeof getScraperDeadlineMs>;
-
-type PageCallback = (products: unknown[], pageInfo: unknown) => Promise<number>;
-
-/** Minimal BaseScraper stand-in whose scrapeProductList we control. */
-function fakeScraper(scrapeProductList: () => Promise<unknown[]>) {
-  return {
-    setRunId: jest.fn(),
-    setOnPageScrapedCallback: jest.fn(),
-    initialize: jest.fn().mockResolvedValue(undefined),
-    scrapeProductList: jest.fn(scrapeProductList),
-    cleanup: jest.fn().mockResolvedValue(undefined),
-  };
-}
-
-function harness(scraper: ReturnType<typeof fakeScraper>) {
-  const update = jest.fn().mockResolvedValue(undefined);
-  const supermarketRepo = {
-    findById: jest.fn().mockResolvedValue({
-      id: '1', name: 'Testmarket', is_active: true, scraper_class: 'TestScraper',
-    }),
-  };
-  // Models the SQL guard: onlyIfRunning refuses a row past 'running'.
-  const status = { current: 'running' };
-  update.mockImplementation(async (_id: string, next: string, data?: { onlyIfRunning?: boolean }) => {
-    if (data?.onlyIfRunning && status.current !== 'running') return 0;
-    status.current = next;
-    return 1;
-  });
-  const create = jest.fn().mockResolvedValue('log-1');
-  const reapStaleRuns = jest.fn().mockResolvedValue(0);
-  const scrapeLogRepo = { create, update, reapStaleRuns };
-
-  mockedFactory.createFromSupermarket = jest.fn().mockReturnValue(scraper) as never;
-
-  const productService = { bulkSaveProducts: jest.fn(async (products: unknown[]) => products.length) };
-  const service = new ScraperService(
-    productService as never,
-    supermarketRepo as never,
-    scrapeLogRepo as never,
-  );
-  return { service, update, scraper, status, create, reapStaleRuns };
-}
 
 describe('ScraperService per-scraper deadline', () => {
   afterEach(() => jest.clearAllMocks());
