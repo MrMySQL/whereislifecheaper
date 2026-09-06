@@ -321,17 +321,30 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
     });
     const status = response?.status() ?? 0;
 
-    const settleDeadline = Date.now() + envConfig.scraper.timeout;
-    let cloudflare = classifyCloudflarePage(await page.content());
-    const sawChallenge = cloudflare?.kind === 'challenge';
-    while (cloudflare?.kind === 'challenge' && Date.now() < settleDeadline) {
-      await sleep(CHALLENGE_POLL_MS);
+    // Reading the body can throw "Execution context was destroyed" when the
+    // challenge's auto-solve navigates away mid-read, on the first snapshot as
+    // much as on any later poll. Treat that as "still settling" and read again.
+    const snapshot = async (): Promise<CloudflarePage | null | 'navigating'> => {
       try {
-        cloudflare = classifyCloudflarePage(await page.content());
+        return classifyCloudflarePage(await page.content());
       } catch {
-        // The auto-solve navigates away mid-read; the next poll sees the new page.
+        return 'navigating';
       }
+    };
+
+    const settleDeadline = Date.now() + envConfig.scraper.timeout;
+    let state = await snapshot();
+    const sawChallenge = state === 'navigating' || state?.kind === 'challenge';
+    while ((state === 'navigating' || state?.kind === 'challenge') && Date.now() < settleDeadline) {
+      await sleep(CHALLENGE_POLL_MS);
+      state = await snapshot();
     }
+    if (state === 'navigating') {
+      throw new Error(
+        `Storefront never became readable within ${envConfig.scraper.timeout}ms of opening ${STOREFRONT_ORIGIN}`
+      );
+    }
+    const cloudflare = state;
 
     if (cloudflare) {
       throw new Error(

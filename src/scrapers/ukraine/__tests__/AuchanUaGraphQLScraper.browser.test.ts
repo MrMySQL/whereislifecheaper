@@ -30,6 +30,11 @@ const CHALLENGE_PAGE = `<!DOCTYPE html><html lang="en-US"><head><title>Just a mo
 <script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=a36a86f48add70a9"></script>
 </head><body><div id="challenge-running">Checking your browser</div></body></html>`;
 
+// The real <title> of https://express.auchan.ua/ as loaded in Chromium on
+// 2026-09-06. "ДОДОму" is Auchan's own delivery brand name.
+const STOREFRONT_PAGE =
+  '<html><head><title>ДОДОму — швидка доставка продуктів у Києві, Львові, Дніпрі, Одесі | Auchan Україна</title></head></html>';
+
 const JSON_PAGE: GraphQLHttpResponse = {
   status: 200,
   contentType: 'application/json',
@@ -164,7 +169,19 @@ describe('AuchanUaGraphQLScraper issues GraphQL requests from a real browser pag
     page.content
       .mockResolvedValueOnce(CHALLENGE_PAGE)
       .mockRejectedValueOnce(new Error('Execution context was destroyed, most likely because of a navigation'))
-      .mockResolvedValue('<html><head><title>ДОДОму — швидка доставка</title></head></html>');
+      .mockResolvedValue(STOREFRONT_PAGE);
+
+    await scraper.initialize();
+
+    expect(page.goto).toHaveBeenCalledTimes(1);
+  });
+
+  it('tolerates the auto-solve navigation landing on the very first snapshot', async () => {
+    const { scraper, page } = scraperWith(JSON_PAGE);
+    page.goto.mockResolvedValue({ status: () => 503 });
+    page.content
+      .mockRejectedValueOnce(new Error('Execution context was destroyed, most likely because of a navigation'))
+      .mockResolvedValue(STOREFRONT_PAGE);
 
     await scraper.initialize();
 
