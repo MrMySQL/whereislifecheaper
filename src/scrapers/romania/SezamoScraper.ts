@@ -223,7 +223,9 @@ export class SezamoScraper extends BaseScraper {
 
       this.logger.info(`Category ${category.name}: Total ${products.length} products scraped`);
     } catch (error) {
-      this.failCategory(category, error, `${this.API_BASE}/categories/normal/${categoryId}/products`);
+      this.failCategory(category, error, error instanceof RequestFailure
+        ? undefined
+        : `${this.API_BASE}/categories/normal/${categoryId}/products`);
     }
 
     return products;
@@ -233,22 +235,12 @@ export class SezamoScraper extends BaseScraper {
     categoryId: string,
     page: number
   ): Promise<SezamoCategoryResponse> {
-    if (!this.page) {
-      throw new Error('Page not initialized');
-    }
-
     const url = `${this.API_BASE}/categories/normal/${categoryId}/products?page=${page}&size=${this.PAGE_SIZE}&sort=recommended&filter=`;
 
-    const response = await this.page.request.get(url, {
-      headers: {
-        Accept: 'application/json',
-        'Accept-Language': 'en-RO,en;q=0.9,ro;q=0.8',
-      },
+    return this.getJson<SezamoCategoryResponse>(url, {
+      Accept: 'application/json',
+      'Accept-Language': 'en-RO,en;q=0.9,ro;q=0.8',
     });
-    if (!response.ok()) {
-      throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
-    }
-    return (await response.json()) as SezamoCategoryResponse;
   }
 
   private async fetchProductsWithPrices(productIds: number[]): Promise<SezamoProductWithPrice[]> {

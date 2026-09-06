@@ -1,4 +1,4 @@
-import { BaseScraper } from '../base/BaseScraper';
+import { BaseScraper, RequestFailure } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { extractQuantity } from '../../utils/normalizer';
 import { retry, sleep } from '../../utils/retry';
@@ -125,11 +125,6 @@ export class CarrefourItScraper extends BaseScraper {
       // Fetch first page to get total count
       const firstPage = await this.fetchPage(category.id, 0, this.PAGE_SIZE);
 
-      if (!firstPage || !firstPage.productIds) {
-        // Out to the catch below, which gives the category up with this cause.
-        throw new Error('Unexpected API response: no productIds on the first page');
-      }
-
       const totalProducts = firstPage.countResult;
       const totalPages = Math.min(
         Math.ceil(totalProducts / this.PAGE_SIZE),
@@ -170,10 +165,6 @@ export class CarrefourItScraper extends BaseScraper {
         try {
           const pageData = await this.fetchPage(category.id, start, this.PAGE_SIZE);
 
-          if (!pageData?.productIds) {
-            continue;
-          }
-
           const pageImages = await this.fetchPageImages(category.url, start, this.PAGE_SIZE);
 
           const products = pageData.productIds
@@ -200,8 +191,9 @@ export class CarrefourItScraper extends BaseScraper {
           // Wait between pages
           await sleep(this.config.waitTimes.betweenPages || 500);
         } catch (error) {
-          // logError counts the failure and keeps it where BaseScraper looks.
-          this.logError(`Failed to fetch page ${page + 1} of ${category.name}`, undefined, error as Error);
+          const url = error instanceof RequestFailure ? error.url : undefined;
+          const detail = error instanceof Error ? error.message : String(error);
+          this.logError(`Failed to fetch page ${page + 1} of ${category.name}: ${detail}`, url, error as Error);
         }
       }
 
@@ -223,10 +215,10 @@ export class CarrefourItScraper extends BaseScraper {
     start: number,
     sz: number
   ): Promise<DemandwareSearchResponse> {
+    const path = `/on/demandware.store/Sites-carrefour-IT-Site/it_IT/Search-ShowAjax?cgid=${encodeURIComponent(cgid)}&start=${start}&sz=${sz}&pmin=0%2C01`;
+    const url = `https://www.carrefour.it${path}`;
     return retry(
       async () => {
-        const path = `/on/demandware.store/Sites-carrefour-IT-Site/it_IT/Search-ShowAjax?cgid=${encodeURIComponent(cgid)}&start=${start}&sz=${sz}&pmin=0%2C01`;
-
         return new Promise<DemandwareSearchResponse>((resolve, reject) => {
           const options = {
             hostname: 'www.carrefour.it',
@@ -252,6 +244,16 @@ export class CarrefourItScraper extends BaseScraper {
 
               try {
                 const data = JSON.parse(body);
+                // Validate every page before leaving the request boundary,
+                // while its exact URL is still available for error reporting.
+                if (!Array.isArray(data?.productIds)) {
+                  reject(new Error('Unexpected API response: productIds is not an array'));
+                  return;
+                }
+                if (!Number.isInteger(data.countResult) || data.countResult < 0) {
+                  reject(new Error('Unexpected API response: countResult is not a non-negative integer'));
+                  return;
+                }
                 resolve(data);
               } catch (e) {
                 reject(new Error(`Failed to parse response: ${body.substring(0, 200)}`));
@@ -277,7 +279,9 @@ export class CarrefourItScraper extends BaseScraper {
           );
         },
       }
-    );
+    ).catch(error => {
+      throw new RequestFailure(url, error instanceof Error ? error.message : String(error));
+    });
   }
 
   /**

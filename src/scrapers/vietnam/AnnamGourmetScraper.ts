@@ -1,4 +1,4 @@
-import { BaseScraper } from '../base/BaseScraper';
+import { BaseScraper, RequestFailure } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { extractQuantity } from '../../utils/normalizer';
 
@@ -173,15 +173,28 @@ export class AnnamGourmetScraper extends BaseScraper {
     const baseUrl = `${this.config.baseUrl}/${category.url}.html`;
     let page = 1;
     let consecutiveEmpty = 0;
+    let categoryFailure: { error: Error; url: string } | undefined;
     const MAX_CONSECUTIVE_EMPTY = 3;
 
     this.logger.info(`Scraping category: ${category.name}`);
 
     while (true) {
       const ajaxUrl = `${baseUrl}?ajax=1&product_list_limit=36&p=${page}`;
+      const pageFailure: { error?: RequestFailure } = {};
+      const fetchPage = async (): Promise<string | null> => {
+        try {
+          return await this.fetchAjaxPage(ajaxUrl);
+        } catch (error) {
+          if (!(error instanceof RequestFailure)) throw error;
+          // Keep HTTP failures available if the retry also fails, without
+          // reporting a transient failure that the retry recovers from.
+          pageFailure.error = error;
+          return null;
+        }
+      };
 
       try {
-        const html = await this.fetchAjaxPage(ajaxUrl);
+        const html = await fetchPage();
 
         // Definitive end: the server explicitly says no products
         if (html && html.includes(NO_PRODUCTS_MARKER)) {
@@ -194,7 +207,7 @@ export class AnnamGourmetScraper extends BaseScraper {
         if (!html || html.length < MIN_HTML_LENGTH) {
           // Retry the same page once before giving up on it
           await this.waitBetweenRequests();
-          const retryHtml = await this.fetchAjaxPage(ajaxUrl);
+          const retryHtml = await fetchPage();
           if (retryHtml && retryHtml.includes(NO_PRODUCTS_MARKER)) {
             this.logger.info(`${category.name}: no more products at page ${page} (retry)`);
             break;
@@ -228,9 +241,14 @@ export class AnnamGourmetScraper extends BaseScraper {
           // The page is given up here. A category that ends with no products
           // after this counts as lost; a genuinely empty one is answered with
           // NO_PRODUCTS_MARKER above, not with blank pages.
+          if (pageFailure.error) {
+            categoryFailure ??= { error: pageFailure.error, url: pageFailure.error.url };
+          }
           this.logError(
-            `${category.name} page ${page}: empty or failed response after retry (${consecutiveEmpty} consecutive)`,
-            ajaxUrl
+            `${category.name} page ${page}: empty or failed response after retry (${consecutiveEmpty} consecutive)` +
+              (pageFailure.error ? `: ${pageFailure.error.message}` : ''),
+            ajaxUrl,
+            pageFailure.error,
           );
           if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
             this.logger.info(`${category.name}: ${MAX_CONSECUTIVE_EMPTY} consecutive empty pages, stopping`);
@@ -267,15 +285,21 @@ export class AnnamGourmetScraper extends BaseScraper {
 
         await this.waitBetweenRequests();
       } catch (error) {
+        const failure = error instanceof Error ? error : new Error(String(error));
+        const failedUrl = error instanceof RequestFailure ? error.url : ajaxUrl;
+        categoryFailure ??= { error: failure, url: failedUrl };
         this.logError(
-          `Failed to scrape ${category.name} page ${page}`,
-          ajaxUrl,
-          error as Error,
+          `Failed to scrape ${category.name} page ${page}: ${failure.message}`,
+          failedUrl,
+          failure,
         );
         break;
       }
     }
 
+    if (allProducts.length === 0 && categoryFailure) {
+      this.failCategory(category, categoryFailure.error, categoryFailure.url);
+    }
     this.logger.info(`${category.name}: Total ${allProducts.length} products scraped`);
     return allProducts;
   }
@@ -284,7 +308,8 @@ export class AnnamGourmetScraper extends BaseScraper {
    * Fetch a category page via Magento's ajax=1 endpoint.
    * Uses page.evaluate(fetch) to run inside the browser context so that
    * session cookies are included automatically (page.request doesn't carry them).
-   * Returns the products_list HTML string, or null on failure.
+   * Returns the products_list HTML string, or null for an empty response.
+   * HTTP failures retain their URL and status for the caller's retry/reporting.
    */
   private async fetchAjaxPage(url: string): Promise<string | null> {
     if (!this.page) return null;
@@ -302,7 +327,7 @@ export class AnnamGourmetScraper extends BaseScraper {
       // Plain logger: the caller retries the page once and records it only
       // if the retry fails too.
       this.logger.warn(`Ajax request failed: HTTP ${result.error} for ${url}`);
-      return null;
+      throw new RequestFailure(url, `HTTP ${result.error}`);
     }
 
     return result.html;

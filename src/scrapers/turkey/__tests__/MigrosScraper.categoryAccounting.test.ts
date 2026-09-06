@@ -80,6 +80,37 @@ describe('MigrosScraper category accounting', () => {
     expect(scraper.getCategoryErrors()[0].message).toMatch(/no products array/);
   });
 
+  it.each([
+    ['missing data', undefined],
+    ['null data', null],
+    ['missing searchInfo', {}],
+    ['null searchInfo', { searchInfo: null }],
+    ['missing page count', { searchInfo: { hitCount: 1, storeProductInfos: [item('a')] } }],
+  ])('keeps the request URL when a successful response has %s', async (_label, data) => {
+    const scraper = new FixtureScraper([{ successful: true, data }]);
+
+    await scraper.scrapeProductList();
+
+    expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
+    expect(scraper.getCategoryErrors()[0]).toEqual(expect.objectContaining({
+      productUrl: 'https://www.migros.com.tr/rest/search/screens/fruit',
+      message: expect.stringMatching(/Unexpected API response/),
+    }));
+  });
+
+  it('keeps earlier products and the page URL when a later response is malformed', async () => {
+    const scraper = new FixtureScraper([page([item('a')], 2), { successful: true, data: {} }]);
+
+    const products = await scraper.scrapeProductList();
+
+    expect(products).toHaveLength(1);
+    expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 0 });
+    expect(scraper.getErrors()[0]).toEqual(expect.objectContaining({
+      productUrl: 'https://www.migros.com.tr/rest/search/screens/fruit?sayfa=2',
+      message: expect.stringMatching(/Unexpected API response/),
+    }));
+  });
+
   it('keeps a category that lost a later page, with the page error on record', async () => {
     const scraper = new FixtureScraper([page([item('a')], 2), { successful: false }]);
 

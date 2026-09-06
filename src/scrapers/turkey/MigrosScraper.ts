@@ -216,7 +216,7 @@ export class MigrosScraper extends BaseScraper {
 
       } catch (error) {
         this.logError(
-          `Failed to scrape page ${page} of ${categoryName}`,
+          `Failed to scrape page ${page} of ${categoryName}: ${error instanceof Error ? error.message : String(error)}`,
           this.pageUrl(categorySlug, page),
           error as Error
         );
@@ -252,7 +252,21 @@ export class MigrosScraper extends BaseScraper {
     if (!response.ok()) {
       throw new Error(`HTTP ${response.status()} ${response.statusText()}`);
     }
-    return (await response.json()) as MigrosApiResponse;
+    const data = await response.json();
+    const searchInfo = data?.data?.searchInfo;
+    // Validate before leaving this boundary: callers still know the page URL
+    // here, whereas a later property-access error escapes to the category loop.
+    if (
+      typeof data?.successful !== 'boolean' ||
+      (data.successful && (
+        !searchInfo || typeof searchInfo !== 'object' ||
+        !Number.isInteger(searchInfo.pageCount) || searchInfo.pageCount < 0 ||
+        !Number.isInteger(searchInfo.hitCount) || searchInfo.hitCount < 0
+      ))
+    ) {
+      throw new Error('Unexpected API response: missing or invalid searchInfo pagination');
+    }
+    return data as MigrosApiResponse;
   }
 
   /**
