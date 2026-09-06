@@ -31,6 +31,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NODE_ENV: production
+          GOOGLE_TRANSLATE_API_KEY: ${{ secrets.GOOGLE_TRANSLATE_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           MAPPING_AI_MODEL: ${{ vars.MAPPING_AI_MODEL }}
         run: npm run products:maintain -- --apply --limit=25

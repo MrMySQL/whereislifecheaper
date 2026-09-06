@@ -12,7 +12,7 @@ test.each([{availability_status:'out_of_stock'},{scraped_at:'2000-01-01'},{canon
 test('AI invented ids cannot enlarge deterministic eligible candidate set',async()=>{
  const repo={markChecked:jest.fn(),start:jest.fn().mockResolvedValue({id:'1'}),targets:jest.fn().mockResolvedValue([{...target,status:'missing'}]),candidates:jest.fn().mockResolvedValue([candidate]),propose:jest.fn().mockResolvedValue(true),finish:jest.fn().mockImplementation((_id,scanned,proposed)=>({scanned,proposed}))};
  const service=new ProductMaintenanceService(repo as any,async()=>['invented','1']);
- expect(await service.run(1,false)).toEqual({scanned:1,proposed:1});expect(repo.propose).toHaveBeenCalledTimes(1);
+ expect(await service.run(1,false)).toMatchObject({scanned:1,proposed:1});expect(repo.propose).toHaveBeenCalledTimes(1);
 });
 test('dry runs do not create review suggestions',async()=>{
  const repo={markChecked:jest.fn(),start:jest.fn().mockResolvedValue({id:'1'}),targets:jest.fn().mockResolvedValue([{...target,status:'missing'}]),candidates:jest.fn().mockResolvedValue([candidate]),propose:jest.fn(),finish:jest.fn()};
@@ -50,7 +50,7 @@ test.each(['candidates','propose'] as const)('failed %s does not advance the sca
  const repo=runRepository();repo[method].mockRejectedValue(new Error('discovery failed'));
  await expect(new ProductMaintenanceService(repo as any).run(1,false)).rejects.toThrow('discovery failed');
  expect(repo.markChecked).not.toHaveBeenCalled();
- expect(repo.finish).toHaveBeenCalledWith('1',1,0,'discovery failed');
+ expect(repo.finish).toHaveBeenCalledWith('1',1,0,'Mapping discovery failed; retry this batch.');
 });
 test('marks a target checked only after successful proposal persistence',async()=>{
  const repo=runRepository();
@@ -60,5 +60,5 @@ test('marks a target checked only after successful proposal persistence',async()
 });
 test('service run defaults to dry run',async()=>{
  const repo=runRepository();await new ProductMaintenanceService(repo as any).run(1);
- expect(repo.start).toHaveBeenCalledWith(true);expect(repo.markChecked).not.toHaveBeenCalled();expect(repo.propose).not.toHaveBeenCalled();
+ expect(repo.start).not.toHaveBeenCalled();expect(repo.markChecked).not.toHaveBeenCalled();expect(repo.propose).not.toHaveBeenCalled();
 });

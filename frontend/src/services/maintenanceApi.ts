@@ -40,6 +40,29 @@ export interface MaintenanceRun {
   error: string | null;
 }
 
+export interface MaintenanceSuggestionPayload {
+  quantity?: QuantityInfo | string | null;
+  raw_quantity?: string | null;
+  raw?: {
+    name: string;
+    description?: string;
+    unit?: string;
+    unit_quantity?: number;
+  };
+  normalized_quantity?: string | null;
+  evidence?: string[];
+  reasons?: string[];
+  price?: number | null;
+  latest_price?: number | null;
+  currency?: string | null;
+  url?: string | null;
+  image_url?: string | null;
+  translated_name?: string | null;
+  search_terms?: string[];
+  availability_status?: AvailabilityStatus;
+  last_available_at?: string | null;
+}
+
 export interface MaintenanceSuggestion {
   id: MaintenanceId;
   canonical_product_id: MaintenanceId;
@@ -52,27 +75,33 @@ export interface MaintenanceSuggestion {
   product_id: MaintenanceId;
   product_name: string;
   status: MaintenanceStatus;
-  payload: {
-    quantity?: QuantityInfo | string | null;
-    raw_quantity?: string | null;
-    raw?: {
-      name: string;
-      description?: string;
-      unit?: string;
-      unit_quantity?: number;
-    };
-    normalized_quantity?: string | null;
-    evidence?: string[];
-    reasons?: string[];
-    price?: number | null;
-    latest_price?: number | null;
-    currency?: string | null;
-    url?: string | null;
-    availability_status?: AvailabilityStatus;
-    last_available_at?: string | null;
-  };
+  payload: MaintenanceSuggestionPayload;
   created_at: string;
   reviewed_at: string | null;
+}
+
+export interface MaintenancePreview {
+  canonical_product_id: MaintenanceId;
+  canonical_name: string;
+  country_id: MaintenanceId;
+  supermarket_id: MaintenanceId;
+  product_id: MaintenanceId;
+  mapping_id: MaintenanceId;
+  product_name: string;
+  payload: MaintenanceSuggestionPayload;
+}
+
+export interface MaintenanceRunResponse extends MaintenanceRun {
+  next_cursor: string | null;
+  has_more: boolean;
+  warnings: string[];
+  previews: MaintenancePreview[];
+}
+
+export interface MaintenanceBatchResult {
+  id: MaintenanceId;
+  status?: MaintenanceStatus;
+  error?: string;
 }
 
 export interface MaintenanceOverview {
@@ -100,8 +129,12 @@ export const maintenanceApi = {
     const response = await api.get<{ data: MaintenanceSuggestion[]; count: number; total: number; limit: number; offset: number }>('/maintenance/suggestions', { params });
     return response.data;
   },
-  run: async (body: { limit?: number; dry_run?: boolean }): Promise<MaintenanceRun> => {
-    const response = await api.post<MaintenanceRun>('/maintenance/run', body);
+  run: async (body: { limit?: number; dry_run?: boolean; country_id?: MaintenanceId; cursor?: string }): Promise<MaintenanceRunResponse> => {
+    const response = await api.post<MaintenanceRunResponse>('/maintenance/run', body.country_id === undefined ? body : { ...body, country_id: String(body.country_id) });
+    return response.data;
+  },
+  batchReview: async (ids: MaintenanceId[], action: 'approve' | 'reject', reason?: string): Promise<{ results: MaintenanceBatchResult[] }> => {
+    const response = await api.post<{ results: MaintenanceBatchResult[] }>('/maintenance/suggestions/batch', reason ? { ids: ids.map(String), action, reason } : { ids: ids.map(String), action });
     return response.data;
   },
   review: async (id: MaintenanceId, action: 'approve' | 'reject' | 'undo', reason?: string): Promise<{ id: MaintenanceId; status: MaintenanceStatus }> => {

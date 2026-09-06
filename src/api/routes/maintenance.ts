@@ -13,7 +13,7 @@ function pageOptions(query: Request['query']) {
     return limit === null || offset === null ? null : { limit, offset };
 }
 function validCountry(country: unknown): country is string | undefined {
-    return country === undefined || (typeof country === 'string' && /^\d+$/.test(country) && Number(country) <= 2147483647);
+    return country === undefined || (typeof country === 'string' && /^[1-9]\d*$/.test(country) && Number(country) <= 2147483647);
 }
 
 import { isAdmin } from '../../auth/middleware';
@@ -51,17 +51,29 @@ export function createMaintenanceRouter(service = new ProductMaintenanceService(
         }
     });
     router.post('/run', async (req, res, next) => {
-        const { limit = 10, dry_run = true } = req.body || {};
-        if (!Number.isInteger(limit) || limit < 1 || limit > 25 || typeof dry_run !== 'boolean') {
+        const { limit = 10, dry_run = true, country_id, cursor } = req.body || {};
+        if (!Number.isInteger(limit) || limit < 1 || limit > 25 || typeof dry_run !== 'boolean' || !validCountry(country_id)
+            || (cursor !== undefined && (!country_id || typeof cursor !== 'string' || !/^\d+:\d+$/.test(cursor) || cursor.split(':').some((part: string) => Number(part) > 2147483647)))) {
             res.status(400).json({ error: 'Invalid run options' });
             return;
         }
         try {
-            res.json(await service.run(limit, dry_run));
+            res.json(await (country_id ? service.run(limit, dry_run, {country:country_id,cursor}) : service.run(limit, dry_run)));
         }
         catch (e) {
             next(e);
         }
+    });
+    router.post('/suggestions/batch', async (req, res, next) => {
+        const {ids,action,reason} = req.body || {};
+        if (!Array.isArray(ids) || !ids.length || ids.length > 50
+            || ids.some(id => typeof id !== 'string' || !/^[1-9]\d*$/.test(id) || Number(id) > 2147483647)
+            || new Set(ids).size !== ids.length || !['approve','reject'].includes(action)
+            || (reason !== undefined && (typeof reason !== 'string' || reason.length > 2000))) {
+            res.status(400).json({error:'Invalid batch review'}); return;
+        }
+        try { res.json(await service.reviewBatch(ids,action,String(req.user?.id),reason)); }
+        catch (error) { next(error); }
     });
     for (const action of ['approve', 'reject', 'undo'] as const) {
         router.post(`/suggestions/:id/${action}`, async (req, res, next) => {

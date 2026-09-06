@@ -1,6 +1,7 @@
 export interface CoverageRow {
     canonical_product_id: string;
     name: string;
+    country_code?: string;
     country_id: string;
     country_name: string;
     supermarket_id: string;
@@ -31,6 +32,9 @@ export interface Suggestion {
     product_name: string;
     status: 'pending' | 'approved' | 'rejected' | 'undone';
     payload: {
+        image_url?: string;
+        translated_name?: string;
+        search_terms?: string[];
         quantity: unknown;
         evidence: string[];
         price: number;
@@ -51,6 +55,7 @@ export interface Suggestion {
     reviewed_at: string | null;
 }
 export interface Candidate {
+    image_url?: string;
     mapping_id: string;
     product_id: string;
     name: string;
@@ -104,3 +109,7 @@ export class MaintenanceConflictError extends Error {
 export class MaintenanceNotFoundError extends Error {
     readonly name = 'MaintenanceNotFoundError';
 }
+
+export interface CountryRunOptions { country?: string; cursor?: string; }
+export interface MappingPreview {canonical_product_id: string; canonical_name: string; country_id: string; supermarket_id: string; product_id: string; mapping_id: string; product_name: string; payload: Suggestion["payload"];}
+export interface MappingRunResult extends RunRow {next_cursor: string | null; has_more: boolean; warnings: string[]; previews: MappingPreview[];}

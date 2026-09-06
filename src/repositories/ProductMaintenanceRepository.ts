@@ -1,7 +1,7 @@
 import type { QueryResultRow } from 'pg';
 import { query, getClient } from '../config/database';
-import { Candidate, MaintenanceTarget, RunRow, Suggestion, CoverageOptions, CoveragePage, MaintenancePageOptions, SuggestionPage, MaintenanceConflictError, MaintenanceNotFoundError } from '../types/maintenance.types';
-const coverageSql = `SELECT cp.id::text canonical_product_id,cp.name,cp.show_per_unit_price,c.id::text country_id,c.name country_name,
+import { Candidate, MaintenanceTarget, RunRow, Suggestion, CoverageOptions, CoveragePage, MaintenancePageOptions, SuggestionPage, MaintenanceConflictError, MaintenanceNotFoundError, CountryRunOptions } from '../types/maintenance.types';
+const coverageSql = `SELECT cp.id::text canonical_product_id,cp.name,cp.show_per_unit_price,c.id::text country_id,c.name country_name,c.code country_code,
  s.id::text supermarket_id,s.name supermarket_name,count(pm.id)::int mapped_count,
  count(pm.id) FILTER (WHERE pm.availability_status='available' AND pm.duplicate_of_mapping_id IS NULL
  AND pm.last_checked_at >= now()-interval '7 days'
@@ -33,7 +33,7 @@ const candidateSql = `SELECT pm.id::text mapping_id,p.id::text product_id,
  CASE WHEN pm.raw_observation IS NOT NULL THEN pm.raw_observation->>'unit' ELSE p.unit END unit,
  CASE WHEN pm.raw_observation IS NOT NULL THEN (pm.raw_observation->>'unit_quantity')::numeric ELSE p.unit_quantity END unit_quantity,
  pm.raw_observation->>'price_basis' price_basis,
- pr.price,pr.currency,pr.quantity_info,pm.url,p.canonical_product_id::text,pm.availability_status,
+ p.image_url,pr.price,pr.currency,pr.quantity_info,pm.url,p.canonical_product_id::text,pm.availability_status,
  pm.last_checked_at,pm.last_available_at,pr.scraped_at
  FROM product_mappings pm JOIN products p ON p.id=pm.product_id
  JOIN LATERAL (SELECT price,currency,scraped_at,quantity_info FROM prices WHERE product_mapping_id=pm.id ORDER BY scraped_at DESC,id DESC LIMIT 1) pr ON true
@@ -43,7 +43,7 @@ export class ProductMaintenanceRepository {
     private async boundedRead<T extends QueryResultRow>(sql: string, params: unknown[]) {
         const client = await getClient();
         try {
-            await client.query('BEGIN');
+            await client.query('BEGIN READ ONLY');
             await client.query("SET LOCAL statement_timeout = '3000ms'");
             const result = await client.query<T>(sql, params);
             await client.query('COMMIT');
@@ -57,14 +57,16 @@ export class ProductMaintenanceRepository {
             client.release();
         }
     }
-    async targets(limit = 1000, gapsOnly = false): Promise<MaintenanceTarget[]> {
+    async targets(limit = 1000, gapsOnly = false, options: CountryRunOptions = {}): Promise<MaintenanceTarget[]> {
         const rows = (await this.boundedRead<MaintenanceTarget>(`WITH coverage AS (${coverageWithStatusSql})
           SELECT coverage.* FROM coverage
           LEFT JOIN product_maintenance_checks mc ON mc.canonical_product_id=coverage.canonical_product_id::int
             AND mc.supermarket_id=coverage.supermarket_id::int
-          WHERE NOT $2::boolean OR fresh_count=0
-          ORDER BY mc.checked_at ASC NULLS FIRST,coverage.canonical_product_id::int,coverage.supermarket_id::int
-          LIMIT $1`, [limit, gapsOnly])).rows;
+          WHERE (NOT $2::boolean OR fresh_count=0)
+          AND ($3::int IS NULL OR country_id::int=$3)
+          AND ($4::int IS NULL OR (coverage.canonical_product_id::int,coverage.supermarket_id::int)>($4::int,$5::int))
+          ORDER BY CASE WHEN $3::int IS NULL THEN mc.checked_at END ASC NULLS FIRST,coverage.canonical_product_id::int,coverage.supermarket_id::int
+          LIMIT $1`, [limit, gapsOnly, options.country || null, options.cursor?.split(':')[0] || null, options.cursor?.split(':')[1] || null])).rows;
         return rows;
     }
     async coverage({ limit = 100, offset = 0, country, gapsOnly = false }: CoverageOptions = {}): Promise<CoveragePage> {
@@ -80,18 +82,27 @@ export class ProductMaintenanceRepository {
               FROM country_coverage) counts`, [limit, offset, country || null, gapsOnly]);
         return { ...result.rows[0], limit, offset };
     }
+    async vocabulary(target: MaintenanceTarget): Promise<string[]> {
+        return (await query<{aliases: string[]}>(`SELECT aliases FROM product_mapping_vocabulary WHERE canonical_product_id=$1 AND country_id=$2 AND source_name=$3`, [target.canonical_product_id,target.country_id,target.name])).rows[0]?.aliases || [];
+    }
+    async saveVocabulary(target: MaintenanceTarget, aliases: string[]): Promise<void> {
+        await query(`INSERT INTO product_mapping_vocabulary(canonical_product_id,country_id,source_name,aliases) VALUES($1,$2,$3,$4)
+          ON CONFLICT(canonical_product_id,country_id) DO UPDATE SET source_name=EXCLUDED.source_name,aliases=EXCLUDED.aliases,updated_at=now()`, [target.canonical_product_id,target.country_id,target.name,aliases]);
+    }
     async markChecked(target: MaintenanceTarget): Promise<void> { await query(`INSERT INTO product_maintenance_checks(canonical_product_id,supermarket_id) VALUES($1,$2) ON CONFLICT(canonical_product_id,supermarket_id) DO UPDATE SET checked_at=now()`, [target.canonical_product_id, target.supermarket_id]); }
     async candidates(target: MaintenanceTarget): Promise<Candidate[]> {
         // The seed set includes local mapped names, preserving multilingual search without translation guesses.
-        const ignored = new Set(['kg', 'ml', 'gr', 'lt', 'cl', 'pcs', 'pack', 'pieces']);
+        const ignored = new Set(['kg','ml','gr','lt','cl','pcs','pack','pieces','of','the','and','per','with','di','de','da','e','la','il','al','en','le','del','litro','litri','liter','litre','grammi']);
         const seeds = [target.name, ...target.aliases].flatMap(x => x.toLocaleLowerCase().match(/[\p{L}]{2,}/gu) || []).filter(term => !ignored.has(term));
         if (!seeds.length)
             return [];
         return (await this.boundedRead<Candidate>(`${candidateSql} AND pm.supermarket_id=$1 AND p.canonical_product_id IS NULL
       AND pm.availability_status='available' AND pm.last_checked_at>=now()-interval '7 days'
       AND pr.scraped_at>=now()-interval '7 days' AND pr.price>0
-      AND EXISTS (SELECT 1 FROM unnest($2::text[]) term WHERE position(term in lower(COALESCE(pm.raw_observation->>'name',p.name)))>0)
-      ORDER BY (SELECT count(*) FROM unnest($2::text[]) term WHERE position(term in lower(COALESCE(pm.raw_observation->>'name',p.name)))>0) DESC,pr.scraped_at DESC,pm.id LIMIT 50`, [target.supermarket_id, [...new Set(seeds)].slice(0, 60)])).rows;
+      AND NOT EXISTS (SELECT 1 FROM product_maintenance_suggestions rejected WHERE rejected.canonical_product_id=$3
+          AND rejected.mapping_id=pm.id AND rejected.status IN ('rejected','undone'))
+      AND EXISTS (SELECT 1 FROM unnest($2::text[]) term WHERE term = ANY(regexp_split_to_array(lower(COALESCE(pm.raw_observation->>'name',p.name)), '[^[:alpha:]]+')))
+      ORDER BY (SELECT count(*) FROM unnest($2::text[]) term WHERE term = ANY(regexp_split_to_array(lower(COALESCE(pm.raw_observation->>'name',p.name)), '[^[:alpha:]]+'))) DESC, length(p.name),pm.id LIMIT 200`, [target.supermarket_id, [...new Set(seeds)].slice(0, 60), target.canonical_product_id])).rows;
     }
     async propose(target: MaintenanceTarget, candidate: Candidate, payload: Suggestion['payload']): Promise<boolean> {
         const r = await query(`INSERT INTO product_maintenance_suggestions(canonical_product_id,mapping_id,product_id,country_id,supermarket_id,payload)

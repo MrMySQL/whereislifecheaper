@@ -39,7 +39,7 @@ integration('maintenance review PostgreSQL', () => {
     const repository = new Repository();
     const allTargets = repository.targets.bind(repository);
     repository.targets = async (_limit, gapsOnly) => (await allTargets(10000, gapsOnly)).filter(t => t.canonical_product_id === canonical && String(t.supermarket_id) === String(store));
-    const service = new Service(repository, async () => []);
+    const service = new Service(repository, async (_target, candidates) => candidates.map(candidate => candidate.mapping_id));
     return { service, repository, canonical, product, mapping, quantity };
   }
   async function proposal(f: Awaited<ReturnType<typeof fixture>>) {
