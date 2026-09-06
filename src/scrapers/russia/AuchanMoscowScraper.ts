@@ -190,7 +190,8 @@ export class AuchanMoscowScraper extends BaseScraper {
       const categoryData = await this.fetchCategory(categoryId);
 
       if (!categoryData) {
-        this.logger.warn(`Failed to fetch category ${categoryName}`);
+        // fetchCategory logged the HTTP status or exception and returned null.
+        this.failCategory(category, 'API returned no data', `${this.API_BASE}?categoryId=${categoryId}`);
         return products;
       }
 

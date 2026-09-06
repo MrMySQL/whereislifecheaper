@@ -565,7 +565,7 @@ export class ReweScraper extends BaseScraper {
         this.logger.warn(`Cloudflare challenge detected for ${category.name}, attempting to solve...`);
         const solved = await this.solveCloudflareChallenge();
         if (!solved) {
-          this.logger.error(`Could not solve Cloudflare challenge for ${category.name}, skipping`);
+          this.failCategory(category, 'Could not solve Cloudflare challenge', baseCategoryUrl);
           return products;
         }
         // Update title after solving
@@ -593,7 +593,7 @@ export class ReweScraper extends BaseScraper {
               this.logger.warn(`Cloudflare challenge on page ${pageNum}, attempting to solve...`);
               const solved = await this.solveCloudflareChallenge();
               if (!solved) {
-                this.logger.error(`Could not solve Cloudflare on page ${pageNum}, stopping pagination`);
+                this.logError(`Could not solve Cloudflare on page ${pageNum} of ${category.name}, stopping pagination`, pageUrl);
                 break;
               }
               pageTitle = await this.page.title();
@@ -639,7 +639,14 @@ export class ReweScraper extends BaseScraper {
         } catch (pageError) {
           // A lost market is not a page glitch: every page after it is empty too.
           if (pageError instanceof ReweMarketError) throw pageError;
-          this.logger.error(`Failed to scrape page ${pageNum} of ${category.name}:`, pageError);
+          // logError, not logger.error: a category whose every page failed
+          // this way must come back as lost, and the base class only sees
+          // errors that went through the buffer.
+          this.logError(
+            `Failed to scrape page ${pageNum} of ${category.name}`,
+            pageNum === 1 ? baseCategoryUrl : `${baseCategoryUrl}?page=${pageNum}`,
+            pageError as Error
+          );
           // Continue to next page on error
         }
       }

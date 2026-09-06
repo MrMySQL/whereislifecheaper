@@ -49,11 +49,13 @@ function config(): ScraperConfig {
  * Stands in for Playwright's page during market selection. `configurations`
  * is what successive reads of the configuration endpoint return, the last one
  * repeating forever; the UI calls are recorded so a test can assert whether
- * the zip flow ran at all. A locator's `hasText` filter is folded into the
+ * the zip flow ran at all. An Error in that list makes that read reject, the
+ * way page.evaluate does when the shop's reload after the 201 tears down the
+ * execution context. A locator's `hasText` filter is folded into the
  * recorded selector, so a test can tell Lieferservice from Abholservice.
  * `selectionStatus` is what /userselections answers the click with.
  */
-function fakePage(configurations: MarketConfiguration[], selectionStatus = 201) {
+function fakePage(configurations: Array<MarketConfiguration | Error>, selectionStatus = 201) {
   const reads = [...configurations];
   let readCount = 0;
   const calls: string[] = [];
@@ -73,7 +75,9 @@ function fakePage(configurations: MarketConfiguration[], selectionStatus = 201) 
     $: async () => null,
     evaluate: async () => {
       readCount++;
-      return reads.length > 1 ? reads.shift() : reads[0];
+      const read = reads.length > 1 ? reads.shift() : reads[0];
+      if (read instanceof Error) throw read;
+      return read;
     },
     get readCount() { return readCount; },
     locator,
@@ -135,6 +139,18 @@ describe('ReweScraper.selectDeliveryMarket', () => {
 
     expect((scraper as unknown as { marketSelected: boolean }).marketSelected).toBe(true);
     expect(page.readCount).toBe(4);
+  });
+
+  it('keeps polling when a read lands mid-reload and throws', async () => {
+    // The reload the 201 triggers destroys the execution context; a read in
+    // flight rejects. That is "not yet", not "no market".
+    const page = fakePage([NO_MARKET, new Error('Execution context was destroyed'), BERLIN_DELIVERY]);
+    const scraper = scraperWith(page);
+
+    await (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket();
+
+    expect((scraper as unknown as { marketSelected: boolean }).marketSelected).toBe(true);
+    expect(page.readCount).toBe(3);
   });
 
   it('walks zip → submit → Lieferservice and accepts the market the site then reports', async () => {

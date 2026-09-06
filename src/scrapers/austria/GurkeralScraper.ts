@@ -198,7 +198,16 @@ export class GurkeralScraper extends BaseScraper {
         // Step 1: Get product IDs for this page
         const categoryResponse = await this.fetchCategoryProductIds(categoryId, page);
 
-        if (!categoryResponse || categoryResponse.productIds.length === 0) {
+        if (!categoryResponse) {
+          // fetchCategoryProductIds logged the cause and returned null: a
+          // failed request, not the end of the category.
+          this.logError(
+            `Failed to fetch page ${page + 1} of ${category.name}`,
+            `${this.API_BASE}/categories/normal/${categoryId}/products`
+          );
+          break;
+        }
+        if (categoryResponse.productIds.length === 0) {
           this.logger.debug(`No more products in category ${category.name} at page ${page}`);
           break;
         }

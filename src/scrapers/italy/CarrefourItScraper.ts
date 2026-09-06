@@ -126,7 +126,7 @@ export class CarrefourItScraper extends BaseScraper {
       const firstPage = await this.fetchPage(category.id, 0, this.PAGE_SIZE);
 
       if (!firstPage || !firstPage.productIds) {
-        this.logger.warn(`No data returned for category ${category.name}`);
+        this.failCategory(category, 'API returned no data for the first page');
         return [];
       }
 

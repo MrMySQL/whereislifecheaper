@@ -224,7 +224,7 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
       const firstPage = await this.fetchProductsPage(categoryId, 1);
 
       if (!firstPage?.data?.search) {
-        this.logger.warn(`No data returned for category ${categoryName}`);
+        this.failCategory(category, 'GraphQL returned no data for the first page');
         return [];
       }
 

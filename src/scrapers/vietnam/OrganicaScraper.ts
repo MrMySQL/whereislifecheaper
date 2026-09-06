@@ -132,7 +132,16 @@ export class OrganicaScraper extends BaseScraper {
       try {
         const apiProducts = await this.fetchCategoryPage(category.url, page);
 
-        if (!apiProducts || apiProducts.length === 0) {
+        if (!apiProducts) {
+          // fetchCategoryPage logged the cause and returned null.
+          this.logError(
+            `Failed to fetch ${category.name} page ${page}`,
+            `${this.config.baseUrl}/collections/${category.url}/products.json?page=${page}`
+          );
+          hasMore = false;
+          break;
+        }
+        if (apiProducts.length === 0) {
           hasMore = false;
           break;
         }

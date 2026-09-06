@@ -137,7 +137,15 @@ export class WinMartScraper extends BaseScraper {
       try {
         const items = await this.fetchCategoryPage(category.url, pageNumber);
 
-        if (!items || items.length === 0) {
+        if (!items) {
+          // fetchCategoryPage logged the cause and returned null.
+          this.logError(
+            `Failed to fetch ${category.name} page ${pageNumber}`,
+            `${WinMartScraper.API_BASE}/it/api/web/v3/item/category?slug=${category.url}&pageNumber=${pageNumber}`
+          );
+          break;
+        }
+        if (items.length === 0) {
           this.logger.info(`${category.name}: no more products at page ${pageNumber}`);
           break;
         }

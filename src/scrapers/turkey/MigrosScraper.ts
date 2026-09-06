@@ -128,17 +128,14 @@ export class MigrosScraper extends BaseScraper {
    * Scrape a single category using REST API
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
-    return this.scrapeCategoryViaApi(category.url, category.id, category.name);
+    return this.scrapeCategoryViaApi(category);
   }
 
   /**
    * Scrape a single category using REST API with pagination
    */
-  private async scrapeCategoryViaApi(
-    categoryUrl: string,
-    categoryId: string,
-    categoryName: string
-  ): Promise<ProductData[]> {
+  private async scrapeCategoryViaApi(category: CategoryConfig): Promise<ProductData[]> {
+    const { url: categoryUrl, id: categoryId, name: categoryName } = category;
     const products: ProductData[] = [];
 
     // Convert URL like /meyve-sebze-c-2 to API slug meyve-sebze-c-2
@@ -148,7 +145,7 @@ export class MigrosScraper extends BaseScraper {
     const firstPageData = await this.fetchCategoryPage(categorySlug, 1);
 
     if (!firstPageData?.successful) {
-      this.logger.warn(`Failed to fetch category ${categoryName}: API returned unsuccessful`);
+      this.failCategory(category, 'API returned unsuccessful for the first page', `${this.API_BASE}/${categorySlug}?sayfa=1`);
       return products;
     }
 
@@ -183,7 +180,7 @@ export class MigrosScraper extends BaseScraper {
         const pageData = await this.fetchCategoryPage(categorySlug, page);
 
         if (!pageData?.successful) {
-          this.logger.warn(`Failed to fetch page ${page} of ${categoryName}`);
+          this.logError(`Failed to fetch page ${page} of ${categoryName}`, `${this.API_BASE}/${categorySlug}?sayfa=${page}`);
           continue;
         }
 
