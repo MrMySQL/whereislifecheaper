@@ -32,7 +32,9 @@ export class PriceRepository {
         priceData.currency,
         priceData.originalPrice || null,
         priceData.isOnSale,
-        priceData.quantityInfo?.comparablePrice ?? priceData.pricePerUnit ?? null,
+        priceData.quantityInfo
+          ? priceData.quantityInfo.comparablePrice
+          : priceData.pricePerUnit ?? null,
         priceData.quantityInfo ? JSON.stringify(priceData.quantityInfo) : null,
       ]
     );

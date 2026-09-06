@@ -1,11 +1,12 @@
 import type { QueryResultRow } from 'pg';
 import { query, getClient } from '../config/database';
-import { Candidate, MaintenanceTarget, RunRow, Suggestion } from '../types/maintenance.types';
+import { Candidate, MaintenanceTarget, RunRow, Suggestion, CoverageOptions, CoveragePage, MaintenancePageOptions, SuggestionPage, MaintenanceConflictError, MaintenanceNotFoundError } from '../types/maintenance.types';
 const coverageSql = `SELECT cp.id::text canonical_product_id,cp.name,cp.show_per_unit_price,c.id::text country_id,c.name country_name,
  s.id::text supermarket_id,s.name supermarket_name,count(pm.id)::int mapped_count,
  count(pm.id) FILTER (WHERE pm.availability_status='available' AND pm.duplicate_of_mapping_id IS NULL
  AND pm.last_checked_at >= now()-interval '7 days'
  AND pr.scraped_at>=now()-interval '7 days' AND pr.price>0
+ AND pr.scraped_at >= pm.last_checked_at
  AND pm.quantity_info IS NOT DISTINCT FROM pr.quantity_info
  AND (NOT cp.show_per_unit_price OR (pr.quantity_info->>'status'='verified'
    AND pr.quantity_info->>'contentUnit' IN ('kg','l')
@@ -32,7 +33,8 @@ const candidateSql = `SELECT pm.id::text mapping_id,p.id::text product_id,
  pm.last_checked_at,pm.last_available_at,pr.scraped_at
  FROM product_mappings pm JOIN products p ON p.id=pm.product_id
  JOIN LATERAL (SELECT price,currency,scraped_at,quantity_info FROM prices WHERE product_mapping_id=pm.id ORDER BY scraped_at DESC,id DESC LIMIT 1) pr ON true
- WHERE pm.duplicate_of_mapping_id IS NULL AND pm.quantity_info IS NOT DISTINCT FROM pr.quantity_info`;
+ WHERE pm.duplicate_of_mapping_id IS NULL AND pr.scraped_at >= pm.last_checked_at
+ AND pm.quantity_info IS NOT DISTINCT FROM pr.quantity_info`;
 export class ProductMaintenanceRepository {
     private async boundedRead<T extends QueryResultRow>(sql: string, params: unknown[]) {
         const client = await getClient();
@@ -61,6 +63,22 @@ export class ProductMaintenanceRepository {
           LIMIT $1`, [limit, gapsOnly])).rows;
         return rows.map(r => ({ ...r, status: r.fresh_count > 0 ? 'covered' : r.mapped_count > 0 ? 'stale' : 'missing' }));
     }
+    async coverage({ limit = 100, offset = 0, country, gapsOnly = false }: CoverageOptions = {}): Promise<CoveragePage> {
+        const result = await this.boundedRead<Omit<CoveragePage, 'limit' | 'offset'>>(`WITH coverage AS (${coverageSql}),
+          country_coverage AS (
+            SELECT coverage.*, CASE WHEN fresh_count>0 THEN 'covered' WHEN mapped_count>0 THEN 'stale' ELSE 'missing' END status
+            FROM coverage WHERE $3::int IS NULL OR country_id::int=$3
+          ), filtered AS (SELECT * FROM country_coverage WHERE NOT $4::boolean OR fresh_count=0),
+          page AS (SELECT * FROM filtered
+            ORDER BY CASE status WHEN 'missing' THEN 0 WHEN 'stale' THEN 1 ELSE 2 END,canonical_product_id::int,supermarket_id::int
+            LIMIT $1 OFFSET $2)
+          SELECT COALESCE((SELECT json_agg(page) FROM page),'[]'::json) coverage,
+            (SELECT count(*)::int FROM filtered) total,
+            (SELECT json_build_object('covered', count(*) FILTER (WHERE status='covered'),
+              'stale', count(*) FILTER (WHERE status='stale'), 'missing', count(*) FILTER (WHERE status='missing'))
+              FROM country_coverage) counts`, [limit, offset, country || null, gapsOnly]);
+        return { ...result.rows[0], limit, offset };
+    }
     async markChecked(target: MaintenanceTarget): Promise<void> { await query(`INSERT INTO product_maintenance_checks(canonical_product_id,supermarket_id) VALUES($1,$2) ON CONFLICT(canonical_product_id,supermarket_id) DO UPDATE SET checked_at=now()`, [target.canonical_product_id, target.supermarket_id]); }
     async candidates(target: MaintenanceTarget): Promise<Candidate[]> {
         // The seed set includes local mapped names, preserving multilingual search without translation guesses.
@@ -81,11 +99,17 @@ export class ProductMaintenanceRepository {
       AND product_maintenance_suggestions.payload IS DISTINCT FROM EXCLUDED.payload RETURNING id`, [target.canonical_product_id, candidate.mapping_id, candidate.product_id, target.country_id, target.supermarket_id, JSON.stringify(payload)]);
         return r.rows.length > 0;
     }
-    async suggestions(status = 'pending', country?: string): Promise<Suggestion[]> {
-        return (await query<Suggestion>(`SELECT ms.*,cp.name canonical_name,p.name product_name,s.name supermarket_name
-      FROM product_maintenance_suggestions ms JOIN canonical_products cp ON cp.id=ms.canonical_product_id
-      JOIN products p ON p.id=ms.product_id JOIN supermarkets s ON s.id=ms.supermarket_id
-      WHERE ms.status=$1 AND ($2::int IS NULL OR ms.country_id=$2) ORDER BY ms.id DESC LIMIT 200`, [status, country || null])).rows;
+    async suggestions(status = 'pending', country?: string, { limit = 100, offset = 0 }: MaintenancePageOptions = {}): Promise<SuggestionPage> {
+        const result = await query<{ data: Suggestion[]; total: number }>(`WITH filtered AS (
+          SELECT ms.*,cp.name canonical_name,p.name product_name,s.name supermarket_name
+          FROM product_maintenance_suggestions ms JOIN canonical_products cp ON cp.id=ms.canonical_product_id
+          JOIN products p ON p.id=ms.product_id JOIN supermarkets s ON s.id=ms.supermarket_id
+          WHERE ms.status=$1 AND ($2::int IS NULL OR ms.country_id=$2)
+        ), page AS (SELECT * FROM filtered ORDER BY id DESC LIMIT $3 OFFSET $4)
+        SELECT COALESCE((SELECT json_agg(page) FROM page),'[]'::json) data,
+          (SELECT count(*)::int FROM filtered) total`, [status, country || null, limit, offset]);
+        const { data, total } = result.rows[0];
+        return { data, count: data.length, total, limit, offset };
     }
     async runs(): Promise<RunRow[]> { return (await query<RunRow>('SELECT * FROM product_maintenance_runs ORDER BY id DESC LIMIT 10')).rows; }
     async start(dryRun: boolean): Promise<RunRow> { return (await query<RunRow>(`INSERT INTO product_maintenance_runs(status,dry_run) VALUES('running',$1) RETURNING *`, [dryRun])).rows[0]; }
@@ -101,18 +125,19 @@ export class ProductMaintenanceRepository {
                 applied_product_updated_at: string;
             }>(`SELECT *,applied_product_updated_at::text FROM product_maintenance_suggestions WHERE id=$1 FOR UPDATE`, [id])).rows[0];
             if (!suggestion)
-                throw new Error('Suggestion not found');
+                throw new MaintenanceNotFoundError('Suggestion not found');
             const desired = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'undone';
             if (suggestion.status === desired) {
                 await db.query('COMMIT');
                 return { id, status: desired };
             }
             if ((action === 'undo' && suggestion.status !== 'approved') || (action !== 'undo' && suggestion.status !== 'pending'))
-                throw new Error('Suggestion state conflict');
+                throw new MaintenanceConflictError('Suggestion state conflict');
             const product = (await db.query<{
                 canonical_product_id: string | null;
                 updated_at: string;
             }>(`SELECT canonical_product_id::text,updated_at FROM products WHERE id=$1 FOR UPDATE`, [suggestion.product_id])).rows[0];
+            if (!product) throw new MaintenanceConflictError('Candidate product no longer exists');
             const before = product.canonical_product_id;
             if (action === 'approve') {
                 // Serialize against observation writes and re-read latest price only after the mapping lock.
@@ -123,9 +148,9 @@ export class ProductMaintenanceRepository {
           FROM canonical_products cp LEFT JOIN product_maintenance_policies pol ON pol.canonical_product_id=cp.id
           WHERE cp.id=$1 AND NOT COALESCE(cp.disabled,false) FOR SHARE OF cp`, [suggestion.canonical_product_id])).rows[0];
                 if (!candidate || !target || before !== null || String(candidate.product_id) !== String(suggestion.product_id))
-                    throw new Error('Candidate classification conflict');
+                    throw new MaintenanceConflictError('Candidate classification conflict');
                 if (!suggestion.payload.raw || suggestion.payload.raw.name !== candidate.name || suggestion.payload.raw.description !== candidate.description || suggestion.payload.raw.unit !== candidate.unit || String(suggestion.payload.raw.unit_quantity) !== String(candidate.unit_quantity) || (suggestion.payload.raw.price_basis || null) !== (candidate.price_basis || null))
-                    throw new Error('Candidate details changed; manual review required');
+                    throw new MaintenanceConflictError('Candidate details changed; manual review required');
                 validate(candidate, target);
                 const updated = (await db.query<{
                     updated_at: string;
@@ -136,7 +161,7 @@ export class ProductMaintenanceRepository {
                 const changed = await db.query(`UPDATE products SET canonical_product_id=NULL,updated_at=clock_timestamp()
           WHERE id=$1 AND canonical_product_id=$2 AND updated_at=$3 RETURNING id`, [suggestion.product_id, suggestion.canonical_product_id, suggestion.applied_product_updated_at]);
                 if (!changed.rows.length)
-                    throw new Error('Product changed since approval; undo conflict');
+                    throw new MaintenanceConflictError('Product changed since approval; undo conflict');
             }
             await db.query('UPDATE product_maintenance_suggestions SET status=$2,reviewed_at=now() WHERE id=$1', [id, desired]);
             await db.query(`INSERT INTO product_maintenance_reviews(suggestion_id,action,actor,reason,before_canonical_id,after_canonical_id) VALUES($1,$2,$3,$4,$5,$6)`, [id, action, actor, reason || null, before, action === 'approve' ? suggestion.canonical_product_id : action === 'undo' ? null : before]);

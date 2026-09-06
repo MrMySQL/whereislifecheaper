@@ -75,3 +75,32 @@ export interface MaintenanceTarget extends CoverageRow {
     expected_unit: 'kg' | 'l' | 'pieces' | null;
     expected_quantity: number | null;
 }
+
+export interface MaintenancePageOptions {
+    limit?: number;
+    offset?: number;
+}
+export interface CoverageOptions extends MaintenancePageOptions {
+    country?: string;
+    gapsOnly?: boolean;
+}
+export interface CoveragePage {
+    coverage: MaintenanceTarget[];
+    total: number;
+    counts: Record<CoverageRow['status'], number>;
+    limit: number;
+    offset: number;
+}
+export interface SuggestionPage {
+    data: Suggestion[];
+    count: number;
+    total: number;
+    limit: number;
+    offset: number;
+}
+export class MaintenanceConflictError extends Error {
+    readonly name = 'MaintenanceConflictError';
+}
+export class MaintenanceNotFoundError extends Error {
+    readonly name = 'MaintenanceNotFoundError';
+}

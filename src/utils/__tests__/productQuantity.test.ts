@@ -116,6 +116,41 @@ describe('interpretProductQuantity', () => {
     expect(result.comparablePrice).toBeCloseTo(0.4);
   });
 
+  test.each(['Eggs 12 pieces', 'Cotton pads 12 pieces'])(
+    'uses the explicit count in %s when the raw unit describes one package',
+    (name) => {
+      const result = interpretProductQuantity({ name, unit: 'piece', unitQuantity: 1, price: 6 });
+      expect(result).toMatchObject({
+        status: 'verified', contentQuantity: 12, contentUnit: 'pieces', comparablePrice: 0.5,
+      });
+      expect(result.evidence).toContain('raw unit: 1 piece (selling unit)');
+    },
+  );
+
+  test('still rejects conflicting explicit and raw package counts larger than one', () => {
+    expect(interpretProductQuantity({
+      name: 'Eggs 12 pieces', unit: 'pieces', unitQuantity: 6, price: 6,
+    })).toMatchObject({ status: 'conflict', comparablePrice: null });
+  });
+
+  test.each([
+    ['dimensional quantity', `${'9'.repeat(400)} L`],
+    ['piece count', `${'9'.repeat(400)} pieces`],
+    ['multipack count', `${'9'.repeat(400)} x 1 L`],
+    ['multipack unit quantity', `2 x ${'9'.repeat(400)} L`],
+    ['multipack total', `${'1' + '0'.repeat(200)} x ${'1' + '0'.repeat(200)} L`],
+  ])('rejects a nonfinite %s', (_label, quantity) => {
+    expect(interpretProductQuantity({ name: `Water ${quantity}`, price: 6 })).toMatchObject({
+      status: 'unknown', contentQuantity: null, contentUnit: null, comparablePrice: null,
+    });
+  });
+
+  test('does not verify raw metadata when the explicit text quantity overflows', () => {
+    expect(interpretProductQuantity({
+      name: `Water ${'9'.repeat(400)} L`, unit: 'l', unitQuantity: 1, price: 6,
+    })).toMatchObject({ status: 'unknown', contentQuantity: 1, comparablePrice: null });
+  });
+
   test('does not guess the weight of an item sold as one piece', () => {
     expect(
       interpretProductQuantity({

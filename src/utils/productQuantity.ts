@@ -33,6 +33,7 @@ interface TextCandidates {
   candidates: Candidate[];
   evidence: string[];
   ambiguous: boolean;
+  invalid: boolean;
 }
 
 function normalizedUnit(unit: string): { unit: ContentUnit; factor: number } | null {
@@ -59,19 +60,16 @@ function normalizedUnit(unit: string): { unit: ContentUnit; factor: number } | n
   return null;
 }
 
-function displayNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(value).replace('.', '.');
-}
-
 function textCandidates(
   text: string | null | undefined,
   source: 'name' | 'description',
 ): TextCandidates {
-  if (!text) return { candidates: [], evidence: [], ambiguous: false };
+  if (!text) return { candidates: [], evidence: [], ambiguous: false, invalid: false };
 
   const candidates: Candidate[] = [];
   const evidence: string[] = [];
   let ambiguous = false;
+  let invalid = false;
   const multipackRanges: Array<[number, number]> = [];
   const multipackRe = new RegExp(
     `(?<![\\d.,])(\\d+)\\s*[x×]\\s*(${NUMBER_PATTERN})\\s*${UNIT_PATTERN}(?!\\p{L})`,
@@ -82,14 +80,18 @@ function textCandidates(
     const eachToken = match[2];
     const each = Number(eachToken.replace(',', '.'));
     const normalized = normalizedUnit(match[3]);
+    const quantity = normalized ? count * each * normalized.factor : null;
     const start = match.index!;
     multipackRanges.push([start, start + match[0].length]);
-    if (isAmbiguousSeparatedNumber(eachToken)) {
+    if (!Number.isFinite(count) || !Number.isFinite(each) || !Number.isFinite(quantity)) {
+      invalid = true;
+      evidence.push(`${source}: invalid quantity ${match[0]}`);
+    } else if (isAmbiguousSeparatedNumber(eachToken)) {
       ambiguous = true;
       evidence.push(`${source}: ambiguous quantity ${match[0]}`);
-    } else if (normalized && count > 0 && each > 0) {
+    } else if (normalized && quantity !== null && quantity > 0) {
       const candidate = {
-        quantity: count * each * normalized.factor,
+        quantity,
         unit: normalized.unit,
         evidence: `${source}: ${match[0]}`,
       };
@@ -107,6 +109,11 @@ function textCandidates(
     if (multipackRanges.some(([from, to]) => start >= from && start < to)) continue;
     const token = match[1];
     const value = Number(token.replace(',', '.'));
+    if (!Number.isFinite(value)) {
+      invalid = true;
+      evidence.push(`${source}: invalid quantity ${match[0]}`);
+      continue;
+    }
     if (isNutritionReference(text, start, value, source)) continue;
     if (isAmbiguousSeparatedNumber(token)) {
       ambiguous = true;
@@ -128,13 +135,18 @@ function textCandidates(
   const piecesRe = /(\d+)\s*(?:pcs?|pieces?|count|ct|eggs?|adet|шт)(?!\p{L})/giu;
   for (const match of text.matchAll(piecesRe)) {
     const value = Number(match[1]);
+    if (!Number.isFinite(value)) {
+      invalid = true;
+      evidence.push(`${source}: invalid quantity ${match[0]}`);
+      continue;
+    }
     if (value > 0) {
       const candidate = { quantity: value, unit: 'pieces' as const, evidence: `${source}: ${match[0]}` };
       candidates.push(candidate);
       evidence.push(candidate.evidence);
     }
   }
-  return { candidates, evidence, ambiguous };
+  return { candidates, evidence, ambiguous, invalid };
 }
 
 function isAmbiguousSeparatedNumber(token: string): boolean {
@@ -170,7 +182,7 @@ function rawCandidate(input: QuantityInput): Candidate | null {
   return {
     quantity: input.unitQuantity * normalized.factor,
     unit: normalized.unit,
-    evidence: `raw unit: ${displayNumber(input.unitQuantity)} ${input.unit}`,
+    evidence: `raw unit: ${String(input.unitQuantity)} ${input.unit}`,
   };
 }
 
@@ -202,7 +214,9 @@ export function interpretProductQuantity(input: QuantityInput): QuantityInterpre
   const textualContent = named.candidates[0] ?? described.candidates[0];
   const hasCountCategoryEvidence = /\beggs?\b/i.test(`${input.name} ${input.description ?? ''}`);
   const rawIsSellingPiece =
-    raw?.unit === 'pieces' && textualContent?.unit !== 'pieces' && !hasCountCategoryEvidence;
+    raw?.unit === 'pieces' &&
+    ((textualContent?.unit !== 'pieces' && !hasCountCategoryEvidence) ||
+      (raw.quantity === 1 && textualContent?.unit === 'pieces' && textualContent.quantity !== 1));
   if (raw) {
     evidence.push(rawIsSellingPiece ? `${raw.evidence} (selling unit)` : raw.evidence);
   } else if (input.unit) {
@@ -247,8 +261,9 @@ export function interpretProductQuantity(input: QuantityInput): QuantityInterpre
         (priceBasis === 'piece' && content.unit === 'pieces')),
   );
   const hasAmbiguousText = named.ambiguous || described.ambiguous;
+  const hasInvalidText = named.invalid || described.invalid;
   const status: QuantityInterpretation['status'] =
-    content && validPrice && compatibleBasis && !invalidRawQuantity && !hasAmbiguousText
+    content && validPrice && compatibleBasis && !invalidRawQuantity && !hasAmbiguousText && !hasInvalidText
       ? 'verified'
       : 'unknown';
 
