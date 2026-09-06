@@ -2,7 +2,18 @@ import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { extractQuantity } from '../../utils/normalizer';
 import { retry, sleep } from '../../utils/retry';
-import https from 'https';
+import { config as envConfig } from '../../config/env';
+
+/**
+ * Origin the GraphQL requests must come from. The storefront is opened in a
+ * real browser page first, and every query is a same-origin fetch from that
+ * page — see postGraphQL() for why.
+ */
+const STOREFRONT_ORIGIN = 'https://express.auchan.ua';
+const GRAPHQL_URL = `${STOREFRONT_ORIGIN}/graphql/`;
+const REQUEST_TIMEOUT_MS = 30000;
+/** How often to re-read the storefront while a Cloudflare challenge is auto-solving. */
+const CHALLENGE_POLL_MS = 500;
 
 /**
  * GraphQL category configuration with API IDs
@@ -43,6 +54,13 @@ interface GraphQLSearchResponse {
     };
   };
   errors?: Array<{ message: string }>;
+}
+
+/** Raw HTTP response from the GraphQL endpoint, before any interpretation. */
+export interface GraphQLHttpResponse {
+  status: number;
+  contentType: string | null;
+  body: string;
 }
 
 /**
@@ -158,9 +176,105 @@ query getCategoryProducts($filter: ProductAttributeFilterInput, $pageSize: Int, 
   }
 }`;
 
+const RESPONSE_SNIPPET_CHARS = 200;
+
+function snippet(body: string): string {
+  return body.replace(/\s+/g, ' ').trim().substring(0, RESPONSE_SNIPPET_CHARS);
+}
+
 /**
- * High-performance GraphQL-based scraper for Auchan Ukraine
- * Uses direct API calls instead of browser automation for much faster scraping
+ * Recognise Cloudflare's own HTML (served instead of the origin's JSON) and
+ * say which kind it is. Returns null for anything that is not a Cloudflare page.
+ *
+ * Two distinct things can come back:
+ *  - the 1020 "Sorry, you have been blocked" page — a firewall rule matched
+ *    (IP, ASN, country, or request signature); no amount of JS solving helps.
+ *  - the "Just a moment..." interstitial — a managed challenge that a real
+ *    browser can pass.
+ * Telling them apart in the log is what stops the next person from reading
+ * "<!DOCTYPE html>" as a parse error again (Daily Scrape 2026-09-04).
+ */
+export type CloudflarePageKind = 'block' | 'challenge' | 'error';
+
+export interface CloudflarePage {
+  kind: CloudflarePageKind;
+  description: string;
+}
+
+export function classifyCloudflarePage(body: string): CloudflarePage | null {
+  const head = body.substring(0, 20000);
+  const rayId =
+    head.match(/Cloudflare Ray ID:\s*<strong[^>]*>([0-9a-f]+)/i)?.[1] ??
+    head.match(/[?&]ray=([0-9a-f]+)/i)?.[1];
+  const ray = rayId ? ` (Ray ID ${rayId})` : '';
+
+  if (/data-translate="block_headline"|Sorry, you have been blocked/i.test(head)) {
+    return {
+      kind: 'block',
+      description: `Cloudflare block page "Sorry, you have been blocked" (error 1020)${ray}`,
+    };
+  }
+  if (/cdn-cgi\/challenge-platform|Just a moment|cf-chl|challenge-running/i.test(head)) {
+    return { kind: 'challenge', description: `Cloudflare challenge page "Just a moment..."${ray}` };
+  }
+  if (/Attention Required! \| Cloudflare|cf-error-details|id="cf-wrapper"/i.test(head)) {
+    return { kind: 'error', description: `Cloudflare error page${ray}` };
+  }
+  return null;
+}
+
+export function describeCloudflarePage(body: string): string | null {
+  return classifyCloudflarePage(body)?.description ?? null;
+}
+
+/**
+ * Turn the raw HTTP response into a GraphQL payload, or throw an error that
+ * says what actually came back: a Cloudflare page, a non-2xx status, a
+ * non-JSON body, or GraphQL-level errors.
+ */
+export function interpretGraphQLResponse(res: GraphQLHttpResponse): GraphQLSearchResponse {
+  const cloudflare = describeCloudflarePage(res.body);
+  if (cloudflare) {
+    throw new Error(`Blocked by Cloudflare: HTTP ${res.status}, ${cloudflare}`);
+  }
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(`HTTP ${res.status} from express.auchan.ua/graphql/: ${snippet(res.body)}`);
+  }
+
+  let data: GraphQLSearchResponse;
+  try {
+    data = JSON.parse(res.body);
+  } catch {
+    throw new Error(
+      `Non-JSON response from express.auchan.ua/graphql/ (HTTP ${res.status}, ` +
+        `content-type ${res.contentType ?? 'unknown'}): ${snippet(res.body)}`
+    );
+  }
+  if (data.errors && data.errors.length > 0) {
+    throw new Error(`GraphQL error: ${data.errors[0].message}`);
+  }
+  // Well-formed JSON that is not a search result (data: null, a different
+  // query's shape, an error envelope without `errors`) must not pass as an
+  // empty category.
+  const search = data?.data?.search;
+  const totalPages = search?.page_info?.total_pages;
+  if (
+    !search ||
+    !Array.isArray(search.items) ||
+    !Number.isInteger(totalPages) ||
+    totalPages < 0
+  ) {
+    throw new Error(
+      `Unexpected GraphQL payload from express.auchan.ua/graphql/ (HTTP ${res.status}): ${snippet(res.body)}`
+    );
+  }
+  return data;
+}
+
+/**
+ * High-performance GraphQL-based scraper for Auchan Ukraine.
+ * Uses the site's GraphQL API instead of DOM scraping; the requests themselves
+ * are issued from a real browser page to get past Cloudflare (see postGraphQL).
  */
 export class AuchanUaGraphQLScraper extends BaseScraper {
   private readonly PAGE_SIZE = 100; // Max products per request
@@ -172,12 +286,84 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
   }
 
   /**
-   * Initialize the scraper (no browser needed)
+   * Launch a browser and open the storefront, so that the GraphQL queries can
+   * be issued as same-origin fetches from a page Cloudflare has let through.
+   * The navigation is retried like every GraphQL page is: a transient blip on
+   * the one request that gates the whole run must not end the run.
    */
   async initialize(): Promise<void> {
-    this.logger.info(`Initializing Auchan Ukraine GraphQL scraper...`);
+    this.logger.info(`Initializing Auchan Ukraine GraphQL scraper (browser context)...`);
     this.startTime = Date.now();
-    this.logger.info(`Auchan Ukraine GraphQL scraper initialized (no browser required)`);
+
+    await this.launchBrowser();
+    this.page = await this.createPage();
+
+    const outcome = await this.retryOnFailure(() => this.openStorefront(), 'Open storefront');
+
+    this.logger.info(`Auchan Ukraine GraphQL scraper initialized (storefront open, ${outcome})`);
+  }
+
+  /**
+   * Navigate to the storefront and make sure what loaded is the storefront.
+   *
+   * The body is inspected regardless of status: Cloudflare normally serves
+   * its pages with 403/503, but the markup is the reliable signal, and goto()
+   * can return no response object at all. A managed challenge ("Just a
+   * moment...") is something a real browser solves on its own a few seconds
+   * after domcontentloaded, so that one is given time to clear; a 1020 block
+   * never clears and fails at once.
+   */
+  private async openStorefront(): Promise<string> {
+    const page = this.page!;
+    const response = await page.goto(`${STOREFRONT_ORIGIN}/`, {
+      waitUntil: 'domcontentloaded',
+      timeout: envConfig.scraper.timeout,
+    });
+    const status = response?.status() ?? 0;
+
+    // Reading the body can throw "Execution context was destroyed" when the
+    // challenge's auto-solve navigates away mid-read, on the first snapshot as
+    // much as on any later poll. Treat that as "still settling" and read again.
+    const snapshot = async (): Promise<CloudflarePage | null | 'navigating'> => {
+      try {
+        return classifyCloudflarePage(await page.content());
+      } catch {
+        return 'navigating';
+      }
+    };
+
+    const settleDeadline = Date.now() + envConfig.scraper.timeout;
+    let state = await snapshot();
+    // Only an interstitial actually seen counts as a challenge. A torn-down
+    // read alone is not evidence of one: if the page then settles on an
+    // ordinary origin error, its status must still be reported below.
+    let sawChallenge = false;
+    while ((state === 'navigating' || state?.kind === 'challenge') && Date.now() < settleDeadline) {
+      if (state !== 'navigating') sawChallenge = true;
+      await sleep(CHALLENGE_POLL_MS);
+      state = await snapshot();
+    }
+    if (state === 'navigating') {
+      throw new Error(
+        `Storefront never became readable within ${envConfig.scraper.timeout}ms of opening ${STOREFRONT_ORIGIN}`
+      );
+    }
+    const cloudflare = state;
+
+    if (cloudflare) {
+      throw new Error(
+        `Blocked by Cloudflare when opening ${STOREFRONT_ORIGIN}: HTTP ${status}, ${cloudflare.description}`
+      );
+    }
+    if (sawChallenge) {
+      // The status belongs to the interstitial (usually 403/503), not to the
+      // storefront the browser navigated to after solving it.
+      return `challenge cleared, first load was HTTP ${status}`;
+    }
+    if (status >= 400) {
+      throw new Error(`HTTP ${status} when opening ${STOREFRONT_ORIGIN}`);
+    }
+    return `HTTP ${status}`;
   }
 
   /**
@@ -219,14 +405,14 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
   ): Promise<ProductData[]> {
     const allProducts: ProductData[] = [];
 
-    try {
+    // No try/catch here on purpose: a category that cannot even load its first
+    // page (Cloudflare block, origin 5xx, schema change) must reject so that
+    // BaseScraper counts it as a failed category. Swallowing the error and
+    // returning [] made the 16/16 block on 2026-09-04 look like a clean run
+    // with zero products. Individual later pages are still tolerated below.
+    {
       // First, get the first page to determine total pages
       const firstPage = await this.fetchProductsPage(categoryId, 1);
-
-      if (!firstPage?.data?.search) {
-        this.logger.warn(`No data returned for category ${categoryName}`);
-        return [];
-      }
 
       const totalPages = Math.min(
         firstPage.data.search.page_info.total_pages,
@@ -270,11 +456,6 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
             batch.map(async (pageNum) => {
               try {
                 const pageData = await this.fetchProductsPage(categoryId, pageNum);
-
-                if (!pageData?.data?.search?.items) {
-                  return { pageNum, products: [] };
-                }
-
                 const products = this.transformProducts(pageData.data.search.items);
                 return { pageNum, products };
               } catch (error) {
@@ -318,16 +499,6 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
       this.logger.info(
         `Category ${categoryName}: scraped ${allProducts.length} total products from ${totalPages} pages`
       );
-    } catch (error) {
-      this.logger.error(
-        `Failed to scrape category ${categoryName}:`,
-        (error as Error).message
-      );
-      this.logError(
-        `Failed to scrape category: ${categoryName}`,
-        undefined,
-        error as Error
-      );
     }
 
     return allProducts;
@@ -355,46 +526,8 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
           variables,
         });
 
-        return new Promise<GraphQLSearchResponse>((resolve, reject) => {
-          const options = {
-            hostname: 'express.auchan.ua',
-            port: 443,
-            path: '/graphql/',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'store': 'ua',
-              'User-Agent': this.config.userAgents?.[0] || 'Mozilla/5.0',
-              'Content-Length': Buffer.byteLength(requestBody),
-            },
-          };
-
-          const req = https.request(options, (res) => {
-            let body = '';
-            res.on('data', (chunk) => (body += chunk));
-            res.on('end', () => {
-              try {
-                const data = JSON.parse(body);
-                if (data.errors && data.errors.length > 0) {
-                  reject(new Error(data.errors[0].message));
-                } else {
-                  resolve(data);
-                }
-              } catch (e) {
-                reject(new Error(`Failed to parse response: ${body.substring(0, 200)}`));
-              }
-            });
-          });
-
-          req.on('error', reject);
-          req.setTimeout(30000, () => {
-            req.destroy();
-            reject(new Error('Request timeout'));
-          });
-          req.write(requestBody);
-          req.end();
-        });
+        const res = await this.postGraphQL(requestBody);
+        return interpretGraphQLResponse(res);
       },
       {
         maxRetries: this.config.maxRetries,
@@ -406,6 +539,53 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
           );
         },
       }
+    );
+  }
+
+  /**
+   * POST a GraphQL request body and return the raw HTTP response.
+   *
+   * The request is issued from inside the browser page (page.evaluate + fetch)
+   * rather than from Node. express.auchan.ua is behind a Cloudflare rule that
+   * 403s non-browser TLS/HTTP signatures: node https (the previous transport),
+   * curl with browser headers, and Playwright's APIRequestContext — with or
+   * without the page's cookies — all received the 1020 block page on
+   * 2026-09-06, while a fetch from a Chromium page on the same IP got JSON.
+   * Same precedent as WoolworthsScraper vs Akamai.
+   *
+   * Overridden in tests to replace the network hop.
+   */
+  protected async postGraphQL(requestBody: string): Promise<GraphQLHttpResponse> {
+    if (!this.page) {
+      throw new Error('Page not initialized: call initialize() before scraping');
+    }
+
+    return this.page.evaluate(
+      async ({ url, body, timeoutMs }) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              store: 'ua',
+            },
+            body,
+            signal: controller.signal,
+          });
+          return {
+            status: res.status,
+            contentType: res.headers.get('content-type'),
+            body: await res.text(),
+          };
+        } finally {
+          clearTimeout(timer);
+        }
+      },
+      { url: GRAPHQL_URL, body: requestBody, timeoutMs: REQUEST_TIMEOUT_MS }
     );
   }
 
@@ -493,10 +673,11 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
   }
 
   /**
-   * Cleanup resources (no browser to close)
+   * Close the browser and report stats
    */
   async cleanup(): Promise<void> {
     this.logger.info(`Cleaning up Auchan Ukraine GraphQL scraper...`);
+    await this.closeBrowser();
 
     const stats = this.getStats();
     this.logger.info('Auchan Ukraine GraphQL scraping completed:', stats);
