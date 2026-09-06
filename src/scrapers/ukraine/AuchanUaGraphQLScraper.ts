@@ -2,7 +2,16 @@ import { BaseScraper } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { extractQuantity } from '../../utils/normalizer';
 import { retry, sleep } from '../../utils/retry';
-import https from 'https';
+import { config as envConfig } from '../../config/env';
+
+/**
+ * Origin the GraphQL requests must come from. The storefront is opened in a
+ * real browser page first, and every query is a same-origin fetch from that
+ * page — see postGraphQL() for why.
+ */
+const STOREFRONT_ORIGIN = 'https://express.auchan.ua';
+const GRAPHQL_URL = `${STOREFRONT_ORIGIN}/graphql/`;
+const REQUEST_TIMEOUT_MS = 30000;
 
 /**
  * GraphQL category configuration with API IDs
@@ -232,8 +241,9 @@ export function interpretGraphQLResponse(res: GraphQLHttpResponse): GraphQLSearc
 }
 
 /**
- * High-performance GraphQL-based scraper for Auchan Ukraine
- * Uses direct API calls instead of browser automation for much faster scraping
+ * High-performance GraphQL-based scraper for Auchan Ukraine.
+ * Uses the site's GraphQL API instead of DOM scraping; the requests themselves
+ * are issued from a real browser page to get past Cloudflare (see postGraphQL).
  */
 export class AuchanUaGraphQLScraper extends BaseScraper {
   private readonly PAGE_SIZE = 100; // Max products per request
@@ -245,12 +255,31 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
   }
 
   /**
-   * Initialize the scraper (no browser needed)
+   * Launch a browser and open the storefront, so that the GraphQL queries can
+   * be issued as same-origin fetches from a page Cloudflare has let through.
    */
   async initialize(): Promise<void> {
-    this.logger.info(`Initializing Auchan Ukraine GraphQL scraper...`);
+    this.logger.info(`Initializing Auchan Ukraine GraphQL scraper (browser context)...`);
     this.startTime = Date.now();
-    this.logger.info(`Auchan Ukraine GraphQL scraper initialized (no browser required)`);
+
+    await this.launchBrowser();
+    this.page = await this.createPage();
+
+    const response = await this.page.goto(`${STOREFRONT_ORIGIN}/`, {
+      waitUntil: 'domcontentloaded',
+      timeout: envConfig.scraper.timeout,
+    });
+    const status = response?.status() ?? 0;
+    if (status >= 400) {
+      const cloudflare = describeCloudflarePage(await this.page.content());
+      throw new Error(
+        cloudflare
+          ? `Blocked by Cloudflare when opening ${STOREFRONT_ORIGIN}: HTTP ${status}, ${cloudflare}`
+          : `HTTP ${status} when opening ${STOREFRONT_ORIGIN}`
+      );
+    }
+
+    this.logger.info(`Auchan Ukraine GraphQL scraper initialized (storefront open, HTTP ${status})`);
   }
 
   /**
@@ -440,45 +469,50 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
   }
 
   /**
-   * POST a GraphQL request body to express.auchan.ua and return the raw HTTP
-   * response. Overridden in tests to replace the network hop.
+   * POST a GraphQL request body and return the raw HTTP response.
+   *
+   * The request is issued from inside the browser page (page.evaluate + fetch)
+   * rather than from Node. express.auchan.ua is behind a Cloudflare rule that
+   * 403s non-browser TLS/HTTP signatures: node https (the previous transport),
+   * curl with browser headers, and Playwright's APIRequestContext — with or
+   * without the page's cookies — all received the 1020 block page on
+   * 2026-09-06, while a fetch from a Chromium page on the same IP got JSON.
+   * Same precedent as WoolworthsScraper vs Akamai.
+   *
+   * Overridden in tests to replace the network hop.
    */
   protected async postGraphQL(requestBody: string): Promise<GraphQLHttpResponse> {
-    return new Promise<GraphQLHttpResponse>((resolve, reject) => {
-      const options = {
-        hostname: 'express.auchan.ua',
-        port: 443,
-        path: '/graphql/',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'store': 'ua',
-          'User-Agent': this.config.userAgents?.[0] || 'Mozilla/5.0',
-          'Content-Length': Buffer.byteLength(requestBody),
-        },
-      };
+    if (!this.page) {
+      throw new Error('Page not initialized: call initialize() before scraping');
+    }
 
-      const req = https.request(options, (res) => {
-        let body = '';
-        res.on('data', (chunk) => (body += chunk));
-        res.on('end', () => {
-          resolve({
-            status: res.statusCode ?? 0,
-            contentType: res.headers['content-type'] ?? null,
+    return this.page.evaluate(
+      async ({ url, body, timeoutMs }) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              store: 'ua',
+            },
             body,
+            signal: controller.signal,
           });
-        });
-      });
-
-      req.on('error', reject);
-      req.setTimeout(30000, () => {
-        req.destroy();
-        reject(new Error('Request timeout'));
-      });
-      req.write(requestBody);
-      req.end();
-    });
+          return {
+            status: res.status,
+            contentType: res.headers.get('content-type'),
+            body: await res.text(),
+          };
+        } finally {
+          clearTimeout(timer);
+        }
+      },
+      { url: GRAPHQL_URL, body: requestBody, timeoutMs: REQUEST_TIMEOUT_MS }
+    );
   }
 
   /**
@@ -565,10 +599,11 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
   }
 
   /**
-   * Cleanup resources (no browser to close)
+   * Close the browser and report stats
    */
   async cleanup(): Promise<void> {
     this.logger.info(`Cleaning up Auchan Ukraine GraphQL scraper...`);
+    await this.closeBrowser();
 
     const stats = this.getStats();
     this.logger.info('Auchan Ukraine GraphQL scraping completed:', stats);
