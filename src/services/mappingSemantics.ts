@@ -1,7 +1,7 @@
 /** Conservative English checks after translation. These narrow a review queue, never auto-approve. */
 const normalized = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ');
 const produce: Record<string,string> = {apple:'apples',banana:'bananas',carrot:'carrots',onion:'onions',tomato:'tomatoes',cucumber:'cucumbers',potato:'potatoes'};
-function coreName(value: string): string { return normalized(value).replace(/\b\d+(?:\s+\d+)?\s*(?:kg|g|l|ml)?\b/g,'').trim().replace(/\s+/g,' '); }
+function coreName(value: string): string { return normalized(value).replace(/\bpack(?:s)?(?: of)?\s+\d+\b/g,'').replace(/\b\d+(?:\s+\d+)?\s*(?:kg|g|l|ml|pieces?|pcs?|counts?|ct|packs?)?\b/g,'').trim().replace(/\s+/g,' '); }
 export function searchNames(canonical: string): string[] {
  const plain=coreName(canonical);
  const entry=Object.entries(produce).find(([one,many])=>new RegExp(`^(${one}|${many})$`).test(plain));
@@ -10,16 +10,18 @@ export function searchNames(canonical: string): string[] {
 export function matchesGroceryType(canonical: string, translatedName: string): boolean {
  const target=coreName(canonical), name=normalized(translatedName).replace(/(\d)(kg|g|gr|ml|l)\b/g,'$1 $2');
  const has=(pattern:string)=>new RegExp(`\\b(?:${pattern})\\b`).test(name);
- const fruit=Object.entries(produce).find(([one,many])=>new RegExp(`^(${one}|${many})$`).test(target));
+ // Processed canonicals such as apple juice have their own type, not the plain-produce rules.
+ const processedProduce=/\b(juice|drink|smoothie|puree|sauce|dried|chips|jam|canned|pickled|powder|flour|cake|pie)\b/.test(target);
+ const fruit=!processedProduce && Object.entries(produce).find(([one,many])=>new RegExp(`\\b(${one}|${many})\\b`).test(target));
  if(fruit) {
   if(!has(`${fruit[0]}|${fruit[1]}`))return false;
   // Without taxonomy or a semantic model, accept only plain produce descriptions.
   // Unknown terms abstain: a short branded candy name can otherwise look exactly like fruit.
-  const allowed=new Set((`${fruit[0]} ${fruit[1]} fresh loose whole organic bio red green yellow white golden delicious gala fuji smith granny pink lady royal cosmic kanzi melinda chiquita carrefour filiera qualita quality origin italy italian category class calibre caliber selected selection premium large small medium mini pack packet bag tray net value washed unwashed unpeeled kg g gr grams gram kilogram kilograms x sfuse sfusi vassoio i ii of from the country france spain`).split(' '));
+  const allowed=new Set((`${fruit[0]} ${fruit[1]} fresh loose whole organic bio red green yellow white golden delicious gala fuji smith granny pink lady royal cosmic kanzi melinda chiquita carrefour filiera qualita quality origin italy italian category class calibre caliber selected selection premium large small medium mini piece pieces pc pcs count counts ct bunch bunches pack packs packet bag tray net value washed unwashed unpeeled kg g gr grams gram kilogram kilograms x sfuse sfusi vassoio i ii of from the country france spain`).split(' '));
   return name.split(' ').filter(word=>word && !/^\d+$/.test(word)).every(word=>allowed.has(word));
  }
 
- if(/^(milk|lactose free milk)$/.test(target)) {
+ if(/\bmilk\b/.test(target) && !/\b(almond|soy|soya|oat|coconut|rice|hazelnut|powder|condensed|chocolate)\b/.test(target)) {
   const lactoseFree=/lactose free/.test(target);
   return has('milk') && !has('almond|soy|soya|oat|coconut|rice|hazelnut|chocolate|cocoa|kefir|yogurt|yoghurt|powder|condensed|cheese|baby')
    && (!has('cream') || has('full cream'))

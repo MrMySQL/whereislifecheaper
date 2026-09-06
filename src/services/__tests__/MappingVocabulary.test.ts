@@ -1,6 +1,6 @@
-import { mappingVocabulary, translateText } from '../MappingVocabulary';
+import { clearTranslationCache, mappingVocabulary, translateText } from '../MappingVocabulary';
 import type { MaintenanceTarget } from '../../types/maintenance.types';
-afterEach(()=>{jest.restoreAllMocks();delete process.env.GOOGLE_TRANSLATE_API_KEY;});
+afterEach(()=>{jest.restoreAllMocks();clearTranslationCache();delete process.env.GOOGLE_TRANSLATE_API_KEY;});
 test('English country vocabulary works without a provider key',async()=>{
  expect(await mappingVocabulary({name:'Whole milk 1 L',country_code:'AU'} as MaintenanceTarget)).toEqual(['Whole milk 1 L']);
 });
@@ -25,4 +25,20 @@ test('batch translations preserve input order and duplicate names',async()=>{
  const {translateTexts}=await import('../MappingVocabulary');
  expect(await translateTexts(['Mele verdi','Pere verdi','Mele verdi'],'en','it',fetcher)).toEqual(['Apples','Pears','Apples']);
  expect(JSON.parse(fetcher.mock.calls[0][1].body).q).toEqual(['Mele verdi','Pere verdi']);
+});
+
+test('multi-language vocabulary retains successes when another language fails',async()=>{
+ process.env.GOOGLE_TRANSLATE_API_KEY='test';
+ jest.spyOn(global,'fetch').mockImplementation(async(_url,options)=>{
+  const body=JSON.parse(options!.body as string);
+  if(body.target==='uz')throw new Error('Provider unavailable');
+  return {ok:true,json:async()=>({data:{translations:[{translatedText:'Сахар'}]}})} as Response;
+ });
+ expect(await mappingVocabulary({name:'Sugar 1 kg',country_code:'UZ'} as MaintenanceTarget)).toEqual(['Сахар']);
+});
+
+test('all failed languages report a translation failure',async()=>{
+ process.env.GOOGLE_TRANSLATE_API_KEY='test';
+ jest.spyOn(global,'fetch').mockRejectedValue(new Error('provider secret'));
+ await expect(mappingVocabulary({name:'Sugar 1 kg',country_code:'UZ'} as MaintenanceTarget)).rejects.toThrow('Translation unavailable');
 });

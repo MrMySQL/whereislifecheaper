@@ -22,3 +22,11 @@ test.each([
 
 test('does not classify translated pastry dough or prepared onion as staples',()=>{expect(matchesGroceryType('Pasta','Sliced pasta 200 g')).toBe(false);expect(matchesGroceryType('Onion 1kg','Sliced onion')).toBe(false);});
 test.each(['Gala apples 1kg','Gala apples 500g'])('produce compact quantity %s remains valid',name=>expect(matchesGroceryType('Apple 1kg',name)).toBe(true));
+
+test.each(['Apple 6 pieces','Apple 6pcs','Apple pack of 6','Apple 6 pack'])('piece and pack canonical %s gets plural search vocabulary',canonical=>expect(searchNames(canonical)).toContain('Apples'));
+test.each([
+ ['Apple 6 pieces','Fresh apples 6 pieces',true],['Banana 1kg','Bananas bunch 1kg',true],
+ ['Whole milk 1L','Almond drink 1L',false],['Whole milk 1L','Whole milk 1L',true],
+ ['Red apples 1kg','Haribo Bananas 175g',false],['Red apples 1kg','Red apples 1kg',true],
+ ['Red apples 1kg','Red apple juice 1L',false],['Organic banana 1kg','Haribo Bananas 175g',false],
+])('descriptive canonical and count listings %s / %s',(canonical,name,expected)=>expect(matchesGroceryType(canonical,name)).toBe(expected));

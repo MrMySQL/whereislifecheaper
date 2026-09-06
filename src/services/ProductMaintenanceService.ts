@@ -85,10 +85,13 @@ export class ProductMaintenanceService {
                     // Ranking failure has no effect on deterministic discovery. Cap input and wait time.
                     let timer: ReturnType<typeof setTimeout> | undefined;
                     try {
-                        const ids = await Promise.race([this.ranker(target, eligible.slice(0, 20).map(e => e.candidate)),
+                        const evaluated = eligible.slice(0, 20).map(e => e.candidate);
+                        const evaluatedIds = new Set(evaluated.map(c => String(c.mapping_id)));
+                        const ids = await Promise.race([this.ranker(target, evaluated),
                             new Promise<string[]>((_resolve, reject) => { timer = setTimeout(() => reject(new Error('Ranking timed out')), 4500); })]);
-                        const rank = new Map(ids.filter(id => eligible.some(e => String(e.candidate.mapping_id) === String(id))).map((id, i) => [String(id), i]));
-                        eligible = eligible.filter(e => rank.has(String(e.candidate.mapping_id)));
+                        const rank = new Map(ids.filter(id => evaluatedIds.has(String(id))).map((id, i) => [String(id), i]));
+                        // Omitted evaluated IDs are incompatible; candidates beyond the input cap were never evaluated.
+                        eligible = eligible.filter(e => rank.has(String(e.candidate.mapping_id)) || !evaluatedIds.has(String(e.candidate.mapping_id)));
                         eligible.sort((a, b) => (rank.get(String(a.candidate.mapping_id)) ?? 999) - (rank.get(String(b.candidate.mapping_id)) ?? 999));
                     }
                     catch { warnings.push(`${target.name}: AI ranking unavailable; candidates need manual semantic review.`); }

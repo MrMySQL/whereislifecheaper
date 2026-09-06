@@ -33,3 +33,14 @@ test('batch review posts one action for selected unique ids', async () => {
   });
   expect(result.results[1]).toEqual({ id: '12', error: 'conflict' });
 });
+
+test('run serializes numeric country IDs as strings', async () => {
+ post.mockResolvedValue({data:{}});
+ await maintenanceApi.run({country_id:7,limit:25});
+ expect(post).toHaveBeenCalledWith('/maintenance/run',{country_id:'7',limit:25});
+});
+test('batch review serializes mixed numeric and string IDs with a reason',async()=>{
+ post.mockResolvedValue({data:{results:[]}});
+ await maintenanceApi.batchReview([11,'12'],'reject','Wrong product');
+ expect(post).toHaveBeenCalledWith('/maintenance/suggestions/batch',{ids:['11','12'],action:'reject',reason:'Wrong product'});
+});

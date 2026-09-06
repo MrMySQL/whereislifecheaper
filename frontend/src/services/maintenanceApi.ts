@@ -130,11 +130,11 @@ export const maintenanceApi = {
     return response.data;
   },
   run: async (body: { limit?: number; dry_run?: boolean; country_id?: MaintenanceId; cursor?: string }): Promise<MaintenanceRunResponse> => {
-    const response = await api.post<MaintenanceRunResponse>('/maintenance/run', body);
+    const response = await api.post<MaintenanceRunResponse>('/maintenance/run', body.country_id === undefined ? body : { ...body, country_id: String(body.country_id) });
     return response.data;
   },
   batchReview: async (ids: MaintenanceId[], action: 'approve' | 'reject', reason?: string): Promise<{ results: MaintenanceBatchResult[] }> => {
-    const response = await api.post<{ results: MaintenanceBatchResult[] }>('/maintenance/suggestions/batch', reason ? { ids, action, reason } : { ids, action });
+    const response = await api.post<{ results: MaintenanceBatchResult[] }>('/maintenance/suggestions/batch', reason ? { ids: ids.map(String), action, reason } : { ids: ids.map(String), action });
     return response.data;
   },
   review: async (id: MaintenanceId, action: 'approve' | 'reject' | 'undo', reason?: string): Promise<{ id: MaintenanceId; status: MaintenanceStatus }> => {

@@ -55,4 +55,21 @@ integration('country onboarding against PostgreSQL',()=>{
   const result=await service.reviewBatch(list.map(s=>String(s.id)),'approve','test-admin');expect(result.results[0].error).toContain('unavailable');expect(result.results[1].status).toBe('approved');
   expect((await db.query('SELECT count(*)::int n FROM products WHERE canonical_product_id IS NOT NULL')).rows[0].n).toBe(1);
  });
+ test('vocabulary is removed with either parent, including tables created before cascade support',async()=>{
+  // Recreate the original constraints to exercise the deployed-schema upgrade.
+  await db.query(`ALTER TABLE product_mapping_vocabulary
+   DROP CONSTRAINT product_mapping_vocabulary_canonical_product_id_fkey,
+   ADD FOREIGN KEY (canonical_product_id) REFERENCES canonical_products(id),
+   DROP CONSTRAINT product_mapping_vocabulary_country_id_fkey,
+   ADD FOREIGN KEY (country_id) REFERENCES countries(id)`);
+  const migration=path.join(__dirname,'../../database/migrations/019_mapping_vocabulary_cascade.sql');
+  const sql=fs.readFileSync(migration,'utf8');await db.query(sql);await db.query(sql);
+  const orphanCountry=String((await db.query("INSERT INTO countries(name,code,currency_code) VALUES('Test','ZZ','EUR') RETURNING id")).rows[0].id);
+  const orphanCanonical=String((await db.query("INSERT INTO canonical_products(name) VALUES('Test product') RETURNING id")).rows[0].id);
+  await db.query("INSERT INTO product_mapping_vocabulary(canonical_product_id,country_id,source_name) VALUES($1,$2,'Test product'),($3,$4,'Sugar 1 kg')",[orphanCanonical,italy,canonical,orphanCountry]);
+  await db.query('DELETE FROM canonical_products WHERE id=$1',[orphanCanonical]);
+  await db.query('DELETE FROM countries WHERE id=$1',[orphanCountry]);
+  expect((await db.query('SELECT count(*)::int n FROM product_mapping_vocabulary')).rows[0].n).toBe(0);
+ });
+
 });

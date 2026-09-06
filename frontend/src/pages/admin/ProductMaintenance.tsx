@@ -121,6 +121,7 @@ export default function ProductMaintenance() {
   const [countryId, setCountryId] = useState('');
   const [runCountryId, setRunCountryId] = useState('');
   const [runSession, setRunSession] = useState<CountryRunSession | null>(null);
+  const [runNotice, setRunNotice] = useState('');
   const [runLimit, setRunLimit] = useState(25);
   const [actionError, setActionError] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -142,19 +143,24 @@ export default function ProductMaintenance() {
     mutationFn: ({ selectedCountryId, previous }: { selectedCountryId: string; previous: CountryRunSession | null }) => maintenanceApi.run({
       limit: runLimit,
       dry_run: false,
-      country_id: selectedCountryId,
-      ...(previous?.hasMore && previous.cursor ? { cursor: previous.cursor } : {}),
+      ...(selectedCountryId ? { country_id: selectedCountryId } : {}),
+      ...(selectedCountryId && previous?.hasMore && previous.cursor ? { cursor: previous.cursor } : {}),
     }),
     onSuccess: (data, variables) => {
-      const continuing = Boolean(variables.previous?.hasMore && variables.previous.cursor);
+      const continuing = Boolean(variables.selectedCountryId && variables.previous?.hasMore && variables.previous.cursor);
       const nextSession = accumulateCountryRun(variables.previous, data, continuing);
-      try { sessionStorage.setItem(`${COUNTRY_RUN_STORAGE_PREFIX}${variables.selectedCountryId}`, JSON.stringify(nextSession)); } catch { /* Progress remains visible for this page load. */ }
-      setRunSession(nextSession);
+      if (variables.selectedCountryId) {
+        try { sessionStorage.setItem(`${COUNTRY_RUN_STORAGE_PREFIX}${variables.selectedCountryId}`, JSON.stringify(nextSession)); } catch { /* Progress remains visible for this page load. */ }
+        setRunSession(nextSession);
+      } else {
+        setRunSession(null);
+        setRunNotice(`Scanned ${data.scanned} combinations; proposed ${data.proposed} mappings.${data.warnings.length ? ` ${data.warnings.join(' ')}` : ''}`);
+      }
       setSuggestionsOffset(0);
       clearBatchSelection();
       invalidate();
     },
-    onError: (error) => setActionError(maintenanceErrorMessage(error, 'The country scan failed. Resume to retry the same batch.')),
+    onError: (error) => setActionError(maintenanceErrorMessage(error, 'The scan failed. Retry to continue.')),
   });
   const reviewMutation = useMutation({
     mutationFn: ({ id, action }: { id: MaintenanceId; action: 'approve' | 'reject' | 'undo' }) => maintenanceApi.review(id, action),
@@ -214,7 +220,8 @@ export default function ProductMaintenance() {
   const reviewControlsLocked = isReviewInteractionLocked(reviewMutation.isPending, batchMutation.isPending, suggestions.isFetching) || runMutation.isPending;
 
   const startCountryRun = () => {
-    if (!runCountryId || reviewControlsLocked) return;
+    if (reviewControlsLocked) return;
+    setRunNotice('');
     setActionError('');
     runMutation.mutate({ selectedCountryId: runCountryId, previous: runSession });
   };
@@ -230,11 +237,13 @@ export default function ProductMaintenance() {
     <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div><h1 className="text-2xl font-bold text-charcoal-900">Product maintenance</h1><p className="text-charcoal-600 mt-1">Find coverage gaps and review replacement mappings with their source evidence.</p></div>
       <div className="flex flex-wrap items-end gap-2">
-        <label className="text-sm text-charcoal-600">Country to map<select aria-label="Country to map" value={runCountryId} disabled={reviewControlsLocked} onChange={(event) => { const nextCountryId = event.target.value; setRunCountryId(nextCountryId); setRunSession(nextCountryId ? loadCountryRunSession(sessionStorage, nextCountryId) : null); setActionError(''); }} className="input mt-1 !w-auto min-w-48 !px-3 !py-2"><option value="">Choose a country</option>{countries.data?.map((country) => <option value={country.id} key={country.id}>{country.flag_emoji} {country.name}</option>)}</select></label>
+        <label className="text-sm text-charcoal-600">Country to map<select aria-label="Country to map" value={runCountryId} disabled={reviewControlsLocked} onChange={(event) => { const nextCountryId = event.target.value; setRunCountryId(nextCountryId); setRunNotice(''); setRunSession(nextCountryId ? loadCountryRunSession(sessionStorage, nextCountryId) : null); setActionError(''); }} className="input mt-1 !w-auto min-w-48 !px-3 !py-2"><option value="">All countries</option>{countries.data?.map((country) => <option value={country.id} key={country.id}>{country.flag_emoji} {country.name}</option>)}</select></label>
         <label className="text-sm text-charcoal-600">Batch size<input aria-label="Scan limit" type="number" min={1} max={25} value={runLimit} disabled={reviewControlsLocked} onChange={(e) => setRunLimit(Math.min(25, Math.max(1, Number(e.target.value) || 1)))} className="input mt-1 !w-20 !px-3 !py-2" /></label>
-        <button className="btn-primary !py-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={reviewControlsLocked || !runCountryId} onClick={startCountryRun}>{runMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}{runMutation.isPending ? 'Scanning…' : runSession?.hasMore ? 'Resume mapping' : 'Map this country'}</button>
+        <button className="btn-primary !py-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={reviewControlsLocked} onClick={startCountryRun}>{runMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}{runMutation.isPending ? 'Scanning…' : !runCountryId ? 'Run maintenance' : runSession?.hasMore ? 'Resume mapping' : 'Map this country'}</button>
       </div>
     </div>
+
+    {runNotice && <p role="status" className="text-sm text-charcoal-600">{runNotice}</p>}
 
     {selectedRunCountry && runSession && <section className="card !p-4" aria-label="Country mapping progress">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

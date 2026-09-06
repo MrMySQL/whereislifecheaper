@@ -8,6 +8,7 @@ export const COUNTRY_LANGUAGES: Record<string, string[]> = {
  PT:['pt'], BR:['pt'], RS:['sr'], HR:['hr'], BA:['bs'], TH:['th'], ID:['id'],
 };
 const cache = new Map<string, string>();
+export function clearTranslationCache(): void { cache.clear(); }
 export async function translateText(text: string, target: string, source = 'en', fetcher: typeof fetch = fetch): Promise<string> {
  return (await translateTexts([text],target,source,fetcher))[0];
 }
@@ -59,6 +60,8 @@ export async function mappingVocabulary(target: MaintenanceTarget): Promise<stri
    }
   } catch { /* Translate is the independent fallback for unavailable semantic expansion. */ }
  }
- const aliases = (await Promise.all(languages.map(language=>translateTexts(searchNames(target.name),language)))).flat();
+ const results = await Promise.allSettled(languages.map(language=>translateTexts(searchNames(target.name),language)));
+ const aliases = results.flatMap(result=>result.status==='fulfilled'?result.value:[]);
+ if (!aliases.length) throw new Error('Translation unavailable');
  return [...new Set(aliases)];
 }

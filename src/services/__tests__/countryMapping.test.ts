@@ -29,3 +29,12 @@ test('batch review commits valid items and reports stale conflicts individually'
 test.each([{country:'0'},{country:'2',cursor:'nope'},{cursor:'1:2'}])('invalid scope rejected before DB work %j',async(options)=>{
  const repo=repository();await expect(new (ProductMaintenanceService as any)(repo as any).run(1,true,options)).rejects.toThrow();expect(repo.targets).not.toHaveBeenCalled();
 });
+
+test('AI omissions only exclude evaluated candidates and keep unseen candidates after ranked matches',async()=>{
+ const repo=repository();repo.targets.mockResolvedValue([{...target,country_code:'GB'}]);
+ repo.candidates.mockResolvedValue(Array.from({length:25},(_,i)=>({...candidate,mapping_id:String(i+1),name:'Sugar 1 kg'})));
+ const ranker=jest.fn().mockResolvedValue(['2']);
+ const result=await new ProductMaintenanceService(repo as any,ranker,async()=>[]).run(1,true,{country:'2'});
+ expect(ranker.mock.calls[0][1]).toHaveLength(20);
+ expect(result.previews.map(p=>String(p.mapping_id))).toEqual(['2','21','22','23','24']);
+});
