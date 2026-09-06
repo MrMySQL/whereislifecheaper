@@ -298,6 +298,9 @@ export class AnnamGourmetScraper extends BaseScraper {
     }
 
     if (allProducts.length === 0 && categoryFailure) {
+      // Page diagnostics stay in BaseScraper.getErrors(); ScraperService does
+      // not copy that buffer into the fatal ScrapeResult.errors collection.
+      // This category outcome therefore follows the run's category threshold.
       this.failCategory(category, categoryFailure.error, categoryFailure.url);
     }
     this.logger.info(`${category.name}: Total ${allProducts.length} products scraped`);

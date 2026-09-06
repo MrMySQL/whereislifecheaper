@@ -104,8 +104,13 @@ describe('ScraperService category failure reporting', () => {
     const scraper = mostlyBrokenScraper(16, 1);
     const { service, update } = harness(scraper);
 
-    await service.runScraper('1', { deadlineMs: 10_000 });
+    const result = await service.runScraper('1', { deadlineMs: 10_000 });
 
+    // A scraper can retain page diagnostics for the category it lost (as
+    // Annam does). Those diagnostics must not become fatal run errors.
+    expect(result.errors).toEqual([]);
+    expect(result.categoriesFailed).toBe(1);
+    expect(assessScrapeResult(result).degraded).toBe(false);
     expect(update).toHaveBeenCalledWith('log-1', 'success', expect.anything());
   });
 
