@@ -75,13 +75,93 @@ interface ReweProduct {
 }
 
 /**
+ * Body of GET /api/marketselection/configuration — the shop's own record of
+ * which market this session shops in. All three are null until a market is
+ * chosen.
+ */
+export interface MarketConfiguration {
+  selectedService: string | null;
+  selectedMarket: string | null;
+  customerZipCode: string | null;
+}
+
+/**
+ * The delivery market (wwIdent) the session is set to for `zip`, or null when
+ * there is none. Pickup is not good enough: its prices are another market's.
+ */
+export function deliveryMarketFor(configuration: MarketConfiguration, zip: string): string | null {
+  if (configuration.selectedService !== 'DELIVERY') return null;
+  if (configuration.customerZipCode !== zip) return null;
+  return configuration.selectedMarket || null;
+}
+
+/** How long to keep asking for the market after the service was chosen. */
+const MARKET_POLL_ATTEMPTS = 30;
+const MARKET_POLL_INTERVAL_MS = 500;
+
+/**
+ * A configuration read that failed because the shop was reloading under it:
+ * Playwright tearing down the execution context or frame, or the in-page
+ * fetch being aborted by the navigation ("Failed to fetch"). These mean "not
+ * yet". Anything else — an HTTP error status, malformed JSON, a closed
+ * target — is the cause and is reported at once.
+ */
+const CONFIGURATION_READ_NOT_YET =
+  /Execution context was destroyed|Cannot find context|Frame was detached|Failed to fetch/;
+
+/**
+ * Raised when REWE has no delivery market for the session. Without one every
+ * tile reads "Preis abhängig vom Standort", so this is fatal for the run, not
+ * a per-page glitch to log and skip.
+ */
+export class ReweMarketError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ReweMarketError';
+  }
+}
+
+/**
+ * A page full of products with no price on any of them means the market is
+ * gone, not that the shelf is empty. Runs from May to August 2026 paginated
+ * 1,919 such pages and reported success.
+ */
+export function assertPricedPage(
+  products: { price: number }[],
+  categoryName: string,
+  pageNumber: number
+): void {
+  if (products.length === 0) return;
+  if (products.some(p => p.price > 0)) return;
+  throw new ReweMarketError(
+    `${categoryName} page ${pageNumber}: ${products.length} products and none with a price — ` +
+      'the delivery market is not set'
+  );
+}
+
+/**
+ * The largest page size the listing accepts. The default is 40, and with a
+ * market set the catalog is ~12,500 products: 312 pages at 40, or ~45 minutes
+ * at the ~9s a page costs here — the whole per-scraper budget.
+ */
+export const REWE_OBJECTS_PER_PAGE = 120;
+
+/** URL of one listing page, in the same form as the site's own pagination links. */
+export function categoryPageUrl(baseCategoryUrl: string, pageNumber: number): string {
+  const url = new URL(baseCategoryUrl);
+  url.searchParams.set('objectsPerPage', String(REWE_OBJECTS_PER_PAGE));
+  if (pageNumber > 1) url.searchParams.set('page', String(pageNumber));
+  return url.toString();
+}
+
+/**
  * Scraper for REWE Germany (www.rewe.de/shop/)
  *
  * This scraper uses playwright-extra with stealth plugin to bypass Cloudflare:
  * 1. Launches browser with stealth mode and persistent session
  * 2. Navigates to www.rewe.de/shop/
- * 3. Selects "Lieferservice" (delivery service) option
- * 4. Enters postal code 10115 (Berlin) to set delivery zone
+ * 3. Enters postal code 10115 (Berlin) into the market chooser
+ * 4. Picks "Lieferservice" in the service overlay the chooser then opens
  * 5. Once market is selected, navigates to category pages to scrape products with actual prices
  *
  * STEALTH MODE FEATURES:
@@ -96,6 +176,9 @@ export class ReweScraper extends BaseScraper {
   private readonly BASE_URL = 'https://www.rewe.de';
   private readonly POSTAL_CODE = '10115'; // Berlin
   private marketSelected = false;
+  private marketWwIdent: string | null = null;
+  /** Set when a category came back unpriced; fails the run after the loop. */
+  private marketLost: ReweMarketError | null = null;
   private browserContext: Awaited<ReturnType<typeof chromium.launchPersistentContext>> | null = null;
 
   constructor(config: ScraperConfig) {
@@ -115,7 +198,9 @@ export class ReweScraper extends BaseScraper {
     // Navigate to shop page and select delivery market
     await this.selectDeliveryMarket();
 
-    this.logger.info(`REWE scraper initialized with delivery zone ${this.POSTAL_CODE}`);
+    this.logger.info(
+      `REWE scraper initialized with delivery market ${this.marketWwIdent} for zone ${this.POSTAL_CODE}`
+    );
   }
 
   /**
@@ -329,148 +414,125 @@ export class ReweScraper extends BaseScraper {
   }
 
   /**
-   * Select a delivery market by entering postal code
-   * This enables actual prices to be displayed
+   * Select the Berlin delivery market so category pages carry real prices.
+   *
+   * The shop's chooser is postcode-first: submitting the zip opens a
+   * "Service wählen" overlay, and its Lieferservice button POSTs
+   * /shop/api/marketselection/userselections, which stores the choice in the
+   * server-side session. Nothing on the page proves that worked — a page
+   * with no market still contains '€' — so the only trustworthy check is the
+   * configuration endpoint, read before (a persistent session may already
+   * carry the market) and after.
+   *
+   * Throws when no delivery market is set afterwards. The previous version
+   * logged and carried on, which is how a broken chooser produced 0-product
+   * runs recorded as success from May to August 2026.
    */
   private async selectDeliveryMarket(): Promise<void> {
-    if (!this.page) return;
+    if (!this.page) throw new ReweMarketError('Browser page is not initialized');
 
-    try {
-      this.logger.info('Navigating to REWE shop to select delivery market...');
+    this.logger.info('Navigating to REWE shop to select delivery market...');
+    await this.page.goto(`${this.BASE_URL}/shop/`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+    await this.handleCookieConsent();
 
-      // Navigate to the shop page
-      await this.page.goto(`${this.BASE_URL}/shop/`, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000
-      });
-      await this.page.waitForTimeout(2000);
-
-      // Handle cookie consent first
-      await this.handleCookieConsent();
-
-      // Check for Cloudflare challenge and try to solve it
-      const title = await this.page.title();
-      if (title.toLowerCase().includes('moment')) {
-        this.logger.warn('Cloudflare challenge detected on shop page. Attempting to solve...');
-        const solved = await this.solveCloudflareChallenge();
-        if (!solved) {
-          this.logger.error('Could not bypass Cloudflare challenge');
-          return;
-        }
+    const title = await this.page.title();
+    if (title.toLowerCase().includes('moment')) {
+      this.logger.warn('Cloudflare challenge detected on shop page. Attempting to solve...');
+      if (!(await this.solveCloudflareChallenge())) {
+        throw new ReweMarketError('Could not bypass Cloudflare challenge on the shop page');
       }
-
-      // Click on "Lieferservice" option
-      this.logger.info('Looking for Lieferservice option...');
-
-      // Try different selectors for the Lieferservice button
-      const lieferserviceSelectors = [
-        'text=Lieferservice',
-        'button:has-text("Lieferservice")',
-        '[data-testid*="delivery"]',
-        'a:has-text("Lieferservice")',
-      ];
-
-      let clicked = false;
-      for (const selector of lieferserviceSelectors) {
-        try {
-          const element = await this.page.$(selector);
-          if (element) {
-            await element.click();
-            clicked = true;
-            this.logger.info('Clicked Lieferservice option');
-            break;
-          }
-        } catch {
-          // Continue trying other selectors
-        }
-      }
-
-      if (!clicked) {
-        this.logger.warn('Could not find Lieferservice button, trying postal code input directly');
-      }
-
-      await this.page.waitForTimeout(1500);
-
-      // Enter postal code
-      this.logger.info(`Entering postal code ${this.POSTAL_CODE}...`);
-
-      // Look for postal code input field
-      const postalInputSelectors = [
-        'input[placeholder*="Postleitzahl"]',
-        'input[placeholder*="PLZ"]',
-        'input[type="text"][name*="zip"]',
-        'input[type="text"][name*="postal"]',
-        'input[type="number"]',
-        'input[inputmode="numeric"]',
-      ];
-
-      let inputFound = false;
-      for (const selector of postalInputSelectors) {
-        try {
-          const input = await this.page.$(selector);
-          if (input) {
-            await input.click();
-            await input.fill(this.POSTAL_CODE);
-            inputFound = true;
-            this.logger.info('Entered postal code');
-            break;
-          }
-        } catch {
-          // Continue trying other selectors
-        }
-      }
-
-      if (!inputFound) {
-        // Try typing in the focused element or any visible input
-        try {
-          await this.page.keyboard.type(this.POSTAL_CODE);
-          inputFound = true;
-          this.logger.info('Typed postal code into focused element');
-        } catch {
-          this.logger.warn('Could not find postal code input');
-        }
-      }
-
-      await this.page.waitForTimeout(1000);
-
-      // Click "Lieferservice finden" button
-      this.logger.info('Looking for Lieferservice finden button...');
-
-      const findButtonSelectors = [
-        'text=Lieferservice finden',
-        'button:has-text("Lieferservice finden")',
-        'button:has-text("finden")',
-        'button[type="submit"]',
-      ];
-
-      for (const selector of findButtonSelectors) {
-        try {
-          const button = await this.page.$(selector);
-          if (button) {
-            await button.click();
-            this.logger.info('Clicked Lieferservice finden button');
-            break;
-          }
-        } catch {
-          // Continue trying other selectors
-        }
-      }
-
-      // Wait for market selection to complete
-      await this.page.waitForTimeout(3000);
-
-      // Verify market was selected by checking for delivery info or prices
-      const pageContent = await this.page.content();
-      if (pageContent.includes('Lieferung') || pageContent.includes('€')) {
-        this.marketSelected = true;
-        this.logger.info('Delivery market selected successfully');
-      } else {
-        this.logger.warn('Market selection may not have completed successfully');
-      }
-
-    } catch (error) {
-      this.logger.error('Failed to select delivery market:', error);
     }
+
+    const existing = deliveryMarketFor(await this.readMarketConfiguration(), this.POSTAL_CODE);
+    if (existing) {
+      this.marketWwIdent = existing;
+      this.marketSelected = true;
+      this.logger.info(`Session already has delivery market ${existing} for ${this.POSTAL_CODE}`);
+      return;
+    }
+
+    this.logger.info(`Entering postal code ${this.POSTAL_CODE}...`);
+    const zipInput = this.page.locator('[data-testid="zip-code-input"]');
+    await zipInput.waitFor({ state: 'visible', timeout: 15000 });
+    await zipInput.fill(this.POSTAL_CODE);
+    await this.page.locator('[data-testid="gbmc_zipCodeSubmit"]').click();
+
+    // The zip lookup answers with the services offered there, and the overlay
+    // renders one service-btn per service: Abholservice and Lieferservice.
+    const delivery = this.page.locator('button[data-testid="service-btn"]', { hasText: 'Lieferservice' });
+    await delivery.waitFor({ state: 'visible', timeout: 15000 });
+    const [response] = await Promise.all([
+      this.page.waitForResponse(
+        r => r.url().includes('/api/marketselection/userselections'),
+        { timeout: 15000 }
+      ),
+      delivery.click(),
+    ]);
+    if (!response.ok()) {
+      throw new ReweMarketError(`REWE rejected the market selection: HTTP ${response.status()}`);
+    }
+
+    const wwIdent = await this.awaitDeliveryMarket();
+    this.marketWwIdent = wwIdent;
+    this.marketSelected = true;
+    this.logger.info(`Delivery market ${wwIdent} selected for ${this.POSTAL_CODE}`);
+  }
+
+  /**
+   * Wait for the session to report the delivery market.
+   *
+   * The 201 from userselections does not carry it: the app then reloads the
+   * shop, and only that navigation leaves the session with the market. Read
+   * once right after the response and it still says null. So poll — a read
+   * torn down by that navigation throws, which just means "not yet". Any
+   * other failure of the read is the cause, and it is reported at once
+   * rather than retried and then blamed on a missing market.
+   */
+  private async awaitDeliveryMarket(): Promise<string> {
+    if (!this.page) throw new ReweMarketError('Browser page is not initialized');
+
+    let configuration: MarketConfiguration | null = null;
+    let lastReadError: Error | null = null;
+    for (let attempt = 0; attempt < MARKET_POLL_ATTEMPTS; attempt++) {
+      if (attempt > 0) await this.page.waitForTimeout(MARKET_POLL_INTERVAL_MS);
+      try {
+        configuration = await this.readMarketConfiguration();
+        lastReadError = null;
+      } catch (error) {
+        const readError = error instanceof Error ? error : new Error(String(error));
+        if (!CONFIGURATION_READ_NOT_YET.test(readError.message)) {
+          throw new ReweMarketError(`Could not read the market for ${this.POSTAL_CODE}: ${readError.message}`);
+        }
+        lastReadError = readError;
+        continue;
+      }
+      const wwIdent = deliveryMarketFor(configuration, this.POSTAL_CODE);
+      if (wwIdent) return wwIdent;
+    }
+    throw new ReweMarketError(
+      `No delivery market set for ${this.POSTAL_CODE} after the zip flow: ` +
+        (lastReadError ? `last read failed with "${lastReadError.message}"` : JSON.stringify(configuration))
+    );
+  }
+
+  /**
+   * What the shop currently believes about this session's market. Fetched
+   * from page context so the request carries the session cookies.
+   */
+  private async readMarketConfiguration(): Promise<MarketConfiguration> {
+    if (!this.page) throw new ReweMarketError('Browser page is not initialized');
+    return this.page.evaluate(async () => {
+      const response = await fetch('/api/marketselection/configuration?checkMarketSelection=false', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error(`marketselection/configuration answered HTTP ${response.status}`);
+      }
+      return (await response.json()) as MarketConfiguration;
+    });
   }
 
   /**
@@ -510,9 +572,39 @@ export class ReweScraper extends BaseScraper {
 
 
   /**
+   * BaseScraper's loop catches per-category errors and carries on, and the
+   * run counts as a success with anything stored — so a market lost in
+   * category 8 would leave seven categories behind and be recorded as a
+   * successful catalog missing half its products. The loss is remembered
+   * here and turned into the run's failure once the loop is done; whatever
+   * was stored before it stays stored.
+   */
+  async scrapeProductList(): Promise<ProductData[]> {
+    const products = await super.scrapeProductList();
+    if (this.marketLost) throw this.marketLost;
+    return products;
+  }
+
+  protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+    // No point loading page after page of location-dependent prices. Skipped
+    // rather than failed: only the category that lost the market is the
+    // failure, and scrapeProductList reports it once.
+    if (this.marketLost) {
+      this.logger.warn(`Skipping ${category.name}: ${this.marketLost.message}`);
+      return [];
+    }
+    try {
+      return await this.scrapeCategoryPages(category);
+    } catch (error) {
+      if (error instanceof ReweMarketError) this.marketLost = error;
+      throw error;
+    }
+  }
+
+  /**
    * Scrape a single category with pagination support
    */
-  protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+  protected async scrapeCategoryPages(category: CategoryConfig): Promise<ProductData[]> {
     const products: ProductData[] = [];
 
     try {
@@ -527,8 +619,9 @@ export class ReweScraper extends BaseScraper {
       }
 
       // Navigate to first page
-      this.logger.debug(`Navigating to ${baseCategoryUrl}`);
-      await this.page.goto(baseCategoryUrl, { waitUntil: 'domcontentloaded' });
+      const firstPageUrl = categoryPageUrl(baseCategoryUrl, 1);
+      this.logger.debug(`Navigating to ${firstPageUrl}`);
+      await this.page.goto(firstPageUrl, { waitUntil: 'domcontentloaded' });
       await this.waitForDynamicContent();
 
       // Handle cookie consent if it appears again
@@ -560,7 +653,7 @@ export class ReweScraper extends BaseScraper {
         try {
           // Navigate to page (skip for first page as we're already there)
           if (pageNum > 1) {
-            const pageUrl = `${baseCategoryUrl}?page=${pageNum}`;
+            const pageUrl = categoryPageUrl(baseCategoryUrl, pageNum);
             this.logger.debug(`Navigating to page ${pageNum}: ${pageUrl}`);
             await this.page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
             await this.waitForDynamicContent();
@@ -585,15 +678,13 @@ export class ReweScraper extends BaseScraper {
           // Extract products from the page
           const pageProducts = await this.extractProductsFromPage();
 
-          // Count products with and without prices
           const productsWithPrice = pageProducts.filter(p => p.price > 0).length;
-          const productsWithoutPrice = pageProducts.length - productsWithPrice;
 
           this.logger.info(`${category.name} page ${pageNum}/${totalPages}: Found ${pageProducts.length} products (${productsWithPrice} with price)`);
 
-          if (productsWithoutPrice > 0 && productsWithPrice === 0 && pageNum === 1) {
-            this.logger.warn(`All products show location-dependent pricing. No market/delivery zone selected.`);
-          }
+          // Every page, not just the first: a market lost between pages
+          // would otherwise leave the rest of the category silently unpriced.
+          assertPricedPage(pageProducts, category.name, pageNum);
 
           // Parse products
           const parsedProducts = this.parseProducts(pageProducts, category.name);
@@ -616,6 +707,8 @@ export class ReweScraper extends BaseScraper {
             await this.page.waitForTimeout(1000);
           }
         } catch (pageError) {
+          // A lost market is not a page glitch: every page after it is empty too.
+          if (pageError instanceof ReweMarketError) throw pageError;
           this.logger.error(`Failed to scrape page ${pageNum} of ${category.name}:`, pageError);
           // Continue to next page on error
         }
@@ -623,6 +716,9 @@ export class ReweScraper extends BaseScraper {
 
       this.logger.info(`Category ${category.name}: Total ${products.length} products scraped from ${totalPages} pages`);
     } catch (error) {
+      // Rethrown so BaseScraper counts the category as failed instead of
+      // taking an empty array for a scraped one.
+      if (error instanceof ReweMarketError) throw error;
       this.logError(
         `Failed to scrape category ${category.name}`,
         `${this.BASE_URL}${category.url}`,
@@ -645,7 +741,7 @@ export class ReweScraper extends BaseScraper {
         const paginationNav = document.querySelector('nav[aria-label*="Suchergebnisse"], nav ul[aria-label*="Suchergebnisse"]');
         if (!paginationNav) {
           // Try alternative: look for page number buttons/links
-          const pageLinks = document.querySelectorAll('a[href*="?page="]');
+          const pageLinks = document.querySelectorAll('a[href*="page="]');
           if (pageLinks.length === 0) return 1;
 
           let maxPage = 1;
@@ -666,7 +762,7 @@ export class ReweScraper extends BaseScraper {
 
         pageItems.forEach(item => {
           // Check for page number in link or button
-          const link = item.querySelector('a[href*="?page="]');
+          const link = item.querySelector('a[href*="page="]');
           if (link) {
             const href = link.getAttribute('href') || '';
             const match = href.match(/[?&]page=(\d+)/);

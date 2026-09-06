@@ -6,6 +6,11 @@ import { ProductWithPricesResult, ProductWithCategory, SupermarketProductEntry }
 import { normalizeProductName } from '../utils/normalizer';
 import { scraperLogger } from '../utils/logger';
 
+/** True when the product carries a name the products table can store. */
+function hasName(product: ProductData): boolean {
+  return typeof product.name === 'string' && product.name.trim().length > 0;
+}
+
 export class ProductService {
   private productRepository: ProductRepository;
   private productMappingRepository: ProductMappingRepository;
@@ -170,12 +175,34 @@ export class ProductService {
   ): Promise<number> {
     if (products.length === 0) return 0;
 
+    // products.name is NOT NULL. A scraper that hands over a nameless item
+    // (Auchan Express, 2026-09-01: four GraphQL items with name = null and
+    // nothing but an image URL) used to fail the whole UNNEST batch with
+    // 23502 and force the per-product fallback. Drop them here, at the last
+    // shared point before the batch insert, so every scraper is covered.
+    const named = products.filter(hasName);
+    if (named.length < products.length) {
+      const dropped = products.filter(p => !hasName(p));
+      scraperLogger.warn(
+        `Dropping ${dropped.length} product(s) without a name before save`,
+        {
+          supermarketId,
+          sample: dropped.slice(0, 3).map(p => ({
+            externalId: p.externalId,
+            productUrl: p.productUrl,
+            imageUrl: p.imageUrl,
+          })),
+        }
+      );
+    }
+    if (named.length === 0) return 0;
+
     const startTime = Date.now();
-    scraperLogger.debug(`Bulk saving ${products.length} products...`);
+    scraperLogger.debug(`Bulk saving ${named.length} products...`);
 
     try {
       // Prepare and normalize
-      const preparedProducts = products.map(p => {
+      const preparedProducts = named.map(p => {
         const normalizedUrl = this.normalizeProductUrl(p.productUrl);
         return {
           ...p,

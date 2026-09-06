@@ -145,17 +145,17 @@ export const supermarketsData: SupermarketSeedData[] = [
   },
   // Germany
   // NOTE: REWE uses stealth mode (playwright-extra) to bypass Cloudflare
-  // DISABLED 2026-08-31: the scraper's delivery-market selection silently
-  // fails, so every product reads as location-dependent and is dropped. It
-  // paginated 1,919 pages for 0 products on the 2026-08-01 run, burning 4h43m
-  // (79% of the CI budget). Last price actually stored: 2026-05-04.
-  // Germany is still covered by Knuspr. Re-enable once market selection works.
+  // Disabled 2026-08-31 after storing no price since 2026-05-04: the shop
+  // had reversed its market chooser and the scraper kept answering the old
+  // one, paginating 1,919 pages of location-dependent prices per run.
+  // Re-enabled 2026-09-06 with the chooser fixed and the run failing loudly
+  // whenever no market is set.
   {
     country_code: 'DE',
     name: 'REWE',
     website_url: 'https://www.rewe.de/shop/',
     scraper_class: 'ReweScraper',
-    is_active: false,
+    is_active: true,
   },
   {
     country_code: 'DE',
