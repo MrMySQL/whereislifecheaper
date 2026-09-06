@@ -116,6 +116,7 @@ describe('AuchanUaGraphQLScraper when Cloudflare answers instead of the API', ()
       failed: auchanUaGraphQLCategories.length,
     });
     expect(scraper.getCategoryErrors()).toHaveLength(auchanUaGraphQLCategories.length);
+    expect(scraper.getErrors()).toEqual([]);
     for (const error of scraper.getCategoryErrors()) {
       expect(error.message).toMatch(/Cloudflare.*403/);
       expect(error.message).toContain('a36a86609964f7ef');

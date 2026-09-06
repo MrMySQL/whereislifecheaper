@@ -81,6 +81,7 @@ describe('Carrefour Italy Demandware request failures', () => {
     expect(subject.getCategoryErrors()).toEqual([
       expect.objectContaining({ productUrl: firstUrl, message: expect.stringMatching(cause) }),
     ]);
+    expect(subject.getErrors()).toEqual([]);
   });
 
   it.each(failures)('retains the later-page offset and cause without losing the category: %s', async (_label, reply, cause) => {
