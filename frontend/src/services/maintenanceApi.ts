@@ -78,6 +78,10 @@ export interface MaintenanceSuggestion {
 export interface MaintenanceOverview {
   coverage: CoverageRow[];
   runs: MaintenanceRun[];
+  total: number;
+  limit: number;
+  offset: number;
+  counts: Record<CoverageStatus, number>;
 }
 
 export function maintenanceErrorMessage(error: unknown, fallback: string): string {
@@ -88,12 +92,12 @@ export function maintenanceErrorMessage(error: unknown, fallback: string): strin
 }
 
 export const maintenanceApi = {
-  getOverview: async (): Promise<MaintenanceOverview> => {
-    const response = await api.get<MaintenanceOverview>('/maintenance/overview');
+  getOverview: async (params: { country_id?: MaintenanceId; gaps_only?: boolean; limit?: number; offset?: number } = {}): Promise<MaintenanceOverview> => {
+    const response = await api.get<MaintenanceOverview>('/maintenance/overview', { params });
     return response.data;
   },
-  getSuggestions: async (params: { status: MaintenanceStatus; country_id?: MaintenanceId }): Promise<{ data: MaintenanceSuggestion[]; count: number }> => {
-    const response = await api.get<{ data: MaintenanceSuggestion[]; count: number }>('/maintenance/suggestions', { params });
+  getSuggestions: async (params: { status: MaintenanceStatus; country_id?: MaintenanceId; limit?: number; offset?: number }): Promise<{ data: MaintenanceSuggestion[]; count: number; total: number; limit: number; offset: number }> => {
+    const response = await api.get<{ data: MaintenanceSuggestion[]; count: number; total: number; limit: number; offset: number }>('/maintenance/suggestions', { params });
     return response.data;
   },
   run: async (body: { limit?: number; dry_run?: boolean }): Promise<MaintenanceRun> => {

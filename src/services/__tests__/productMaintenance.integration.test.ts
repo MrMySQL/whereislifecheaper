@@ -2,6 +2,8 @@
 import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
+import express from 'express';
+import request from 'supertest';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -84,7 +86,7 @@ integration('offer observations and current comparisons (PostgreSQL)', () => {
   test('single-product fallback refreshes observations even when external ID already exists', async () => {
     await products.bulkSaveProducts([bottle()], store, 'TRY');
     await client.query("UPDATE product_mappings SET last_scraped_at=NOW()-INTERVAL '60 days'");
-    await products.findOrCreateProduct(bottle({isAvailable:false}), store);
+    await products.saveProduct(bottle({isAvailable:false}), store);
     const row = (await client.query('SELECT availability_status,last_scraped_at > NOW()-INTERVAL \'1 day\' AS recent FROM product_mappings')).rows[0];
     expect(row.availability_status).toBe('out_of_stock');
     expect(row.recent).toBe(true);
@@ -97,11 +99,12 @@ integration('offer observations and current comparisons (PostgreSQL)', () => {
     expect(Number((await client.query('SELECT count(*) FROM prices')).rows[0].count)).toBe(2);
   });
 
-  test('current comparisons omit unavailable, stale, duplicate and quantity-conflicting offers', async () => {
-    await products.bulkSaveProducts([bottle(),bottle({externalId:'stale',productUrl:'https://a.example/stale'}),bottle({externalId:'unknown',productUrl:'https://a.example/unknown',name:'Water bottle',unitQuantity:1})],store,'TRY');
+  test('comparisons omit unavailable, superseded, duplicate and quantity-conflicting offers', async () => {
+    await products.bulkSaveProducts([bottle(),bottle({externalId:'duplicate',productUrl:'https://a.example/duplicate'}),bottle({externalId:'stale',productUrl:'https://a.example/stale'}),bottle({externalId:'unknown',productUrl:'https://a.example/unknown',name:'Water bottle',unitQuantity:1})],store,'TRY');
     await products.bulkSaveProducts([bottle({price:10,currency:'EUR',productUrl:'https://b.example/water'})],secondStore,'EUR');
     await linkAll();
     await client.query("UPDATE prices SET scraped_at=NOW()-INTERVAL '60 days' WHERE product_mapping_id IN (SELECT id FROM product_mappings WHERE external_id='stale')");
+    await client.query("UPDATE product_mappings SET duplicate_of_mapping_id=(SELECT id FROM product_mappings WHERE supermarket_id=$1 AND external_id='water-5') WHERE supermarket_id=$1 AND external_id='duplicate'", [store]);
     let result = await canonical.getComparison({}, {limit:100,offset:0});
     expect(result.total).toBe(1);
     expect(result.data).toHaveLength(2);
@@ -119,6 +122,59 @@ integration('offer observations and current comparisons (PostgreSQL)', () => {
     expect((await canonical.getComparison({}, {limit:100,offset:0})).total).toBe(1);
     await products.bulkSaveProducts([bottle({price:0})],store,'TRY');
     expect((await canonical.getComparison({}, {limit:100,offset:0})).total).toBe(0);
+  });
+
+  test('unknown package quantity cannot pair a new observation with an older price', async () => {
+    const unknown = bottle({name:'Water bottle',unit:undefined,unitQuantity:undefined});
+    await products.bulkSaveProducts([unknown],store,'TRY');
+    await products.bulkSaveProducts([{...unknown,currency:'EUR',price:10}],secondStore,'EUR');
+    await linkAll();
+    await client.query('UPDATE canonical_products SET show_per_unit_price=false');
+    expect((await canonical.getComparison({}, {limit:100,offset:0})).total).toBe(1);
+    // A newer sighting has the same unknown quantity snapshot, but no new price.
+    await client.query('UPDATE product_mappings SET last_checked_at=NOW() WHERE supermarket_id=$1', [store]);
+    expect((await canonical.getComparison({}, {limit:100,offset:0})).total).toBe(0);
+  });
+
+  test('default comparisons retain old prices and report their age when the pipeline stops', async () => {
+    await products.bulkSaveProducts([bottle()],store,'TRY');
+    await products.bulkSaveProducts([bottle({currency:'EUR',price:10})],secondStore,'EUR');
+    await linkAll();
+    await client.query("UPDATE product_mappings SET last_checked_at=NOW()-INTERVAL '60 days'");
+    await client.query("UPDATE prices SET scraped_at=NOW()-INTERVAL '59 days'");
+    const result = await canonical.getComparison({}, {limit:100,offset:0});
+    expect(result.total).toBe(1);
+    expect(result.data).toHaveLength(2);
+    expect(result.freshness.newest).not.toBeNull();
+    expect(result.freshness.newest!.getTime()).toBeLessThan(Date.now()-58*86400000);
+    expect(result.freshness.oldest).toEqual(result.freshness.newest);
+
+    const app = express();
+    app.use('/canonical', (await import('../../api/routes/canonical')).default);
+    const response = await request(app).get('/canonical/comparison?search=Water&limit=1');
+    expect(response.status).toBe(200);
+    expect(response.body.total).toBe(1);
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].country_count).toBe(2);
+    expect(response.body.freshness.max_age_days).toBeNull();
+    expect(response.body.freshness.newest_age_days).toBeGreaterThanOrEqual(58);
+
+    const filtered = await request(app).get('/canonical/comparison?search=Water&max_age_days=7');
+    expect(filtered.status).toBe(200);
+    expect(filtered.body.total).toBe(0);
+    expect(filtered.body.data).toEqual([]);
+    expect(filtered.body.freshness.newest_age_days).toBeGreaterThanOrEqual(58);
+  });
+
+  test('individual saves commit an available observation and its price together', async () => {
+    await products.saveProduct(bottle({isAvailable:false}),store);
+    expect(Number((await client.query('SELECT count(*) FROM prices')).rows[0].count)).toBe(0);
+    await products.saveProduct(bottle({price:125}),store);
+    const row = (await client.query('SELECT pm.availability_status,pm.last_checked_at,pr.scraped_at,pr.price,pm.quantity_info,pr.quantity_info AS price_quantity FROM product_mappings pm JOIN prices pr ON pr.product_mapping_id=pm.id')).rows[0];
+    expect(row.availability_status).toBe('available');
+    expect(Number(row.price)).toBe(125);
+    expect(row.quantity_info).toEqual(row.price_quantity);
+    expect(row.last_checked_at).toEqual(row.scraped_at);
   });
 
   test.each([
@@ -146,15 +202,38 @@ integration('offer observations and current comparisons (PostgreSQL)', () => {
     expect(snapshots[1].quantity_info).toMatchObject({contentQuantity:2,comparablePrice:30});
   });
 
-  test('a failed price insert rolls back its availability observation', async () => {
+  test.each(['bulk', 'individual'] as const)('a failed %s price insert rolls back its availability observation', async mode => {
     await products.bulkSaveProducts([bottle()],store,'TRY');
     const before = (await client.query('SELECT quantity_info,last_checked_at FROM product_mappings')).rows[0];
     await client.query("CREATE OR REPLACE FUNCTION reject_test_price() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test price insertion failure'; END $$");
     await client.query('CREATE TRIGGER reject_test_price BEFORE INSERT ON prices FOR EACH ROW EXECUTE FUNCTION reject_test_price()');
     try {
-      await expect(products.bulkSaveProducts([bottle({price:125})],store,'TRY')).rejects.toThrow('test price insertion failure');
+      const save = mode === 'bulk' ? products.bulkSaveProducts([bottle({price:125})],store,'TRY') : products.saveProduct(bottle({price:125}),store);
+      await expect(save).rejects.toThrow('test price insertion failure');
       const after = (await client.query('SELECT quantity_info,last_checked_at FROM product_mappings')).rows[0];
       expect(after).toEqual(before);
+    } finally {
+      await client.query('DROP TRIGGER reject_test_price ON prices');
+      await client.query('DROP FUNCTION reject_test_price()');
+    }
+  });
+
+  test('scraper fallback saves healthy listings while a rejected price leaves its observation unchanged', async () => {
+    const healthy = bottle({externalId:'healthy',productUrl:'https://a.example/healthy'});
+    await products.bulkSaveProducts([bottle(),healthy],store,'TRY');
+    const before = (await client.query("SELECT quantity_info,last_checked_at FROM product_mappings WHERE external_id='water-5'")).rows[0];
+    await client.query("CREATE OR REPLACE FUNCTION reject_test_price() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.price=125 THEN RAISE EXCEPTION 'test price insertion failure'; END IF; RETURN NEW; END $$");
+    await client.query('CREATE TRIGGER reject_test_price BEFORE INSERT ON prices FOR EACH ROW EXECUTE FUNCTION reject_test_price()');
+    try {
+      const { ScraperService } = await import('../ScraperService');
+      const scraper = new ScraperService(products);
+      const stored = await (scraper as unknown as {storeProducts: (rows: typeof healthy[], id: string) => Promise<number>})
+        .storeProducts([bottle({price:125}),{...healthy,price:150}],store);
+      expect(stored).toBe(1);
+      expect((await client.query("SELECT quantity_info,last_checked_at FROM product_mappings WHERE external_id='water-5'")).rows[0]).toEqual(before);
+      const prices = (await client.query("SELECT pr.price,pr.scraped_at,pm.last_checked_at FROM prices pr JOIN product_mappings pm ON pm.id=pr.product_mapping_id WHERE pm.external_id='healthy' ORDER BY pr.id")).rows;
+      expect(prices.map(row => Number(row.price))).toEqual([100,150]);
+      expect(prices[1].scraped_at).toEqual(prices[1].last_checked_at);
     } finally {
       await client.query('DROP TRIGGER reject_test_price ON prices');
       await client.query('DROP FUNCTION reject_test_price()');

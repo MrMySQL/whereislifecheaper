@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 jest.mock('../../../repositories/ProductMaintenanceRepository', () => ({ ProductMaintenanceRepository: jest.fn() }));
 import { createMaintenanceRouter } from '../maintenance';
+import { MaintenanceConflictError } from '../../../types/maintenance.types';
 
 function app(role?: 'admin' | 'user') {
   const a = express();
@@ -17,8 +18,13 @@ function app(role?: 'admin' | 'user') {
     run: jest.fn().mockResolvedValue({ id: '1' }),
     review: jest.fn().mockResolvedValue({ id: '3', status: 'approved' }),
   };
+  const errors = jest.fn();
   a.use('/maintenance', createMaintenanceRouter(service as any));
-  return { a, service };
+  a.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    errors(error);
+    res.status(500).json({ error: 'Internal server error' });
+  });
+  return { a, service, errors };
 }
 
 const endpoints = [
@@ -58,7 +64,7 @@ test.each(['approve','reject','undo'] as const)('%s uses the authenticated actor
 
 test('preserves review conflict details for the UI', async () => {
   const {a, service} = app('admin');
-  service.review.mockRejectedValue(new Error('Candidate changed since this suggestion was created'));
+  service.review.mockRejectedValue(new MaintenanceConflictError('Candidate changed since this suggestion was created'));
   const result = await request(a).post('/maintenance/suggestions/3/approve').send({});
   expect(result.status).toBe(409);
   expect(result.body.error).toBe('Candidate changed since this suggestion was created');
@@ -68,4 +74,38 @@ test.each(['/suggestions?status=invalid','/suggestions?country_id=abc'])('reject
   const {a, service} = app('admin');
   expect((await request(a).get(`/maintenance${path}`)).status).toBe(400);
   expect(service.suggestions).not.toHaveBeenCalled();
+});
+
+test.each(['status=pending&status=approved','status[]=pending','status[bad]=pending'])('rejects non-string status: %s',async(query)=>{
+ const {a,service}=app('admin');expect((await request(a).get(`/maintenance/suggestions?${query}`)).status).toBe(400);expect(service.suggestions).not.toHaveBeenCalled();
+});
+test('run defaults to dry run and apply must be explicit',async()=>{
+ const {a,service}=app('admin');await request(a).post('/maintenance/run').send({});expect(service.run).toHaveBeenLastCalledWith(10,true);
+ await request(a).post('/maintenance/run').send({dry_run:false});expect(service.run).toHaveBeenLastCalledWith(10,false);
+});
+test('unexpected review failures reach global error handler without exposing database details',async()=>{
+ const {a,service,errors}=app('admin');const failure=new Error('database password secret');service.review.mockRejectedValue(failure);
+ const response=await request(a).post('/maintenance/suggestions/1/approve').send({});
+ expect(response.status).toBe(500);expect(response.body).toEqual({error:'Internal server error'});expect(errors).toHaveBeenCalledWith(failure);
+});
+test.each(['/overview?offset=-1','/suggestions?limit=201','/overview?gaps_only=yes','/suggestions?offset[]=2'])('rejects malformed pagination: %s',async(path)=>{
+ expect((await request(app('admin').a).get(`/maintenance${path}`)).status).toBe(400);
+});
+test('passes validated coverage and suggestion pagination to the service',async()=>{
+ const {a,service}=app('admin');
+ await request(a).get('/maintenance/overview?limit=50&offset=1000&country_id=2&gaps_only=true');
+ expect(service.overview).toHaveBeenCalledWith({limit:50,offset:1000,country:'2',gapsOnly:true});
+ await request(a).get('/maintenance/suggestions?limit=50&offset=200&status=approved&country_id=2');
+ expect(service.suggestions).toHaveBeenCalledWith('approved','2',{limit:50,offset:200});
+});
+
+test.each([
+ ['MaintenanceNotFoundError',404,'Suggestion not found'],
+ ['MaintenanceConflictError',409,'Candidate classification conflict'],
+] as const)('expected %s review failure returns %s',async(name,status,message)=>{
+ const {a,service,errors}=app('admin');
+ const ErrorType=require('../../../types/maintenance.types')[name];
+ service.review.mockRejectedValue(new ErrorType(message));
+ const response=await request(a).post('/maintenance/suggestions/1/approve').send({});
+ expect(response.status).toBe(status);expect(response.body).toEqual({error:message});expect(errors).not.toHaveBeenCalled();
 });

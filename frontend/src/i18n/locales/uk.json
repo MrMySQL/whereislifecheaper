@@ -43,6 +43,7 @@
     "comparePrices": "Порівняти ціни",
     "mapping": "Зіставлення",
     "productMapping": "Зіставлення товарів",
+    "maintenance": "Обслуговування",
     "canonicalFreshness": "Актуальність",
     "scrapers": "Парсери",
     "openMenu": "Відкрити меню",
@@ -63,7 +64,8 @@
     "allCountriesTooltip": "Показати лише товари, доступні у всіх обраних країнах",
     "searchProducts": "Пошук товарів...",
     "showingProducts": "Показано <strong>{{shown}}</strong> з <strong>{{total}}</strong> товарів",
-    "staleData": "Ціни не оновлювалися {{days}} дн. Нижче — останні наявні дані, а не сьогоднішні ціни."
+    "staleData": "Ціни не оновлювалися {{days}} дн. Нижче — останні наявні дані, а не сьогоднішні ціни.",
+    "noCurrentPrices": "За вашим запитом в обраних країнах не знайдено товарів для порівняння."
   },
   "comparison": {
     "product": "Товар",
