@@ -1,7 +1,6 @@
 import { getClient } from '../config/database';
 import { ProductRepository, ProductMappingRepository, PriceRepository } from '../repositories';
 import { productRepository as defaultProductRepo, productMappingRepository as defaultMappingRepo, priceRepository as defaultPriceRepo } from '../repositories';
-import { QuantityInterpretation } from '../utils/productQuantity';
 import { ProductData } from '../types/scraper.types';
 import { ProductWithPricesResult, ProductWithCategory, SupermarketProductEntry } from '../types/db.types';
 import { normalizeProductName } from '../utils/normalizer';
@@ -102,7 +101,6 @@ export class ProductService {
         if (existingMappingByUrl) {
           productId = existingMappingByUrl.product_id;
           existingMappingId = existingMappingByUrl.id;
-          await this.productMappingRepository.updateMappingById(existingMappingId, { productUrl, externalId });
           await this.productMappingRepository.updateProduct(productId, {
             name: productData.name,
             normalizedName,
@@ -133,8 +131,9 @@ export class ProductService {
       const mappingId = existingMappingId ?? await this.productMappingRepository.createOrUpdateMapping(
         productId, supermarketId, { externalId, productUrl }
       );
-      await this.productMappingRepository.updateMappingById(mappingId, { productUrl, externalId });
-      await this.productMappingRepository.recordObservations([mappingId], [productData]);
+      if (existingMappingId) {
+        await this.productMappingRepository.updateMappingById(mappingId, { productUrl, externalId });
+      }
       return mappingId;
     } catch (error) {
       scraperLogger.error('Error in findOrCreateProduct:', error);
@@ -142,18 +141,26 @@ export class ProductService {
     }
   }
 
-  async recordPrice(
-    productMappingId: string,
-    priceData: {
-      price: number;
-      currency: string;
-      originalPrice?: number;
-      isOnSale: boolean;
-      pricePerUnit?: number;
-      quantityInfo?: QuantityInterpretation;
+  /** Save a single fallback sighting with the same atomic price snapshot as a batch. */
+  async saveProduct(product: ProductData, supermarketId: string, categoryId?: string): Promise<string> {
+    const mappingId = await this.findOrCreateProduct(product, supermarketId, categoryId);
+    await this.saveObservationsAndPrices([mappingId], [product], product.currency);
+    return mappingId;
+  }
+
+  private async saveObservationsAndPrices(mappingIds: string[], products: ProductData[], currency: string): Promise<void> {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      await this.productMappingRepository.recordObservations(mappingIds, products, client);
+      await this.priceRepository.batchInsertPrices(mappingIds, products, currency, client);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-  ): Promise<void> {
-    return this.priceRepository.recordPrice(productMappingId, priceData);
   }
 
   async bulkSaveProducts(
@@ -278,18 +285,7 @@ export class ProductService {
         // Reviewers lock the offer row before reading its latest price. Commit
         // the observation and corresponding price together, so neither readers
         // nor approvals can see a new availability state with an old price.
-        const client = await getClient();
-        try {
-          await client.query('BEGIN');
-          await this.productMappingRepository.recordObservations(allMappingIds, allProducts, client);
-          await this.priceRepository.batchInsertPrices(allMappingIds, allProducts, currency, client);
-          await client.query('COMMIT');
-        } catch (error) {
-          await client.query('ROLLBACK');
-          throw error;
-        } finally {
-          client.release();
-        }
+        await this.saveObservationsAndPrices(allMappingIds, allProducts, currency);
       }
 
       const duration = Date.now() - startTime;

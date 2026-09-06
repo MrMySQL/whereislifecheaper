@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Check, CheckCircle2, ExternalLink, PackageSearch, Play, RefreshCw, RotateCcw, X } from 'lucide-react';
 import Loading from '../../components/common/Loading';
@@ -74,6 +74,18 @@ function SuggestionCard({ suggestion, busy, onAction }: { suggestion: Maintenanc
   );
 }
 
+const PAGE_SIZE = 100;
+
+function Pagination({ label, offset, count, total, busy, onChange }: { label: string; offset: number; count: number; total: number; busy: boolean; onChange: (offset: number) => void }) {
+  return <nav aria-label={`${label} pagination`} className="flex flex-wrap items-center justify-between gap-3 pt-3 text-xs text-charcoal-500">
+    <span>Showing {count ? offset + 1 : 0}–{count ? offset + count : 0} of {total}</span>
+    <div className="flex gap-2">
+      <button aria-label={`Previous ${label} page`} disabled={busy || offset === 0} className="btn-secondary !px-3 !py-1.5 text-xs disabled:opacity-50" onClick={() => onChange(Math.max(0, offset - PAGE_SIZE))}>Previous</button>
+      <button aria-label={`Next ${label} page`} disabled={busy || offset + PAGE_SIZE >= total} className="btn-secondary !px-3 !py-1.5 text-xs disabled:opacity-50" onClick={() => onChange(offset + PAGE_SIZE)}>Next</button>
+    </div>
+  </nav>;
+}
+
 export default function ProductMaintenance() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<MaintenanceStatus>('pending');
@@ -81,17 +93,16 @@ export default function ProductMaintenance() {
   const [runLimit, setRunLimit] = useState(25);
   const [actionError, setActionError] = useState('');
   const [showCovered, setShowCovered] = useState(false);
-  const [coverageLimit, setCoverageLimit] = useState(100);
-  const overview = useQuery({ queryKey: ['maintenance-overview'], queryFn: maintenanceApi.getOverview, refetchInterval: 10000 });
-  const suggestions = useQuery({ queryKey: ['maintenance-suggestions', status, countryId], queryFn: () => maintenanceApi.getSuggestions({ status, country_id: countryId || undefined }) });
+  const [coverageOffset, setCoverageOffset] = useState(0);
+  const [suggestionsOffset, setSuggestionsOffset] = useState(0);
+  const overview = useQuery({ queryKey: ['maintenance-overview', countryId, showCovered, coverageOffset], queryFn: () => maintenanceApi.getOverview({ country_id: countryId || undefined, gaps_only: !showCovered, limit: PAGE_SIZE, offset: coverageOffset }), refetchInterval: 10000 });
+  const suggestions = useQuery({ queryKey: ['maintenance-suggestions', status, countryId, suggestionsOffset], queryFn: () => maintenanceApi.getSuggestions({ status, country_id: countryId || undefined, limit: PAGE_SIZE, offset: suggestionsOffset }) });
   const countries = useQuery({ queryKey: ['countries'], queryFn: countriesApi.getAll });
   const invalidate = () => { queryClient.invalidateQueries({ queryKey: ['maintenance-overview'] }); queryClient.invalidateQueries({ queryKey: ['maintenance-suggestions'] }); };
-  const runMutation = useMutation({ mutationFn: () => maintenanceApi.run({ limit: runLimit }), onSuccess: invalidate, onError: (error) => setActionError(maintenanceErrorMessage(error, 'Could not start maintenance. Please try again.')) });
-  const reviewMutation = useMutation({ mutationFn: ({ id, action }: { id: MaintenanceId; action: 'approve' | 'reject' | 'undo' }) => maintenanceApi.review(id, action), onSuccess: invalidate, onError: (error) => setActionError(maintenanceErrorMessage(error, 'The review action failed. Refresh and try again.')) });
-  const coverageCounts = useMemo(() => (overview.data?.coverage || []).reduce((acc, row) => ({ ...acc, [row.status]: acc[row.status] + 1 }), { covered: 0, stale: 0, missing: 0 } as Record<CoverageStatus, number>), [overview.data]);
-  const filteredCoverage = useMemo(() => (overview.data?.coverage || [])
-    .filter((row) => (!countryId || String(row.country_id) === countryId) && (showCovered || row.status !== 'covered'))
-    .sort((a, b) => ({ missing: 0, stale: 1, covered: 2 }[a.status] - { missing: 0, stale: 1, covered: 2 }[b.status])), [overview.data, countryId, showCovered]);
+  const runMutation = useMutation({ mutationFn: () => maintenanceApi.run({ limit: runLimit, dry_run: false }), onSuccess: invalidate, onError: (error) => setActionError(maintenanceErrorMessage(error, 'Could not start maintenance. Please try again.')) });
+  const reviewMutation = useMutation({ mutationFn: ({ id, action }: { id: MaintenanceId; action: 'approve' | 'reject' | 'undo' }) => maintenanceApi.review(id, action), onSuccess: () => { setSuggestionsOffset(0); invalidate(); }, onError: (error) => setActionError(maintenanceErrorMessage(error, 'The review action failed. Refresh and try again.')) });
+  const coverageCounts = overview.data?.counts || { covered: 0, stale: 0, missing: 0 };
+  const filteredCoverage = overview.data?.coverage || [];
   const error = overview.error || suggestions.error;
 
   return <div className="space-y-6">
@@ -109,12 +120,13 @@ export default function ProductMaintenance() {
     <section className="card !p-5">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-3">
         <div><h2 className="font-semibold text-charcoal-900">Coverage details</h2><p className="text-sm text-charcoal-500">Missing and stale combinations are shown first, including gaps without candidates.</p></div>
-        <label className="flex items-center gap-2 text-sm text-charcoal-600"><input type="checkbox" checked={showCovered} onChange={(event) => { setShowCovered(event.target.checked); setCoverageLimit(100); }} className="h-4 w-4 rounded border-cream-300 text-terracotta-600" />Show covered</label>
+        <label className="flex items-center gap-2 text-sm text-charcoal-600"><input type="checkbox" checked={showCovered} onChange={(event) => { setShowCovered(event.target.checked); setCoverageOffset(0); }} className="h-4 w-4 rounded border-cream-300 text-terracotta-600" />Show covered</label>
       </div>
       {overview.isLoading ? <Loading text="Loading coverage…" /> : filteredCoverage.length === 0 ? <p className="text-sm text-charcoal-500 py-6 text-center">No coverage rows match these filters.</p> : <>
-        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-cream-200 text-left text-charcoal-500"><th className="py-2 pr-3">Canonical</th><th className="pr-3">Country</th><th className="pr-3">Store</th><th className="pr-3">Mapped</th><th className="pr-3">Current</th><th>Status</th></tr></thead><tbody>{filteredCoverage.slice(0, coverageLimit).map((row) => <tr className="table-row" key={`${row.canonical_product_id}-${row.country_id}-${row.supermarket_id}`}><td className="py-2 pr-3 font-medium text-charcoal-800">{row.name}</td><td className="pr-3">{row.country_name}</td><td className="pr-3">{row.supermarket_name}</td><td className="pr-3 tabular-nums">{row.mapped_count}</td><td className="pr-3 tabular-nums">{row.fresh_count}</td><td><span className={`badge ${statusStyles[row.status]}`}>{row.status === 'missing' ? 'no mapping' : row.status}</span></td></tr>)}</tbody></table></div>
-        <div className="flex items-center justify-between gap-3 pt-3 text-xs text-charcoal-500"><span>Showing {Math.min(coverageLimit, filteredCoverage.length)} of {filteredCoverage.length}</span>{coverageLimit < filteredCoverage.length && <button className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => setCoverageLimit((value) => value + 100)}>Load 100 more</button>}</div>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-cream-200 text-left text-charcoal-500"><th className="py-2 pr-3">Canonical</th><th className="pr-3">Country</th><th className="pr-3">Store</th><th className="pr-3">Mapped</th><th className="pr-3">Current</th><th>Status</th></tr></thead><tbody>{filteredCoverage.map((row) => <tr className="table-row" key={`${row.canonical_product_id}-${row.country_id}-${row.supermarket_id}`}><td className="py-2 pr-3 font-medium text-charcoal-800">{row.name}</td><td className="pr-3">{row.country_name}</td><td className="pr-3">{row.supermarket_name}</td><td className="pr-3 tabular-nums">{row.mapped_count}</td><td className="pr-3 tabular-nums">{row.fresh_count}</td><td><span className={`badge ${statusStyles[row.status]}`}>{row.status === 'missing' ? 'no mapping' : row.status}</span></td></tr>)}</tbody></table></div>
+
       </>}
+      {!!overview.data?.total && <Pagination label="coverage" offset={coverageOffset} count={filteredCoverage.length} total={overview.data.total} busy={overview.isFetching} onChange={setCoverageOffset} />}
     </section>
 
     <section className="card !p-5">
@@ -123,8 +135,9 @@ export default function ProductMaintenance() {
     </section>
 
     <section className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3"><div><h2 className="text-lg font-semibold text-charcoal-900">Candidate review</h2><p className="text-sm text-charcoal-500">Every approval is explicit and audited. Approved mappings can be undone.</p></div><div className="flex gap-2"><select className="input !py-2 !w-auto" aria-label="Suggestion status" value={status} onChange={(e) => setStatus(e.target.value as MaintenanceStatus)}>{(['pending', 'approved', 'rejected', 'undone'] as const).map((value) => <option key={value} value={value}>{label(value)}</option>)}</select><select className="input !py-2 !w-auto max-w-48" aria-label="Country" value={countryId} onChange={(e) => setCountryId(e.target.value)}><option value="">All countries</option>{countries.data?.map((country) => <option value={country.id} key={country.id}>{country.flag_emoji} {country.name}</option>)}</select></div></div>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3"><div><h2 className="text-lg font-semibold text-charcoal-900">Candidate review</h2><p className="text-sm text-charcoal-500">Every approval is explicit and audited. Approved mappings can be undone.</p></div><div className="flex gap-2"><select className="input !py-2 !w-auto" aria-label="Suggestion status" value={status} onChange={(e) => { setStatus(e.target.value as MaintenanceStatus); setSuggestionsOffset(0); }}>{(['pending', 'approved', 'rejected', 'undone'] as const).map((value) => <option key={value} value={value}>{label(value)}</option>)}</select><select className="input !py-2 !w-auto max-w-48" aria-label="Country" value={countryId} onChange={(e) => { setCountryId(e.target.value); setCoverageOffset(0); setSuggestionsOffset(0); }}><option value="">All countries</option>{countries.data?.map((country) => <option value={country.id} key={country.id}>{country.flag_emoji} {country.name}</option>)}</select></div></div>
       {suggestions.isLoading ? <div className="card"><Loading text="Loading suggestions…" /></div> : !suggestions.data?.data.length ? <div className="card text-center py-12"><PackageSearch className="h-10 w-10 text-charcoal-300 mx-auto mb-3" /><p className="font-medium text-charcoal-700">No {status} suggestions</p><p className="text-sm text-charcoal-500 mt-1">Run maintenance or choose another filter.</p></div> : <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">{suggestions.data.data.map((suggestion) => <SuggestionCard key={suggestion.id} suggestion={suggestion} busy={reviewMutation.isPending && reviewMutation.variables?.id === suggestion.id} onAction={(id, action) => { setActionError(''); reviewMutation.mutate({ id, action }); }} />)}</div>}
+      {!!suggestions.data?.total && <Pagination label="suggestions" offset={suggestionsOffset} count={suggestions.data.data.length} total={suggestions.data.total} busy={suggestions.isFetching} onChange={setSuggestionsOffset} />}
     </section>
   </div>;
 }

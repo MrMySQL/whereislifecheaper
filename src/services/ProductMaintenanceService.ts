@@ -1,5 +1,5 @@
 import { ProductMaintenanceRepository } from '../repositories/ProductMaintenanceRepository';
-import { Candidate, MaintenanceTarget } from '../types/maintenance.types';
+import { Candidate, MaintenanceTarget, CoverageOptions, MaintenancePageOptions, MaintenanceConflictError } from '../types/maintenance.types';
 import { configuredMaintenanceRanker } from './maintenanceRanker';
 import { interpretProductQuantity } from '../utils/productQuantity';
 /** Optional assistance receives only eligible database candidates; returned IDs only affect ordering. */
@@ -10,30 +10,30 @@ export class ProductMaintenanceService {
         const cutoff = Date.now() - 7 * 86400000;
         if (candidate.canonical_product_id !== null || candidate.availability_status !== 'available'
             || !(new Date(candidate.last_checked_at).getTime() >= cutoff) || !(new Date(candidate.scraped_at).getTime() >= cutoff))
-            throw new Error('Candidate is stale, unavailable, or already classified');
+            throw new MaintenanceConflictError('Candidate is stale, unavailable, or already classified');
         const interpreted = interpretProductQuantity({ name: candidate.name, description: candidate.description, unit: candidate.unit,
             unitQuantity: candidate.unit_quantity == null ? undefined : Number(candidate.unit_quantity), price: Number(candidate.price), priceBasis: candidate.price_basis || candidate.quantity_info?.priceBasis });
         const quantity = candidate.quantity_info || interpreted;
         if (quantity.status !== interpreted.status || quantity.contentUnit !== interpreted.contentUnit || quantity.contentQuantity !== interpreted.contentQuantity || quantity.priceBasis !== interpreted.priceBasis || quantity.comparablePrice !== interpreted.comparablePrice)
-            throw new Error('Price snapshot disagrees with current listing');
+            throw new MaintenanceConflictError('Price snapshot disagrees with current listing');
         if ((target.excluded_terms || []).some(term => candidate.name.toLocaleLowerCase().includes(term.toLocaleLowerCase())))
-            throw new Error('Excluded product form');
+            throw new MaintenanceConflictError('Excluded product form');
         const expected = interpretProductQuantity({ name: target.name, price: 1 });
         const expectedUnit = target.expected_unit || expected.contentUnit;
         const expectedQuantity = target.expected_quantity == null ? expected.contentQuantity : Number(target.expected_quantity);
         if (quantity.status !== 'verified' || !Number.isFinite(quantity.comparablePrice) || !(Number(quantity.comparablePrice) > 0))
-            throw new Error('Candidate quantity requires manual investigation');
+            throw new MaintenanceConflictError('Candidate quantity requires manual investigation');
         if (target.show_per_unit_price && !['kg', 'l'].includes(quantity.contentUnit || ''))
-            throw new Error('Per-unit comparison requires mass or volume');
+            throw new MaintenanceConflictError('Per-unit comparison requires mass or volume');
         if (expectedUnit && quantity.contentUnit !== expectedUnit)
-            throw new Error('Candidate content unit is incompatible');
+            throw new MaintenanceConflictError('Candidate content unit is incompatible');
         if (!target.show_per_unit_price && expectedQuantity && Math.abs((quantity.contentQuantity || 0) - expectedQuantity) > 0.0001)
-            throw new Error('Candidate content quantity is incompatible');
+            throw new MaintenanceConflictError('Candidate content quantity is incompatible');
         return quantity;
     }
-    async overview() { return { coverage: await this.repository.targets(), runs: await this.repository.runs() }; }
-    async suggestions(status?: string, country?: string) { const data = await this.repository.suggestions(status, country); return { data, count: data.length }; }
-    async run(limit = 10, dryRun = false) {
+    async overview(options: CoverageOptions = {}) { return { ...await this.repository.coverage(options), runs: await this.repository.runs() }; }
+    async suggestions(status?: string, country?: string, options: MaintenancePageOptions = {}) { return this.repository.suggestions(status, country, options); }
+    async run(limit = 10, dryRun = true) {
         if (!Number.isInteger(limit) || limit < 1 || limit > 25)
             throw new Error('Run limit must be between 1 and 25');
         const run = await this.repository.start(dryRun);
@@ -45,8 +45,6 @@ export class ProductMaintenanceService {
                 if (Date.now() > deadline)
                     break;
                 scanned++;
-                if (!dryRun)
-                    await this.repository.markChecked(target);
                 const eligible = (await this.repository.candidates(target)).flatMap(candidate => {
                     try {
                         return [{ candidate, quantity: this.validate(candidate, target) }];
@@ -95,6 +93,8 @@ export class ProductMaintenanceService {
                     if (dryRun || await this.repository.propose(target, candidate, payload))
                         proposed++;
                 }
+                if (!dryRun)
+                    await this.repository.markChecked(target);
             }
             return await this.repository.finish(run.id, scanned, proposed);
         }
