@@ -1,14 +1,17 @@
 /** Conservative English checks after translation. These narrow a review queue, never auto-approve. */
 const normalized = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ');
 const produce: Record<string,string> = {apple:'apples',banana:'bananas',carrot:'carrots',onion:'onions',tomato:'tomatoes',cucumber:'cucumbers',potato:'potatoes'};
-function coreName(value: string): string { return normalized(value).replace(/\bpack(?:s)?(?: of)?\s+\d+\b/g,'').replace(/\b\d+(?:\s+\d+)?\s*(?:kg|g|l|ml|pieces?|pcs?|counts?|ct|packs?)?\b/g,'').trim().replace(/\s+/g,' '); }
+const quantityUnits = 'kg|g|gr|l|ml|pieces?|pcs?|counts?|ct|packs?';
+function coreName(value: string): string {
+ return normalized(value).replace(new RegExp(`\\b(?:packs?(?: of)?\\s+)?\\d+(?:\\s+\\d+)?\\s*(?:${quantityUnits})?\\b`,'g'),'').trim().replace(/\s+/g,' ');
+}
 export function searchNames(canonical: string): string[] {
  const plain=coreName(canonical);
  const entry=Object.entries(produce).find(([one,many])=>new RegExp(`^(${one}|${many})$`).test(plain));
  return entry ? [canonical,entry[1][0].toUpperCase()+entry[1].slice(1)] : [canonical];
 }
 export function matchesGroceryType(canonical: string, translatedName: string): boolean {
- const target=coreName(canonical), name=normalized(translatedName).replace(/(\d)(kg|g|gr|ml|l)\b/g,'$1 $2');
+ const target=coreName(canonical), name=normalized(translatedName).replace(new RegExp(`(\\d)(${quantityUnits})\\b`,'g'),'$1 $2');
  const has=(pattern:string)=>new RegExp(`\\b(?:${pattern})\\b`).test(name);
  // Processed canonicals such as apple juice have their own type, not the plain-produce rules.
  const processedProduce=/\b(juice|drink|smoothie|puree|sauce|dried|chips|jam|canned|pickled|powder|flour|cake|pie)\b/.test(target);

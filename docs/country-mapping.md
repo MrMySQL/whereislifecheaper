@@ -40,7 +40,7 @@ The first replay exposed substring false positives such as chocolate for cola an
 
 Initial verification passed 355 backend tests across 35 suites after rebasing onto current main (including disposable PostgreSQL integration tests), nine frontend state/API tests, both production builds, targeted frontend lint, and a mocked browser exercise of country resume/reload, grouped bilingual cards, partial approval failures, and selection safety. Full frontend lint has unrelated pre-existing errors outside this change.
 
-Cubic review fixes passed 371 backend tests across 35 suites, 12 frontend tests (including the rendered all-country control and request), and both production builds. Regression coverage includes partial translation failure, candidates beyond the AI input cap, numeric API IDs, descriptive/piece produce, and repeated upgrade migrations followed by parent deletion.
+Cubic review fixes passed 382 backend tests across 35 suites, 13 frontend tests (including the rendered all-country control and request), and both production builds. Regression coverage includes partial translation failure, candidates beyond the AI input cap, numeric API IDs, descriptive/piece produce, and repeated upgrade migrations followed by parent deletion.
 
 ## Rollout
 

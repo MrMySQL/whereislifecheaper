@@ -62,6 +62,12 @@ export async function mappingVocabulary(target: MaintenanceTarget): Promise<stri
  }
  const results = await Promise.allSettled(languages.map(language=>translateTexts(searchNames(target.name),language)));
  const aliases = results.flatMap(result=>result.status==='fulfilled'?result.value:[]);
- if (!aliases.length) throw new Error('Translation unavailable');
+ if (!aliases.length) {
+  const error = new Error('Translation unavailable');
+  const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  // Preserve diagnostics for callers without leaking provider details in messages or JSON.
+  Object.defineProperty(error, 'cause', { value: failure?.reason, configurable: true });
+  throw error;
+ }
  return [...new Set(aliases)];
 }

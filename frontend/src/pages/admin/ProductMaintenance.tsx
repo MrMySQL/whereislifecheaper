@@ -140,6 +140,7 @@ export default function ProductMaintenance() {
   const countries = useQuery({ queryKey: ['countries'], queryFn: countriesApi.getAll });
   const invalidate = () => { queryClient.invalidateQueries({ queryKey: ['maintenance-overview'] }); queryClient.invalidateQueries({ queryKey: ['maintenance-suggestions'] }); };
   const runMutation = useMutation({
+    mutationKey: ['maintenance-run'],
     mutationFn: ({ selectedCountryId, previous }: { selectedCountryId: string; previous: CountryRunSession | null }) => maintenanceApi.run({
       limit: runLimit,
       dry_run: false,

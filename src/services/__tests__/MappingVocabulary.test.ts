@@ -42,3 +42,13 @@ test('all failed languages report a translation failure',async()=>{
  jest.spyOn(global,'fetch').mockRejectedValue(new Error('provider secret'));
  await expect(mappingVocabulary({name:'Sugar 1 kg',country_code:'UZ'} as MaintenanceTarget)).rejects.toThrow('Translation unavailable');
 });
+
+test('failed vocabulary retains the original diagnostic cause without exposing it in the message',async()=>{
+ process.env.GOOGLE_TRANSLATE_API_KEY='test';
+ const cause=new Error('provider secret');
+ jest.spyOn(global,'fetch').mockRejectedValue(cause);
+ const error=await mappingVocabulary({name:'Sugar 1 kg',country_code:'UZ'} as MaintenanceTarget).catch(e=>e);
+ expect(error.message).toBe('Translation unavailable');
+ expect(error.cause).toBe(cause);
+ expect(JSON.stringify(error)).not.toContain('provider secret');
+});

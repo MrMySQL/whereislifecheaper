@@ -30,3 +30,6 @@ test.each([
  ['Red apples 1kg','Haribo Bananas 175g',false],['Red apples 1kg','Red apples 1kg',true],
  ['Red apples 1kg','Red apple juice 1L',false],['Organic banana 1kg','Haribo Bananas 175g',false],
 ])('descriptive canonical and count listings %s / %s',(canonical,name,expected)=>expect(matchesGroceryType(canonical,name)).toBe(expected));
+
+test.each(['Apple pack of 6 pieces','Apple packs of 6pcs','Apple pack of 4ct'])('pack quantities with units %s retain plural discovery',canonical=>expect(searchNames(canonical)).toContain('Apples'));
+test.each(['6pcs','4ct','2packs','6pieces','6counts','1pc','1pack'])('compact count %s remains eligible',quantity=>expect(matchesGroceryType('Apple 6 pieces',`Fresh apples ${quantity}`)).toBe(true));
