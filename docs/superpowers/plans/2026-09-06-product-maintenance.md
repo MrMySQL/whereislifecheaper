@@ -25,7 +25,7 @@
 - User has approved implementation; execute without another design approval checkpoint.
 
 ## Verification and rollout status
-- All 229 tests across 29 suites on the isolated PR branch and backend/frontend build passed locally, including disposable PostgreSQL migrations and review transactions.
+- All 251 tests across 29 suites on the isolated PR branch and backend/frontend build passed locally, including disposable PostgreSQL migrations and review transactions.
 - Independent final review findings addressed with regression coverage.
-- Visual browser QA remains outstanding: no working browser runtime was available.
+- Browser QA passed against local fixtures: filters, run limits, review actions, conflict handling, retry recovery and desktop/mobile layouts.
 - Production remains unchanged. Follow `docs/product-maintenance.md` to collect new observations before deploying the stricter comparison endpoint.

@@ -61,4 +61,4 @@ TEST_DATABASE_URL=postgres://postgres:local-test-only@127.0.0.1:55439/maintenanc
 npm run build
 ```
 
-Coverage includes stock transitions, package normalization, historical snapshots, latest-price eligibility, canonical policy compatibility, repeatable migrations, review revalidation, idempotency and conflict-safe undo. Backend and frontend builds were verified locally. Visual browser QA remains outstanding because a working browser runtime was unavailable in the implementation environment.
+Coverage includes stock transitions, package normalization, historical snapshots, latest-price eligibility, canonical policy compatibility, repeatable migrations, review revalidation, idempotency and conflict-safe undo. Backend and frontend builds were verified locally. Browser QA passed using the production frontend build with synthetic local API responses: country/status filters, covered rows, bounded scan requests, approve/reject/undo, conflict messages, failed-load retry recovery, and desktop/mobile layouts (1440 px and 390 px). Database integration tests separately verify real persistence and eligibility; this is not a production smoke test.
