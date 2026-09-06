@@ -26,7 +26,8 @@
     "docker:build": "docker build -t whereislifecheaper-scraper .",
     "aws:deploy": "scripts/deploy-ecr.sh",
     "aws:run": "scripts/run-ecs-task.sh",
-    "aws:stop": "scripts/stop-ecs-task.sh"
+    "aws:stop": "scripts/stop-ecs-task.sh",
+    "products:maintain": "ts-node scripts/maintain-products.ts"
   },
   "keywords": [
     "price-comparison",

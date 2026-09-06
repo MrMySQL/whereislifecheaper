@@ -47,6 +47,9 @@ export default function Header() {
                   <Link to="/admin/canonical-freshness" className={navLinkClass('/admin/canonical-freshness')}>
                     {t('nav.canonicalFreshness')}
                   </Link>
+                  <Link to="/admin/maintenance" className={navLinkClass('/admin/maintenance')}>
+                    {t('nav.maintenance')}
+                  </Link>
                   <Link to="/admin/scrapers" className={navLinkClass('/admin/scrapers')}>
                     {t('nav.scrapers')}
                   </Link>
@@ -110,6 +113,9 @@ export default function Header() {
                   </Link>
                   <Link to="/admin/canonical-freshness" className={navLinkClass('/admin/canonical-freshness')} onClick={() => setMobileMenuOpen(false)}>
                     {t('nav.canonicalFreshness')}
+                  </Link>
+                  <Link to="/admin/maintenance" className={navLinkClass('/admin/maintenance')} onClick={() => setMobileMenuOpen(false)}>
+                    {t('nav.maintenance')}
                   </Link>
                   <Link to="/admin/scrapers" className={navLinkClass('/admin/scrapers')} onClick={() => setMobileMenuOpen(false)}>
                     {t('nav.scrapers')}

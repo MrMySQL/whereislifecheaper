@@ -239,14 +239,7 @@ export class CanonicalProductRepository {
     return result.rows;
   }
 
-  /**
-   * @param filters.maxAgeDays When set, only prices scraped within this many
-   *   days are considered — both for eligibility and for the price actually
-   *   returned. Left unset the query has no date bound at all, which is how a
-   *   price from January 2026 was still being served as "latest" in August.
-   *   It is opt-in rather than a default because turning it on while the
-   *   scrape pipeline is down empties the comparison table entirely.
-   */
+  /** Only current, available, non-duplicate offers can enter country averages. */
   async getComparison(
     filters: { search?: string; maxAgeDays?: number },
     pagination: { limit: number; offset: number }
@@ -255,116 +248,75 @@ export class CanonicalProductRepository {
     total: number;
     freshness: { newest: Date | null; oldest: Date | null };
   }> {
-    const whereClauses = ['cp.disabled IS NOT TRUE'];
-    const baseParams: unknown[] = [];
-
-    if (filters.search) {
-      baseParams.push(`%${filters.search}%`);
-      whereClauses.push(`cp.name ILIKE $${baseParams.length}`);
+    const maxAgeDays = filters.maxAgeDays ?? 7;
+    if (!Number.isInteger(maxAgeDays) || maxAgeDays < 1 || maxAgeDays > 365) {
+      throw new Error('Price freshness must be between 1 and 365 days');
     }
-
-    let freshnessSql = '';
-    if (filters.maxAgeDays !== undefined) {
-      baseParams.push(filters.maxAgeDays);
-      freshnessSql = ` AND scraped_at >= CURRENT_TIMESTAMP - ($${baseParams.length} * INTERVAL '1 day')`;
-    }
-
-    const baseWhereSql = whereClauses.join(' AND ');
-    const eligibleCanonicalCte = `
-      WITH eligible_canonical AS (
-        SELECT cp.id, cp.name
-        FROM canonical_products cp
-        INNER JOIN products p ON p.canonical_product_id = cp.id
-        INNER JOIN product_mappings pm ON pm.product_id = p.id
-        INNER JOIN supermarkets s ON pm.supermarket_id = s.id
-        WHERE ${baseWhereSql}
-          AND EXISTS (
-            SELECT 1 FROM prices pr_exists
-            WHERE pr_exists.product_mapping_id = pm.id
-              -- Must match the laterals below, which skip NULL-dated rows.
-              -- Counting one here that they then discard would inflate the
-              -- total and the country count past what the page can show.
-              AND pr_exists.scraped_at IS NOT NULL
-              ${freshnessSql.replace('scraped_at', 'pr_exists.scraped_at')}
-          )
-        GROUP BY cp.id, cp.name
-        HAVING COUNT(DISTINCT s.country_id) >= 2
-      )
-    `;
-
-    const dataSql = `
-      ${eligibleCanonicalCte},
-      paged_canonical AS (
-        SELECT id FROM eligible_canonical
-        ORDER BY name, id
-        LIMIT $${baseParams.length + 1}
-        OFFSET $${baseParams.length + 2}
-      )
-      SELECT
-        cp.id as canonical_id, cp.name as canonical_name, cp.description as canonical_description,
-        cp.show_per_unit_price,
-        cat.name as category_name,
-        p.id as product_id, p.name as product_name, p.brand, p.unit, p.unit_quantity, p.image_url,
-        pm.url as product_url,
-        s.name as supermarket_name,
-        c.id as country_id, c.name as country_name, c.code as country_code, c.currency_code,
-        pr.price, pr.currency, pr.original_price, pr.is_on_sale, pr.scraped_at, pr.price_per_unit
-      FROM paged_canonical pc
-      INNER JOIN canonical_products cp ON cp.id = pc.id
-      LEFT JOIN categories cat ON cp.category_id = cat.id
-      INNER JOIN products p ON p.canonical_product_id = cp.id
-      INNER JOIN product_mappings pm ON p.id = pm.product_id
-      INNER JOIN supermarkets s ON pm.supermarket_id = s.id
-      INNER JOIN countries c ON s.country_id = c.id
-      INNER JOIN LATERAL (
-        SELECT price, currency, original_price, is_on_sale, scraped_at, price_per_unit
-        FROM prices
-        WHERE product_mapping_id = pm.id AND scraped_at IS NOT NULL${freshnessSql}
-        ORDER BY scraped_at DESC
-        LIMIT 1
-      ) pr ON true
-      ORDER BY cp.name, c.name, p.id
-    `;
-
-    const countSql = `
-      ${eligibleCanonicalCte}
-      SELECT COUNT(*)::int as total FROM eligible_canonical
-    `;
-
-    // Deliberately unpaginated: the caller uses this to decide whether the
-    // scrape pipeline is alive, and one page of 100 says nothing about the
-    // other `total - 100`. Cheap because idx_prices_mapping_scraped serves
-    // the lateral directly.
-    const freshnessAggregateSql = `
-      ${eligibleCanonicalCte}
-      SELECT MAX(pr.scraped_at) as newest, MIN(pr.scraped_at) as oldest
-      FROM eligible_canonical ec
-      INNER JOIN products p ON p.canonical_product_id = ec.id
-      INNER JOIN product_mappings pm ON p.id = pm.product_id
-      INNER JOIN LATERAL (
-        SELECT scraped_at
-        FROM prices
-        -- IS NOT NULL because DESC sorts NULLs first: one NULL-dated row
-        -- would otherwise become the mapping's "latest" and poison MIN/MAX.
-        WHERE product_mapping_id = pm.id AND scraped_at IS NOT NULL${freshnessSql}
-        ORDER BY scraped_at DESC
-        LIMIT 1
-      ) pr ON true
-    `;
-
-    const [dataResult, countResult, freshnessResult] = await Promise.all([
-      query<CanonicalComparisonRow>(dataSql, [...baseParams, pagination.limit, pagination.offset]),
-      query<{ total: number }>(countSql, baseParams),
-      query<{ newest: Date | null; oldest: Date | null }>(freshnessAggregateSql, baseParams),
+    const params: unknown[] = [maxAgeDays];
+    const searchSql = filters.search ? 'AND cp.name ILIKE $2' : '';
+    if (filters.search) params.push(`%${filters.search}%`);
+    // This CTE visits only canonical-linked offers, then uses the existing
+    // (product_mapping_id, scraped_at DESC) index once per offer. Never scan
+    // all historical prices, and never fall back from an unusable latest price
+    // to an older interpretation of a different package.
+    const cte = `WITH current_offers AS (
+      SELECT cp.id AS canonical_id, cp.name AS canonical_name,
+        cp.description AS canonical_description, cp.show_per_unit_price,
+        cat.name AS category_name, p.id AS product_id, p.name AS product_name,
+        p.brand, p.image_url, pm.url AS product_url, s.name AS supermarket_name,
+        c.id AS country_id, c.name AS country_name, c.code AS country_code, c.currency_code,
+        CASE WHEN cp.show_per_unit_price THEN pr.quantity_info->>'contentUnit' ELSE p.unit END AS unit,
+        CASE WHEN cp.show_per_unit_price THEN (pr.quantity_info->>'contentQuantity')::numeric ELSE p.unit_quantity END AS unit_quantity,
+        pr.price, pr.currency, pr.original_price, pr.is_on_sale, pr.scraped_at,
+        CASE WHEN pr.quantity_info->>'status' = 'verified'
+          THEN (pr.quantity_info->>'comparablePrice')::numeric ELSE NULL END AS price_per_unit
+      FROM canonical_products cp
+      LEFT JOIN product_maintenance_policies pol ON pol.canonical_product_id = cp.id
+      JOIN products p ON p.canonical_product_id = cp.id
+      JOIN product_mappings pm ON pm.product_id = p.id
+      JOIN supermarkets s ON s.id = pm.supermarket_id
+      JOIN countries c ON c.id = s.country_id
+      LEFT JOIN categories cat ON cat.id = cp.category_id
+      CROSS JOIN LATERAL (
+        SELECT price, currency, original_price, is_on_sale, scraped_at, quantity_info
+        FROM prices WHERE product_mapping_id = pm.id AND scraped_at IS NOT NULL
+        ORDER BY scraped_at DESC, id DESC LIMIT 1
+      ) pr
+      WHERE cp.disabled IS NOT TRUE AND s.is_active
+        AND pm.availability_status = 'available'
+        AND pm.last_checked_at >= CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')
+        AND pm.duplicate_of_mapping_id IS NULL
+        AND pm.quantity_info IS NOT DISTINCT FROM pr.quantity_info
+        AND pr.price > 0
+        AND pr.scraped_at >= CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')
+        AND (cp.show_per_unit_price IS NOT TRUE OR (
+          pr.quantity_info->>'status' = 'verified'
+          AND pr.quantity_info->>'contentUnit' IN ('kg', 'l')
+          AND (pr.quantity_info->>'comparablePrice')::numeric > 0
+        ))
+        AND (pol.expected_unit IS NULL OR pr.quantity_info->>'contentUnit' = pol.expected_unit)
+        AND (cp.show_per_unit_price OR pol.expected_quantity IS NULL
+          OR (pr.quantity_info->>'contentQuantity')::numeric = pol.expected_quantity)
+        ${searchSql}
+    ), eligible_canonical AS (
+      SELECT canonical_id, canonical_name FROM current_offers
+      GROUP BY canonical_id, canonical_name HAVING COUNT(DISTINCT country_id) >= 2
+    )`;
+    const [data, count, dates] = await Promise.all([
+      query<CanonicalComparisonRow>(`${cte}, paged AS (
+        SELECT canonical_id FROM eligible_canonical ORDER BY canonical_name, canonical_id
+        LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      ) SELECT co.* FROM current_offers co JOIN paged USING (canonical_id)
+        ORDER BY co.canonical_name, co.country_name, co.product_id`,
+      [...params, pagination.limit, pagination.offset]),
+      query<{ total: number }>(`${cte} SELECT COUNT(*)::int AS total FROM eligible_canonical`, params),
+      query<{ newest: Date | null; oldest: Date | null }>(`${cte}
+        SELECT MAX(co.scraped_at) AS newest, MIN(co.scraped_at) AS oldest
+        FROM current_offers co JOIN eligible_canonical ec USING (canonical_id)`, params),
     ]);
-
     return {
-      data: dataResult.rows,
-      total: countResult.rows[0]?.total || 0,
-      freshness: {
-        newest: freshnessResult.rows[0]?.newest ?? null,
-        oldest: freshnessResult.rows[0]?.oldest ?? null,
-      },
+      data: data.rows, total: count.rows[0]?.total ?? 0,
+      freshness: dates.rows[0] ?? {newest: null, oldest: null},
     };
   }
 
