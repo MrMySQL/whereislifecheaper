@@ -1,5 +1,7 @@
+import { PoolClient } from 'pg';
 import { query, getClient } from '../config/database';
 import { MappingLookupResult, NameBrandMappingResult } from '../types/db.types';
+import { interpretProductQuantity } from '../utils/productQuantity';
 import { ProductData } from '../types/scraper.types';
 
 /**
@@ -165,6 +167,36 @@ export class ProductMappingRepository {
         updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [mappingId, data.productUrl, data.externalId || null]
+    );
+  }
+
+  /** Persist explicit sightings only. Absence from a scrape is not an out-of-stock observation. */
+  async recordObservations(mappingIds: string[], products: ProductData[], client?: PoolClient): Promise<void> {
+    if (mappingIds.length !== products.length) throw new Error('Observation mappings and products must align');
+    if (mappingIds.length === 0) return;
+    const observations = products.map((product, index) => ({
+      id: Number(mappingIds[index]),
+      available: product.isAvailable,
+      quantity: interpretProductQuantity(product),
+      raw: {
+        name: product.name, description: product.description ?? null,
+        unit: product.unit ?? null, unit_quantity: product.unitQuantity ?? null,
+        price_basis: product.priceBasis ?? null,
+      },
+    }));
+    const execute = client ? client.query.bind(client) : query;
+    await execute(
+      `UPDATE product_mappings pm SET
+        last_checked_at = CURRENT_TIMESTAMP,
+        last_scraped_at = CURRENT_TIMESTAMP,
+        last_available_at = CASE WHEN o.available THEN CURRENT_TIMESTAMP ELSE pm.last_available_at END,
+        availability_status = CASE WHEN o.available THEN 'available' ELSE 'out_of_stock' END,
+        is_available = o.available,
+        quantity_info = o.quantity,
+        raw_observation = o.raw
+       FROM jsonb_to_recordset($1::jsonb) AS o(id int, available boolean, quantity jsonb, raw jsonb)
+       WHERE pm.id = o.id`,
+      [JSON.stringify(observations)]
     );
   }
 

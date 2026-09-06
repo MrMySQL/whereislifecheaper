@@ -1,3 +1,4 @@
+import { interpretProductQuantity } from '../../utils/productQuantity';
 import { Browser, Page, chromium } from 'playwright';
 import { createPrefixedLogger } from '../../utils/logger';
 import { retry, sleep } from '../../utils/retry';
@@ -411,9 +412,7 @@ export abstract class BaseScraper {
       products: products.map((p) => ({
         ...p,
         normalizedName: p.name, // Will be normalized by the service
-        pricePerUnit: p.unitQuantity
-          ? p.price / p.unitQuantity
-          : undefined,
+        pricePerUnit: interpretProductQuantity(p).comparablePrice ?? undefined,
       })),
       scrapedAt: new Date(),
       duration,

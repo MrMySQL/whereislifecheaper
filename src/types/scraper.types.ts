@@ -60,6 +60,8 @@ export interface ProductData {
   description?: string;
   categoryName?: string;
   isAvailable: boolean;
+  /** Basis of the quoted price when explicitly provided by the retailer. */
+  priceBasis?: 'package' | 'kg' | 'l' | 'piece' | 'unknown';
 }
 
 export interface ScrapedProduct extends ProductData {

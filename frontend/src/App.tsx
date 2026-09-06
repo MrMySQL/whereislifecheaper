@@ -12,6 +12,7 @@ import Mapping from './pages/admin/Mapping';
 import CanonicalFreshness from './pages/admin/CanonicalFreshness';
 import Scrapers from './pages/admin/Scrapers';
 import RequestCountry from './pages/RequestCountry';
+import ProductMaintenance from './pages/admin/ProductMaintenance';
 import { loadExchangeRates } from './utils/currency';
 
 // Track page views for SPA navigation
@@ -64,6 +65,14 @@ function App() {
                 element={
                   <ProtectedRoute requireAdmin>
                     <CanonicalFreshness />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/maintenance"
+                element={
+                  <ProtectedRoute requireAdmin>
+                    <ProductMaintenance />
                   </ProtectedRoute>
                 }
               />

@@ -264,8 +264,8 @@ export class MigrosScraper extends BaseScraper {
 
     for (const item of apiProducts) {
       try {
-        // Skip products not in sale
-        if (item.status !== 'IN_SALE') {
+        // Retain explicit unavailable sightings. Unknown statuses are not stock evidence.
+        if (item.status !== 'IN_SALE' && item.status !== 'OUT_OF_STOCK') {
           continue;
         }
 
@@ -294,7 +294,7 @@ export class MigrosScraper extends BaseScraper {
           brand: item.brand?.name,
           unit,
           unitQuantity,
-          isAvailable: true,
+          isAvailable: item.status === 'IN_SALE',
           externalId: item.sku,
         };
 

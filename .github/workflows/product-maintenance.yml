@@ -1,0 +1,35 @@
+name: Product Maintenance
+
+on:
+  schedule:
+    - cron: '23 8 * * *'
+  workflow_run:
+    workflows: ['Daily Scrape']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-maintenance
+  cancel-in-progress: false
+
+jobs:
+  propose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Discover fresh replacement candidates
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_ENV: production
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          MAPPING_AI_MODEL: ${{ vars.MAPPING_AI_MODEL }}
+        run: npm run products:maintain -- --apply --limit=25

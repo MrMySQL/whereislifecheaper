@@ -78,6 +78,7 @@ export default function Home() {
       canonicalApi.getComparison({
         search: debouncedSearch || undefined,
         limit: 100,
+        max_age_days: 7,
       }),
   });
 
@@ -137,6 +138,11 @@ export default function Home() {
             })}
           </p>
         </div>
+      )}
+      {!comparisonLoading && comparisonData && filteredProducts.length === 0 && (
+        <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {t('home.noCurrentPrices', {defaultValue: 'No current comparable prices match this selection. Prices must be available and observed within the last seven days.'})}
+        </p>
       )}
       {/* Compact Hero Section */}
       <section className="rounded-2xl bg-saffron-50 px-5 py-5">
