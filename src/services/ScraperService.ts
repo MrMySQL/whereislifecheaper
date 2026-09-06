@@ -253,9 +253,11 @@ export class ScraperService {
         await this.scrapeLogRepository.update(scrapeLogId, status, {
           productsScraped: totalStoredCount,
           error: health.degraded ? health.reasons.join('; ') : undefined,
-          duration: result.duration,
+          duration: Date.now() - startTime,
           onlyIfRunning: true,
         });
+        // The row cannot include its own write; the returned result can.
+        result.duration = Date.now() - startTime;
       }
 
       scraperLogger.info(

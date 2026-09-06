@@ -3,7 +3,7 @@ jest.mock('../../utils/logger', () => {
   return { scraperLogger: stub, logger: stub, createPrefixedLogger: () => stub };
 });
 
-import { BaseScraper } from '../base/BaseScraper';
+import { BaseScraper, FatalScrapeError } from '../base/BaseScraper';
 import { CategoryConfig, ProductData, ScraperConfig } from '../../types/scraper.types';
 
 const categories: CategoryConfig[] = [
@@ -190,5 +190,45 @@ describe('BaseScraper category accounting', () => {
     await scraper.scrapeProductList();
 
     expect(scraper.getCategoryStats()).toEqual({ attempted: 4, failed: 0 });
+  });
+
+  it('does not count a category that reported a failure after producing products', async () => {
+    // Knuspr saving 44 pages and dying on the 45th is a lost page, not a lost
+    // category, and must not push the run over the degraded threshold.
+    class PartialScraper extends PartlyBrokenScraper {
+      protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+        const products = await super.scrapeCategory(category);
+        if (category.name === 'Meat') {
+          this.failCategory(category, new Error('page 2 timed out'), 'https://example.test/meat?page=2');
+        }
+        return products;
+      }
+    }
+    const scraper = new PartialScraper([]);
+
+    await scraper.scrapeProductList();
+
+    expect(scraper.getCategoryStats()).toEqual({ attempted: 4, failed: 0 });
+    expect(scraper.getCategoryErrors()).toEqual([]);
+    // The error is still reported, alongside the other page-level errors.
+    expect(scraper.getErrors().map(e => e.message)).toEqual([
+      expect.stringMatching(/Meat.*page 2 timed out.*1 product/),
+    ]);
+  });
+
+  it('aborts the run on a fatal error instead of trying the remaining categories', async () => {
+    // REWE losing its delivery market makes every later category unpriced;
+    // crawling them anyway burns the deadline on pages that cannot succeed.
+    class FatalScraper extends PartlyBrokenScraper {
+      protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
+        if (category.name === 'Meat') throw new FatalScrapeError('delivery market is gone');
+        return super.scrapeCategory(category);
+      }
+    }
+    const scraper = new FatalScraper([]);
+
+    await expect(scraper.scrapeProductList()).rejects.toThrow(/delivery market/);
+
+    expect(scraper.getCategoryStats().attempted).toBe(2);
   });
 });

@@ -148,4 +148,19 @@ describe('ScraperService category failure reporting', () => {
       error: undefined,
     }));
   });
+
+  it('reports a duration that includes the final scrape_logs write', async () => {
+    const scraper = mostlyBrokenScraper(16, 0);
+    const { service, update } = harness(scraper);
+    const original = update.getMockImplementation()!;
+    update.mockImplementation(async (...args: unknown[]) => {
+      await new Promise(resolve => setTimeout(resolve, 30));
+      return original(...(args as Parameters<typeof original>));
+    });
+
+    const result = await service.runScraper('1', { deadlineMs: 10_000 });
+
+    const finalWrite = update.mock.calls.find(c => c[1] === 'success')!;
+    expect(result.duration).toBeGreaterThanOrEqual((finalWrite[2] as { duration: number }).duration + 25);
+  });
 });

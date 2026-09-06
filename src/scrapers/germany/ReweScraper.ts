@@ -1,4 +1,4 @@
-import { BaseScraper } from '../base/BaseScraper';
+import { BaseScraper, FatalScrapeError } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { config } from '../../config/env';
 import { chromium } from 'playwright-extra';
@@ -102,9 +102,10 @@ const MARKET_POLL_INTERVAL_MS = 500;
 /**
  * Raised when REWE has no delivery market for the session. Without one every
  * tile reads "Preis abhängig vom Standort", so this is fatal for the run, not
- * a per-page glitch to log and skip.
+ * a per-page glitch to log and skip: BaseScraper stops at the first one
+ * instead of paginating every remaining category to the same result.
  */
-export class ReweMarketError extends Error {
+export class ReweMarketError extends FatalScrapeError {
   constructor(message: string) {
     super(message);
     this.name = 'ReweMarketError';
@@ -610,9 +611,10 @@ export class ReweScraper extends BaseScraper {
 
           this.logger.info(`${category.name} page ${pageNum}/${totalPages}: Found ${pageProducts.length} products (${productsWithPrice} with price)`);
 
-          if (pageNum === 1) {
-            assertPricedPage(pageProducts, category.name, pageNum);
-          }
+          // Every page, not just the first: a market that drops mid-category
+          // leaves later pages full of unpriced tiles that parseProducts
+          // would otherwise discard without a word.
+          assertPricedPage(pageProducts, category.name, pageNum);
 
           // Parse products
           const parsedProducts = this.parseProducts(pageProducts, category.name);
@@ -644,7 +646,8 @@ export class ReweScraper extends BaseScraper {
 
       this.logger.info(`Category ${category.name}: Total ${products.length} products scraped from ${totalPages} pages`);
     } catch (error) {
-      // Rethrown so the run stops: a wrong market makes every category wrong.
+      // Fatal: BaseScraper rethrows it out of scrapeProductList, so the run
+      // ends here rather than crawling every remaining category unpriced.
       if (error instanceof ReweMarketError) throw error;
       this.failCategory(category, error, `${this.BASE_URL}${category.url}`);
     }
