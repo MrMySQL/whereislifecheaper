@@ -6,8 +6,8 @@ import { supermarketRepository as defaultSupermarketRepo, scrapeLogRepository as
 import { scraperLogger } from '../utils/logger';
 import { ProductData, ScrapeResult, CategoryConfig, PageInfo } from '../types/scraper.types';
 import { ScrapeLogWithSupermarket, ScrapeLogLatestStats } from '../types/db.types';
-import { calculatePricePerUnit } from '../utils/normalizer';
-import { getScraperCategories } from '../scrapers/scraperRegistry';
+import { interpretProductQuantity } from '../utils/productQuantity';
+import { getScraperCategories, getScraperDeadlineMs } from '../scrapers/scraperRegistry';
 import { generateRunId } from '../utils/runId';
 
 export interface RunScraperOptions {
@@ -145,9 +145,12 @@ export class ScraperService {
     // Clock starts here so lookup, browser launch and scrape all draw on one
     // budget. `remaining()` never returns 0 while a budget is in force, since
     // withDeadline reads 0 as "unbounded".
-    const budgetMs = options?.deadlineMs ?? DEFAULT_SCRAPER_DEADLINE_MS;
-    const bounded = Number.isFinite(budgetMs) && budgetMs > 0;
-    const deadlineAt = startTime + budgetMs;
+    // Mutable because the scraper class is not known until the lookup below
+    // returns: the default covers the lookup itself, then a scraper with a
+    // registered budget of its own switches to it for the rest of the run.
+    let budgetMs = options?.deadlineMs ?? DEFAULT_SCRAPER_DEADLINE_MS;
+    let bounded = Number.isFinite(budgetMs) && budgetMs > 0;
+    let deadlineAt = startTime + budgetMs;
     const remaining = () => (bounded ? Math.max(1, deadlineAt - Date.now()) : 0);
 
     try {
@@ -164,6 +167,22 @@ export class ScraperService {
       if (!supermarket.is_active) {
         scraperLogger.warn(`Supermarket is not active: ${supermarket.name}`);
         return this.buildEmptyResult(supermarketId, 'Supermarket not active');
+      }
+
+      // A caller-supplied budget is an explicit instruction and outranks the
+      // registry. Measured from startTime, not from now, so the lookup this
+      // run has already spent still comes out of the scraper's own budget.
+      if (options?.deadlineMs === undefined) {
+        const registered = getScraperDeadlineMs(supermarket.scraper_class ?? '');
+        if (registered !== undefined) {
+          budgetMs = registered;
+          bounded = Number.isFinite(budgetMs) && budgetMs > 0;
+          deadlineAt = startTime + budgetMs;
+          scraperLogger.info(
+            `${supermarket.name} runs on its registered ${Math.round(budgetMs / 60000)} minute budget ` +
+            `instead of the ${Math.round(DEFAULT_SCRAPER_DEADLINE_MS / 60000)} minute default.`
+          );
+        }
       }
 
       await this.withDeadline(this.ensureStaleRunsReaped(), remaining(), budgetMs);
@@ -225,7 +244,7 @@ export class ScraperService {
         products: products.map(p => ({
           ...p,
           normalizedName: p.name,
-          pricePerUnit: calculatePricePerUnit(p.price, p.unitQuantity, p.unit),
+          pricePerUnit: interpretProductQuantity(p).comparablePrice ?? undefined,
         })),
         scrapedAt: new Date(),
         duration: Date.now() - startTime,
@@ -381,12 +400,12 @@ export class ScraperService {
       for (const product of products) {
         try {
           const mappingId = await this.productService.findOrCreateProduct(product, supermarketId);
-          await this.productService.recordPrice(mappingId, {
+          if (product.isAvailable) await this.productService.recordPrice(mappingId, {
             price: product.price,
             currency: product.currency,
             originalPrice: product.originalPrice,
             isOnSale: product.isOnSale,
-            pricePerUnit: calculatePricePerUnit(product.price, product.unitQuantity, product.unit),
+            quantityInfo: interpretProductQuantity(product),
           });
           storedCount++;
         } catch (err) {

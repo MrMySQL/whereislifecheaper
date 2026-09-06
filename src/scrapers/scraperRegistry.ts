@@ -35,6 +35,15 @@ export interface ScraperRegistration {
   defaultConfig: Partial<ScraperConfig>;
   /** Available categories for this scraper */
   categories: CategoryConfig[];
+  /**
+   * Wall-clock budget for one run of this scraper, in ms.
+   *
+   * Omit it and the scraper runs on DEFAULT_SCRAPER_DEADLINE_MS. Set it only
+   * for a catalog the default cannot cover: the budget is a safeguard against
+   * a wedged scraper holding the run open, so raising it trades that
+   * protection for coverage and should be justified per scraper.
+   */
+  deadlineMs?: number;
 }
 
 /**
@@ -243,6 +252,11 @@ export const SCRAPER_REGISTRY: Map<string, ScraperRegistration> = new Map([
       scraperClass: WoolworthsScraper,
       defaultConfig: woolworthsConfig,
       categories: woolworthsCategories,
+      // The 45-minute default cut every run mid-catalog: 9 of 13 categories on
+      // 2026-09-04, with Pantry stopped at page 60 of ~238 and Drinks, Beer,
+      // Wine & Spirits and International Foods never reached. At ~12s per
+      // 36-product page the full catalog is a ~2.5h job.
+      deadlineMs: 3 * 60 * 60 * 1000,
     },
   ],
 ]);
@@ -273,6 +287,13 @@ export function getScraperCategories(className: string): CategoryConfig[] {
  */
 export function getScraperDefaultConfig(className: string): Partial<ScraperConfig> | undefined {
   return SCRAPER_REGISTRY.get(className)?.defaultConfig;
+}
+
+/**
+ * Get the per-scraper wall-clock budget, or undefined to use the default.
+ */
+export function getScraperDeadlineMs(className: string): number | undefined {
+  return SCRAPER_REGISTRY.get(className)?.deadlineMs;
 }
 
 /**
