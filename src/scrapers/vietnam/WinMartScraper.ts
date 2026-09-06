@@ -138,9 +138,11 @@ export class WinMartScraper extends BaseScraper {
         const items = await this.fetchCategoryPage(category.url, pageNumber);
 
         if (!items) {
-          // fetchCategoryPage logged the cause and returned null.
-          this.logError(
-            `Failed to fetch ${category.name} page ${pageNumber}`,
+          // fetchCategoryPage logged the cause and returned null. We give the
+          // category up here; BaseScraper decides whether that lost it.
+          this.failCategory(
+            category,
+            `page ${pageNumber} could not be fetched`,
             `${WinMartScraper.API_BASE}/it/api/web/v3/item/category?slug=${category.url}&pageNumber=${pageNumber}`
           );
           break;

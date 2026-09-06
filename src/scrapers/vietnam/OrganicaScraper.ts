@@ -133,9 +133,11 @@ export class OrganicaScraper extends BaseScraper {
         const apiProducts = await this.fetchCategoryPage(category.url, page);
 
         if (!apiProducts) {
-          // fetchCategoryPage logged the cause and returned null.
-          this.logError(
-            `Failed to fetch ${category.name} page ${page}`,
+          // fetchCategoryPage logged the cause and returned null. We give the
+          // category up here; BaseScraper decides whether that lost it.
+          this.failCategory(
+            category,
+            `page ${page} could not be fetched`,
             `${this.config.baseUrl}/collections/${category.url}/products.json?page=${page}`
           );
           hasMore = false;

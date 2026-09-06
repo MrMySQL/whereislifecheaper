@@ -145,7 +145,7 @@ export class MigrosScraper extends BaseScraper {
     const firstPageData = await this.fetchCategoryPage(categorySlug, 1);
 
     if (!firstPageData?.successful) {
-      this.failCategory(category, 'API returned unsuccessful for the first page', `${this.API_BASE}/${categorySlug}?sayfa=1`);
+      this.failCategory(category, 'API returned unsuccessful for the first page', `${this.API_BASE}/${categorySlug}`);
       return products;
     }
 

@@ -608,7 +608,9 @@ export class ReweScraper extends BaseScraper {
               this.logger.warn(`Cloudflare challenge on page ${pageNum}, attempting to solve...`);
               const solved = await this.solveCloudflareChallenge();
               if (!solved) {
-                this.logError(`Could not solve Cloudflare on page ${pageNum} of ${category.name}, stopping pagination`, pageUrl);
+                // Giving the category up; BaseScraper decides whether that
+                // lost it or truncated it.
+                this.failCategory(category, `could not solve Cloudflare on page ${pageNum}`, pageUrl);
                 break;
               }
               pageTitle = await this.page.title();

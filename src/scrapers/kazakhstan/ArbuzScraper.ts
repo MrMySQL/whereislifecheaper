@@ -125,16 +125,14 @@ export class ArbuzScraper extends BaseScraper {
    * Scrape a single category using REST API
    */
   protected async scrapeCategory(category: CategoryConfig): Promise<ProductData[]> {
-    return this.scrapeCategoryViaApi(category.id, category.name);
+    return this.scrapeCategoryViaApi(category);
   }
 
   /**
    * Scrape a single category using REST API with pagination
    */
-  private async scrapeCategoryViaApi(
-    categoryId: string,
-    categoryName: string
-  ): Promise<ProductData[]> {
+  private async scrapeCategoryViaApi(category: CategoryConfig): Promise<ProductData[]> {
+    const { id: categoryId, name: categoryName } = category;
     const products: ProductData[] = [];
     let page = 1;
     const limit = 40;
@@ -147,9 +145,11 @@ export class ArbuzScraper extends BaseScraper {
         const pageData = await this.fetchCategoryPage(categoryId, page, limit);
 
         if (!pageData) {
-          // fetchCategoryPage logged the cause and returned null.
-          this.logError(
-            `Failed to fetch page ${page} of ${categoryName}`,
+          // fetchCategoryPage logged the cause and returned null. We give the
+          // category up here; BaseScraper decides whether that lost it.
+          this.failCategory(
+            category,
+            `page ${page} could not be fetched`,
             `${this.API_BASE}/shop/catalog/${categoryId}?page=${page}`
           );
           hasMore = false;

@@ -200,9 +200,11 @@ export class GurkeralScraper extends BaseScraper {
 
         if (!categoryResponse) {
           // fetchCategoryProductIds logged the cause and returned null: a
-          // failed request, not the end of the category.
-          this.logError(
-            `Failed to fetch page ${page + 1} of ${category.name}`,
+          // failed request, not the end of the category. We give the category
+          // up here; BaseScraper decides whether that lost it or truncated it.
+          this.failCategory(
+            category,
+            `page ${page + 1} could not be fetched`,
             `${this.API_BASE}/categories/normal/${categoryId}/products`
           );
           break;
