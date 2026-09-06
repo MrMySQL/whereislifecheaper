@@ -467,14 +467,29 @@ export class ReweScraper extends BaseScraper {
     if (!this.page) throw new ReweMarketError('Browser page is not initialized');
 
     let configuration: MarketConfiguration | null = null;
+    let lastError: unknown = null;
     for (let attempt = 0; attempt < MARKET_POLL_ATTEMPTS; attempt++) {
       if (attempt > 0) await this.page.waitForTimeout(MARKET_POLL_INTERVAL_MS);
-      configuration = await this.readMarketConfiguration().catch(() => null);
+      try {
+        configuration = await this.readMarketConfiguration();
+        lastError = null;
+      } catch (error) {
+        // Every read error keeps the poll going: the reload that follows the
+        // 201 rejects a read in flight as a destroyed context or a failed
+        // fetch, and the next read works. A persistent cause (a 403 from the
+        // endpoint, say) still ends here after the poll budget, so it is
+        // kept and reported instead of dying as "configuration: null".
+        configuration = null;
+        lastError = error;
+      }
       const wwIdent = configuration && deliveryMarketFor(configuration, this.POSTAL_CODE);
       if (wwIdent) return wwIdent;
     }
+    const seen = lastError instanceof Error
+      ? `last read failed: ${lastError.message}`
+      : `last read: ${JSON.stringify(configuration)}`;
     throw new ReweMarketError(
-      `No delivery market set for ${this.POSTAL_CODE} after the zip flow: ${JSON.stringify(configuration)}`
+      `No delivery market set for ${this.POSTAL_CODE} after the zip flow (${seen})`
     );
   }
 

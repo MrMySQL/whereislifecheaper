@@ -153,6 +153,17 @@ describe('ReweScraper.selectDeliveryMarket', () => {
     expect(page.readCount).toBe(3);
   });
 
+  it('names the last read error when the market never appears', async () => {
+    // A 403 from the configuration endpoint used to surface as "No delivery
+    // market set ... : null" after 15 seconds of polling, with the cause gone.
+    const page = fakePage([NO_MARKET, new Error('marketselection/configuration answered HTTP 403')]);
+    const scraper = scraperWith(page);
+
+    await expect(
+      (scraper as unknown as { selectDeliveryMarket: () => Promise<void> }).selectDeliveryMarket()
+    ).rejects.toThrow(/answered HTTP 403/);
+  });
+
   it('walks zip → submit → Lieferservice and accepts the market the site then reports', async () => {
     const page = fakePage([NO_MARKET, BERLIN_DELIVERY]);
     const scraper = scraperWith(page);
