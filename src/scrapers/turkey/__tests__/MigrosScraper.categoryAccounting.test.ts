@@ -54,6 +54,16 @@ describe('MigrosScraper category accounting', () => {
     expect(scraper.getErrors()).toEqual([]);
   });
 
+  it('reports the category lost when the first page has no products array', async () => {
+    const malformed = { successful: true, data: { searchInfo: { pageCount: 1, hitCount: 0 } } };
+    const scraper = new FixtureScraper([malformed]);
+
+    await scraper.scrapeProductList();
+
+    expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
+    expect(scraper.getCategoryErrors()[0].message).toMatch(/no products array/);
+  });
+
   it('keeps a category that lost a later page, with the page error on record', async () => {
     const scraper = new FixtureScraper([page([item('a')], 2), { successful: false }]);
 

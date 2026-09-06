@@ -261,7 +261,9 @@ export class AuchanUaScraper extends BaseScraper {
       await this.page.waitForSelector('a[href*="/ua/"][href$="/"]', {
         timeout: 10000,
       }).catch(() => {
-        this.logger.warn('Product links not found on page');
+        // Through the buffer: a category with no products after this is lost
+        // (the 2026-09-04 Cloudflare block looked exactly like this).
+        this.logError('Product links not found on page', this.page?.url());
       });
 
       // Get all product containers by looking for elements with price info
@@ -297,7 +299,7 @@ export class AuchanUaScraper extends BaseScraper {
         }
       }
     } catch (error) {
-      this.logger.error('Failed to extract products from page:', error);
+      this.logError('Failed to extract products from page', this.page?.url(), error as Error);
       await this.takeScreenshot('auchan-extract-products-error');
       throw error;
     }

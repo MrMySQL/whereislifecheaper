@@ -273,7 +273,10 @@ export class SezamoScraper extends BaseScraper {
         ]);
 
         if (!productsResponse.ok() || !pricesResponse.ok()) {
-          this.logger.warn(`Failed to fetch batch: products=${productsResponse.status()}, prices=${pricesResponse.status()}`);
+          this.logError(
+            `Failed to fetch product batch: products=${productsResponse.status()}, prices=${pricesResponse.status()}`,
+            `${this.API_BASE}/products?${productsParam}`
+          );
           continue;
         }
 
@@ -294,7 +297,7 @@ export class SezamoScraper extends BaseScraper {
           }
         }
       } catch (error) {
-        this.logger.error(`Failed to fetch product batch:`, error);
+        this.logError('Failed to fetch product batch', `${this.API_BASE}/products?${productsParam}`, error as Error);
       }
 
       if (i + this.BATCH_SIZE < productIds.length) {

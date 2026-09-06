@@ -200,11 +200,8 @@ export class CarrefourItScraper extends BaseScraper {
           // Wait between pages
           await sleep(this.config.waitTimes.betweenPages || 500);
         } catch (error) {
-          this.logger.warn(
-            `Failed to fetch page ${page + 1} of ${category.name}:`,
-            (error as Error).message
-          );
-          this.productsFailed++;
+          // logError counts the failure and keeps it where BaseScraper looks.
+          this.logError(`Failed to fetch page ${page + 1} of ${category.name}`, undefined, error as Error);
         }
       }
 

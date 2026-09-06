@@ -287,7 +287,7 @@ export class AnnamGourmetScraper extends BaseScraper {
     }, url);
 
     if ('error' in result) {
-      this.logger.warn(`Ajax request failed: ${result.error} for ${url}`);
+      this.logError(`Ajax request failed: HTTP ${result.error}`, url);
       return null;
     }
 

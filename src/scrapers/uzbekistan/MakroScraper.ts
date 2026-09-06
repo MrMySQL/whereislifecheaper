@@ -251,7 +251,8 @@ export class MakroScraper extends BaseScraper {
 
       products.push(...parsedProducts);
     } catch (error) {
-      this.failCategory(category, error, `${this.API_BASE}?categoryId=${categoryId}`);
+      // The id travels in the POST body; this is the URL that was requested.
+      this.failCategory(category, error, `${this.API_BASE}?auto_translate=false`);
     }
 
     return products;

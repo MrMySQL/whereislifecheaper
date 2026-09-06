@@ -234,7 +234,7 @@ export class SparAlbaniaScraper extends BaseScraper {
         }
       }
     } catch (error) {
-      this.logger.error('Failed to extract products from page:', error);
+      this.logError('Failed to extract products from page', this.page?.url(), error as Error);
       await this.takeScreenshot('extract-products-error');
       throw error;
     }

@@ -255,7 +255,9 @@ export class MigrosScraper extends BaseScraper {
     const products: ProductData[] = [];
 
     if (!apiProducts || !Array.isArray(apiProducts)) {
-      this.logger.warn(`No products array in API response`);
+      // logError, not a warning: a category that ends with no products after
+      // this must count as lost, and BaseScraper only sees the error buffer.
+      this.logError('Unexpected API response: no products array');
       return products;
     }
 

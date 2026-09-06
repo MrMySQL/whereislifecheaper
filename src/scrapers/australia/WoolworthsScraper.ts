@@ -222,9 +222,9 @@ export class WoolworthsScraper extends BaseScraper {
       const response = await this.fetchCategoryPage(category, pageNumber);
 
       if (!response || !response.Success) {
-        this.logger.warn(
-          `${category.name}: empty/failed response on page ${pageNumber}, stopping`
-        );
+        // Giving the category up; BaseScraper decides whether that lost it
+        // or truncated it.
+        this.failCategory(category, `empty or failed response on page ${pageNumber}`);
         break;
       }
 

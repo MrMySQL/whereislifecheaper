@@ -278,11 +278,8 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
                 const products = this.transformProducts(pageData.data.search.items);
                 return { pageNum, products };
               } catch (error) {
-                this.logger.warn(
-                  `Failed to fetch page ${pageNum} of ${categoryName}:`,
-                  (error as Error).message
-                );
-                this.productsFailed++;
+                // logError counts the failure and keeps it where BaseScraper looks.
+                this.logError(`Failed to fetch page ${pageNum} of ${categoryName}`, undefined, error as Error);
                 return { pageNum, products: [] };
               }
             })

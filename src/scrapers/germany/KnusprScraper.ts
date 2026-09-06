@@ -306,7 +306,10 @@ export class KnusprScraper extends BaseScraper {
         ]);
 
         if (!productsResponse.ok() || !pricesResponse.ok()) {
-          this.logger.warn(`Failed to fetch batch: products=${productsResponse.status()}, prices=${pricesResponse.status()}`);
+          this.logError(
+            `Failed to fetch product batch: products=${productsResponse.status()}, prices=${pricesResponse.status()}`,
+            `${this.API_BASE}/products?${productsParam}`
+          );
           continue;
         }
 
@@ -329,7 +332,7 @@ export class KnusprScraper extends BaseScraper {
           }
         }
       } catch (error) {
-        this.logger.error(`Failed to fetch product batch:`, error);
+        this.logError('Failed to fetch product batch', `${this.API_BASE}/products?${productsParam}`, error as Error);
       }
 
       // Small delay between batches

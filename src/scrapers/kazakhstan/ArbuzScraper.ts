@@ -178,7 +178,7 @@ export class ArbuzScraper extends BaseScraper {
       } catch (error) {
         // Giving the category up; BaseScraper decides whether that lost it
         // or truncated it.
-        this.failCategory(category, error, `${this.API_BASE}/shop/catalog/${categoryId}?page=${page}`);
+        this.failCategory(category, error, this.categoryPageUrl(categoryId, page, limit));
         hasMore = false;
       }
     }
@@ -199,7 +199,7 @@ export class ArbuzScraper extends BaseScraper {
       throw new Error('Page not initialized');
     }
 
-    const url = `${this.API_BASE}/shop/catalog/${categoryId}?where[available][e]=0&limit=${limit}&page=${page}`;
+    const url = this.categoryPageUrl(categoryId, page, limit);
 
     // Use Playwright's request context (includes cookies from browser)
     const response = await this.page.request.get(url, {
@@ -214,6 +214,10 @@ export class ArbuzScraper extends BaseScraper {
     return (await response.json()) as ArbuzApiResponse;
   }
 
+  private categoryPageUrl(categoryId: string, page: number, limit: number): string {
+    return `${this.API_BASE}/shop/catalog/${categoryId}?where[available][e]=0&limit=${limit}&page=${page}`;
+  }
+
   /**
    * Parse API product data into ProductData format
    */
@@ -221,7 +225,9 @@ export class ArbuzScraper extends BaseScraper {
     const products: ProductData[] = [];
 
     if (!apiProducts || !Array.isArray(apiProducts)) {
-      this.logger.warn(`No products array in API response`);
+      // logError, not a warning: a category that ends with no products after
+      // this must count as lost, and BaseScraper only sees the error buffer.
+      this.logError('Unexpected API response: no products array');
       return products;
     }
 

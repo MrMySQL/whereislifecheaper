@@ -93,6 +93,13 @@ export abstract class BaseScraper {
   /**
    * Scrape a single category and return its products.
    * This is the main method that subclasses must implement.
+   *
+   * Contract for failures: throw, or call failCategory() (the category is
+   * being given up) or logError() (a page or product was lost) before
+   * returning what was collected. A category that returns nothing with
+   * nothing reported is taken as empty, not as lost — the base class can
+   * only count what it is told about, so a failure logged through the plain
+   * logger vanishes from the run's health.
    */
   protected abstract scrapeCategory(category: CategoryConfig): Promise<ProductData[]>;
 
