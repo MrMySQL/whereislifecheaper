@@ -38,6 +38,9 @@
   ],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@google-cloud/logging-winston": "^6.0.1",
     "@types/connect-pg-simple": "^7.0.3",
