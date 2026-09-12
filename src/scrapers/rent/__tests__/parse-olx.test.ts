@@ -20,7 +20,7 @@ describe('parseOlxListPage', () => {
     expect(listing.sqmText).toBe('57 м²');
   });
 
-  test('removes tracking parameters so promoted and organic URLs identify the same listing', () => {
+  test('canonicalizes a listing URL by removing tracking parameters', () => {
     const [listing] = parseOlxListPage(structuredFixture);
     expect(listing.url).toBe('https://www.olx.ua/d/uk/obyavlenie/orenda-vul-urlvska-11-44-vlna-poruch-metro-osokorki-ID10veof.html');
   });

@@ -17,16 +17,19 @@ function canonicalUrl(href: string): string {
   return (href.startsWith('http') ? href : `https://www.olx.ua${href}`).split(/[?#]/)[0];
 }
 
-function parseStructuredAttributes(script: string): Map<string, OlxAttributes> {
+function parseStructuredListing(script: string): { attributes: Map<string, OlxAttributes>; empty: boolean } {
   const attributes = new Map<string, OlxAttributes>();
+  const result = { attributes, empty: false };
   // OLX serializes its state as a JSON string assigned inside this script.
   // Decode the string and object with JSON.parse, never execute page scripts.
   const match = script.match(/window\.__PRERENDERED_STATE__\s*=\s*("(?:\\.|[^"\\])*")/);
-  if (!match) return attributes;
+  if (!match) return result;
   try {
     const state = JSON.parse(JSON.parse(match[1]));
-    const ads = state?.listing?.listing?.ads;
-    if (!Array.isArray(ads)) return attributes;
+    const listing = state?.listing?.listing;
+    const ads = listing?.ads;
+    if (!Array.isArray(ads)) return result;
+    result.empty = listing.totalElements === 0 && ads.length === 0;
     for (const ad of ads) {
       if (typeof ad?.url !== 'string' || !Array.isArray(ad.params)) continue;
       const values: OlxAttributes = {};
@@ -40,12 +43,12 @@ function parseStructuredAttributes(script: string): Map<string, OlxAttributes> {
   } catch {
     // Card markup remains usable when OLX changes or omits its embedded state.
   }
-  return attributes;
+  return result;
 }
 
-export function parseOlxListPage(html: string): ListingRaw[] {
+export function parseOlxListPage(html: string, requireListingEvidence = false): ListingRaw[] {
   const $ = cheerio.load(html);
-  const attributes = parseStructuredAttributes($('#olx-init-config').text());
+  const { attributes, empty } = parseStructuredListing($('#olx-init-config').text());
   $('style, script').remove();
   const cards = $(CARD_SELECTOR);
 
@@ -82,5 +85,8 @@ export function parseOlxListPage(html: string): ListingRaw[] {
     });
   });
 
+  if (requireListingEvidence && listings.length === 0 && !empty) {
+    throw new Error('no listings parsed and no explicit empty-results state');
+  }
   return listings;
 }

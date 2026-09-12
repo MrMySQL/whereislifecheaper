@@ -32,7 +32,7 @@ No production database writes, workflow dispatch, or deployment were performed d
 
 The source fixes include OLX structured attributes and URL deduplication, Domain studio classification, Flatfy district/scope validation, and preservation of partial listings after HTTP/navigation failures. Australian scrapers now reject missing or malformed search payloads instead of interpreting protection stubs as empty results. Source-health reporting retains the refusal reason through normalization and describes partial regressions accurately.
 
-OLX and DOM.RIA still treat a later HTTP 200 page with no parsed cards as the end of pagination; identifying a genuine empty result versus an unknown protection page needs source-specific evidence. Their HTTP and navigation failures are now explicit and preserve prior listings.
+Follow-up PR review hardened HTTP 200 empty-page handling: an unverified zero-card page is a failure and preserves an existing sample as degraded. Flatfy also rejects redirects that drop or change the requested page number. Realestate.com.au strict parsing rejects a nonempty search result that produces no usable listings while still accepting an explicitly empty result array.
 
 Regression fixtures include reduced examples from the captured OLX and Domain pages. CLI tests invoke the repository's installed ts-node directly, avoiding package resolution/network access from temporary working directories.
 

@@ -92,8 +92,40 @@ describe('scrapeFlatfy', () => {
     await expect(scrapeFlatfy({ startPage: 210 })).rejects.toThrow(/outside.*Kyiv.*rent/);
   });
 
+  test.each(['', '&page=1', '&page=209'])('rejects a resumed page whose redirect changes pagination to %s', async (query) => {
+    finalUrl = `https://flatfy.ua/uk/search?geo_id=10009580&section_id=2${query}`;
+    gotoMock.mockImplementation(respond);
+    await expect(scrapeFlatfy({ startPage: 210 })).rejects.toThrow(/requested page 210.*received page (?:1|209)/);
+  });
+
+  test.each(['', '&page=1', '&page=209'])('preserves the sample as degraded when a later redirect changes pagination to %s', async (query) => {
+    gotoMock.mockImplementationOnce(async () => {
+      finalUrl = 'https://flatfy.ua/uk/search?geo_id=10009580&section_id=2&page=209';
+      return respond();
+    }).mockImplementation(async () => {
+      finalUrl = `https://flatfy.ua/uk/search?geo_id=10009580&section_id=2${query}`;
+      return respond();
+    });
+    const result = await scrapeFlatfy({ startPage: 209 });
+    expect(result).toMatchObject({
+      listings: [{ url: 'https://flatfy.ua/redirect/4713104101' }],
+      degraded: expect.stringMatching(/requested page 210.*received page (?:1|209)/),
+    });
+  });
+
+  test('accepts an omitted page parameter for the first page', async () => {
+    finalUrl = 'https://flatfy.ua/uk/search?geo_id=10009580&section_id=2';
+    gotoMock.mockImplementationOnce(respond).mockRejectedValue(new Error('navigation failed'));
+    const result = await scrapeFlatfy();
+    expect(result).toMatchObject({
+      listings: [{ url: 'https://flatfy.ua/redirect/4713104101' }],
+      degraded: expect.stringMatching(/page 2.*navigation failed/),
+    });
+  });
+
   test.each(['empty', 'http', 'navigation', 'wall', 'redirect'])('preserves the collected sample as degraded after a later %s failure', async (failure) => {
-    gotoMock.mockImplementationOnce(respond).mockImplementation(async () => {
+    gotoMock.mockImplementationOnce(respond).mockImplementation(async (requestedUrl: string) => {
+      finalUrl = requestedUrl;
       if (failure === 'navigation') throw new Error('navigation failed');
       html = failure === 'wall' ? '<html>DataDome captcha-delivery.com</html>' : '<html></html>';
       if (failure === 'http') status = 503;

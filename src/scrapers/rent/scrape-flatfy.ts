@@ -103,6 +103,12 @@ export async function scrapeFlatfy(
               returnedUrl.searchParams.get('section_id') !== '2') {
             throw new Error(`redirected outside the Kyiv rent search; HTTP ${status ?? 'unknown'}; url=${page.url()}`);
           }
+          // A redirect can retain the search filters but reset pagination.
+          // An omitted page means page 1, never the late page we requested.
+          const returnedPage = returnedUrl.searchParams.get('page') ?? '1';
+          if (returnedPage !== String(p)) {
+            throw new Error(`requested page ${p} but received page ${returnedPage}; HTTP ${status ?? 'unknown'}; url=${page.url()}`);
+          }
 
           // Wait for the React-rendered listing cards to appear.
           try {

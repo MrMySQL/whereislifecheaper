@@ -39,6 +39,9 @@ export async function scrapeDomria(): Promise<ScrapeResult> {
 
         const html = await page.content();
         pageListings = parseDomriaListPage(html);
+        // No verified empty-results marker is available for this source.
+        // A zero-card HTTP 200 page may instead be a challenge or changed markup.
+        if (pageListings.length === 0) throw new Error('no listings parsed; end of results is unconfirmed');
       } catch (error) {
         const message = `[domria] page ${pageNum}: ${error instanceof Error ? error.message : String(error)}`;
         if (collected.length === 0) throw new Error(message);
@@ -48,11 +51,6 @@ export async function scrapeDomria(): Promise<ScrapeResult> {
       }
       console.log(`[domria] page ${pageNum}: ${pageListings.length} listings`);
 
-      if (pageListings.length === 0) {
-        if (pageNum === 1) throw new Error('[domria] no listings parsed from the first page');
-        console.log('[domria] empty page, stopping pagination');
-        break;
-      }
       const seen = new Set(collected.map((l) => l.url));
       let newCount = 0;
       for (const l of pageListings) {

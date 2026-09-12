@@ -44,7 +44,7 @@ export async function scrapeOlx(): Promise<ScrapeResult> {
           .catch(() => {});
 
         const html = await page.content();
-        pageListings = parseOlxListPage(html);
+        pageListings = parseOlxListPage(html, true);
       } catch (error) {
         const message = `[olx] page ${pageNum}: ${error instanceof Error ? error.message : String(error)}`;
         if (collected.length === 0) throw new Error(message);
@@ -55,7 +55,6 @@ export async function scrapeOlx(): Promise<ScrapeResult> {
       console.log(`[olx] page ${pageNum}: ${pageListings.length} listings`);
 
       if (pageListings.length === 0) {
-        if (pageNum === 1) throw new Error('[olx] no listings parsed from the first page');
         console.log('[olx] empty page, stopping pagination');
         break;
       }

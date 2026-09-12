@@ -88,6 +88,7 @@ function getRentSearchListings(exchange: Record<string, unknown> | null): ReaLis
 
   const listings: ReaListing[] = [];
   let foundSearch = false;
+  let hasSearchItems = false;
   for (const entry of Object.values(cache)) {
     if (!entry?.data) continue;
     let data: any;
@@ -100,11 +101,12 @@ function getRentSearchListings(exchange: Record<string, unknown> | null): ReaLis
     const items = data?.rentSearch?.results?.exact?.items;
     if (!Array.isArray(items)) continue;
     foundSearch = true;
+    hasSearchItems ||= items.length > 0;
     for (const item of items) {
       if (item?.listing) listings.push(item.listing);
     }
   }
-  return foundSearch ? listings : null;
+  return foundSearch && (!hasSearchItems || listings.length > 0) ? listings : null;
 }
 
 function sqmText(listing: ReaListing): string | null {
@@ -147,5 +149,10 @@ export function parseRealestateAuListPage(html: string, requireSearchPayload = f
     });
   }
 
+  // Only an explicit empty results array establishes the end of pagination.
+  // A nonempty payload that yields nothing can indicate a changed schema.
+  if (requireSearchPayload && listings.length > 0 && out.length === 0) {
+    throw new Error('Missing or invalid realestate.com.au search payload');
+  }
   return out;
 }
