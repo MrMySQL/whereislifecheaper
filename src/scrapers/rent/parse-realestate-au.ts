@@ -152,7 +152,7 @@ export function parseRealestateAuListPage(html: string, requireSearchPayload = f
   // Only an explicit empty results array establishes the end of pagination.
   // A nonempty payload that yields nothing can indicate a changed schema.
   if (requireSearchPayload && listings.length > 0 && out.length === 0) {
-    throw new Error('Missing or invalid realestate.com.au search payload');
+    throw new Error('realestate.com.au search payload contained no usable listings (possible schema change)');
   }
   return out;
 }

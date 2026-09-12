@@ -87,13 +87,14 @@ describe('scrapeOlx', () => {
   });
 
   test('does not mistake an empty ads array with positive result count for end of results', async () => {
-    const { page } = browserWithPage(card);
+    const { page, browser } = browserWithPage(card);
     const state = { listing: { listing: { totalElements: 1000, ads: [] } } };
     page.content.mockResolvedValueOnce(card).mockResolvedValueOnce(
       `<script id="olx-init-config">window.__PRERENDERED_STATE__ = ${JSON.stringify(JSON.stringify(state))};</script>`,
     );
     const checked = expect(scrapeOlx()).resolves.toMatchObject({ degraded: expect.stringMatching(/page 2.*partial/) });
     await Promise.all([checked, jest.runAllTimersAsync()]);
+    expect(browser.close).toHaveBeenCalledTimes(1);
   });
 
 });

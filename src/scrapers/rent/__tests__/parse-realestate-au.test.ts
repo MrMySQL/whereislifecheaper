@@ -28,6 +28,11 @@ describe('parseRealestateAuListPage', () => {
     expect(() => parseRealestateAuListPage(searchPage(items as unknown[]), true)).toThrow(/search payload/i);
   });
 
+  test('distinguishes unusable listing data from a missing search payload', () => {
+    expect(() => parseRealestateAuListPage(searchPage([{ listing: {} }]), true))
+      .toThrow(/search payload contained no usable listings/);
+  });
+
   test('accepts an explicitly empty search in strict mode', () => {
     expect(parseRealestateAuListPage(searchPage([]), true)).toEqual([]);
   });
