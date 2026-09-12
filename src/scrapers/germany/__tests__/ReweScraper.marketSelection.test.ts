@@ -115,6 +115,83 @@ describe('deliveryMarketFor', () => {
   });
 });
 
+describe('REWE Cloudflare challenge handling', () => {
+  function challengePage() {
+    return {
+      ...fakePage([NO_MARKET]),
+      title: async () => 'Einen Moment bitte...',
+      url: () => 'https://www.rewe.de/shop/',
+      screenshot: async () => {},
+      frames: () => [] as unknown[],
+    };
+  }
+
+  function solve(page: ReturnType<typeof challengePage>) {
+    return (scraperWith(page) as unknown as {
+      solveCloudflareChallenge: () => Promise<boolean>;
+    }).solveCloudflareChallenge();
+  }
+
+  it('does not declare a challenge solved just because it retains the shop URL', async () => {
+    // The September 10 Actions screenshot still showed an unchecked challenge
+    // after the URL-based shortcut returned true.
+    await expect(solve(challengePage())).resolves.toBe(false);
+  });
+
+  it('finds a challenge frame even when its iframe is not queryable in the page DOM', async () => {
+    const page = challengePage();
+    let clicked = false;
+    page.title = async () => clicked ? 'REWE Onlineshop' : 'Einen Moment bitte...';
+    page.frames = () => [{
+      url: () => 'https://challenges.cloudflare.com/cdn-cgi/challenge-platform/turnstile/test',
+      $: async (selector: string) => selector === 'input[type="checkbox"]' ? {
+        boundingBox: async () => null,
+        click: async () => { clicked = true; },
+      } : null,
+    }];
+
+    await expect(solve(page)).resolves.toBe(true);
+    expect(clicked).toBe(true);
+  });
+
+  it('clicks the rendered checkbox inside a closed shadow root using its frame offset', async () => {
+    const page = challengePage();
+    let clicked = false;
+    page.title = async () => clicked ? 'REWE Onlineshop' : 'Nur einen Moment…';
+    const session = {
+      send: async (method: string) => {
+        if (method === 'DOM.getDocument') return { root: {
+          nodeName: '#document', children: [{ nodeName: 'BODY', shadowRoots: [{
+            nodeName: '#document-fragment', children: [{
+              nodeName: 'INPUT', attributes: ['type', 'checkbox'], backendNodeId: 31,
+            }],
+          }] }],
+        } };
+        if (method === 'DOM.getBoxModel') return { model: {
+          content: [9, 16, 209, 16, 209, 49, 9, 49], width: 200, height: 33,
+        } };
+        return {};
+      },
+      detach: async () => {},
+    };
+    Object.assign(page, {
+      context: () => ({ newCDPSession: async () => session }),
+      mouse: { click: async (x: number, y: number) => { clicked = x === 609 && y === 452.5; } },
+    });
+    page.frames = () => [{
+      url: () => 'https://challenges.cloudflare.com/cdn-cgi/challenge-platform/turnstile/test',
+      $: async () => null,
+      frameElement: async () => ({
+        boundingBox: async () => ({ x: 500, y: 420, width: 300, height: 65 }),
+        dispose: async () => {},
+      }),
+    }];
+
+    await expect(solve(page)).resolves.toBe(true);
+    expect(clicked).toBe(true);
+  });
+});
+
 describe('ReweScraper.selectDeliveryMarket', () => {
   it('throws when the site still reports no market after the zip flow', async () => {
     // 2026-08-01: the old selectors clicked a paragraph and a non-existent

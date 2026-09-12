@@ -74,6 +74,9 @@ jobs:
           # Bound to an env var rather than interpolated into the script, so a
           # dispatch input cannot inject shell.
           SCRAPER_INPUT: ${{ inputs.scraper }}
+          # Preserve the existing proxy secret after the move to per-store
+          # configuration. REWE's challenge can reject hosted-runner traffic.
+          SCRAPER_PROXY_CONFIG: ${{ secrets.SCRAPER_PROXY_URL != '' && format('{{"rewe":{0}}}', toJSON(secrets.SCRAPER_PROXY_URL)) || '{}' }}
         run: |
           if [ -n "$SCRAPER_INPUT" ]; then
             echo "Running specific scraper: $SCRAPER_INPUT"
