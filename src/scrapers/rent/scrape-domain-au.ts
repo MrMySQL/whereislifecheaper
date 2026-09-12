@@ -65,25 +65,24 @@ export async function scrapeDomainAu(): Promise<ScrapeResult> {
     const url = `${BASE_URL}${pageNum}`;
     console.log(`[domainau] fetching page ${pageNum}: ${url}`);
 
-    const response = await fetch(url, {
-      headers: HEADERS,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      // The status is the entire diagnosis of a block, and returning [] here
-      // would reach the summary as "0 raw" - the same thing a page that simply
-      // parsed to nothing looks like. Once some pages are in hand, though, a
-      // refusal is a reason to stop rather than to throw away real listings -
-      // but the sample is then a truncated slice of an ordered result set, so
-      // it goes back marked 'degraded' rather than passed off as a clean run.
-      const message = `[domainau] page ${pageNum} returned HTTP ${response.status}`;
+    let pageListings: ListingRaw[];
+    try {
+      const response = await fetch(url, {
+        headers: HEADERS,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      if (!response.ok) throw new Error(`returned HTTP ${response.status}`);
+      // HTTP 200 can still be a protection stub. Only a valid search payload
+      // can establish that pagination reached an empty results page.
+      pageListings = parseDomainAuListPage(await response.text(), true);
+    } catch (error) {
+      const message = `[domainau] page ${pageNum}: ${error instanceof Error ? error.message : String(error)}`;
       if (collected.length === 0) throw new Error(message);
       degraded = `${message} after ${collected.length} listings; sample is partial`;
       console.warn(degraded);
       break;
     }
 
-    const pageListings = parseDomainAuListPage(await response.text());
     console.log(`[domainau] page ${pageNum}: ${pageListings.length} listings`);
     if (pageListings.length === 0) break;
 

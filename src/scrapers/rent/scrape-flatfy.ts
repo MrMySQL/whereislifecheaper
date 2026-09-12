@@ -1,6 +1,7 @@
 import { chromium, Browser } from 'playwright';
 import { parseFlatfyListPage, isDataDomeWall } from './parse-flatfy';
 import { ListingRaw } from './types';
+import type { ScrapeResult } from './RentScraperService';
 
 const BASE_URL =
   'https://flatfy.ua/uk/search?geo_id=10009580&section_id=2&page=';
@@ -18,8 +19,8 @@ const WALL_BACKOFF_MS = 20000; // grows linearly per retry: 20s, 40s, 60s, ...
 // How many consecutive all-duplicate pages to tolerate before treating it as the
 // end of pagination. Must be generous enough to page through the overlap when
 // resuming a prior run (listings shift between pages over time, so the seam of
-// already-seen pages can span several pages). Real end-of-data is detected
-// separately by an empty page, so a high value only costs at the resume seam.
+// already-seen pages can span several pages). An unrecognized empty page is
+// reported separately as incomplete, since it may be a block or markup change.
 const ZERO_ADD_TOLERANCE = 12;
 
 function sleep(ms: number): Promise<void> {
@@ -36,7 +37,7 @@ export interface ScrapeFlatfyOptions {
 
 export async function scrapeFlatfy(
   opts: ScrapeFlatfyOptions = {},
-): Promise<ListingRaw[]> {
+): Promise<ScrapeResult> {
   const startPage = Math.max(1, opts.startPage ?? 1);
   // Headed Chromium is required to bypass flatfy.ua's DataDome protection.
   const browser: Browser = await chromium.launch({
@@ -62,6 +63,7 @@ export async function scrapeFlatfy(
     const seen = new Set<string>();
     const all: ListingRaw[] = [];
     let zeroAddStreak = 0;
+    let degraded: string | undefined;
 
     // Seed from a prior run so we append new listings and skip ones we already have.
     for (const l of opts.seed ?? []) {
@@ -78,84 +80,113 @@ export async function scrapeFlatfy(
 
     for (let p = startPage; p <= MAX_PAGES; p++) {
       const url = BASE_URL + p;
+      try {
+        // Fetch the page, recovering from DataDome walls by pausing and retrying.
+        let html = '';
+        let walled = false;
+        let status: number | undefined;
+        for (let attempt = 0; attempt <= WALL_RETRIES; attempt++) {
+          const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+          status = response?.status();
+          // An explicit HTTP refusal is terminal; retries below are only for
+          // soft interstitials served with a successful status.
+          if (status !== undefined && status >= 400) {
+            throw new Error(`HTTP ${status}; title=${JSON.stringify(await page.title())}; url=${page.url()}`);
+          }
 
-      // Fetch the page, recovering from DataDome walls by pausing and retrying.
-      let html = '';
-      let walled = false;
-      for (let attempt = 0; attempt <= WALL_RETRIES; attempt++) {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+          // Late pages can redirect to an unfiltered search containing sales.
+          // Never treat those cards as Kyiv monthly rentals.
+          const returnedUrl = new URL(page.url());
+          if (returnedUrl.hostname !== 'flatfy.ua' ||
+              !/^\/(?:uk\/)?search$/.test(returnedUrl.pathname) ||
+              returnedUrl.searchParams.get('geo_id') !== '10009580' ||
+              returnedUrl.searchParams.get('section_id') !== '2') {
+            throw new Error(`redirected outside the Kyiv rent search; HTTP ${status ?? 'unknown'}; url=${page.url()}`);
+          }
+          // A redirect can retain the search filters but reset pagination.
+          // An omitted page means page 1, never the late page we requested.
+          const returnedPage = returnedUrl.searchParams.get('page') ?? '1';
+          if (returnedPage !== String(p)) {
+            throw new Error(`requested page ${p} but received page ${returnedPage}; HTTP ${status ?? 'unknown'}; url=${page.url()}`);
+          }
 
-        // Wait for the React-rendered listing cards to appear.
-        try {
-          await page.waitForSelector(CARD_SELECTOR, { timeout: 30000 });
-        } catch {
-          // No cards rendered — could be the DataDome wall or an empty page.
+          // Wait for the React-rendered listing cards to appear.
+          try {
+            await page.waitForSelector(CARD_SELECTOR, { timeout: 30000 });
+          } catch {
+            // No cards rendered — could be the DataDome wall or an empty page.
+          }
+
+          // Nudge any lazy-loaded content.
+          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+          await page.waitForTimeout(1500);
+
+          html = await page.content();
+
+          if (!isDataDomeWall(html)) {
+            walled = false;
+            break;
+          }
+
+          walled = true;
+          if (attempt < WALL_RETRIES) {
+            const backoff = WALL_BACKOFF_MS * (attempt + 1);
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[scrape-flatfy] DataDome wall on page ${p} (attempt ${attempt + 1}/` +
+                `${WALL_RETRIES}); backing off ${backoff / 1000}s and retrying.`
+            );
+            await sleep(backoff);
+          }
         }
 
-        // Nudge any lazy-loaded content.
-        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-        await page.waitForTimeout(1500);
-
-        html = await page.content();
-
-        if (!isDataDomeWall(html)) {
-          walled = false;
-          break;
+        if (walled) {
+          throw new Error(`DataDome wall persisted after ${WALL_RETRIES} retries; HTTP ${status ?? 'unknown'}; url=${page.url()}`);
         }
 
-        walled = true;
-        if (attempt < WALL_RETRIES) {
-          const backoff = WALL_BACKOFF_MS * (attempt + 1);
+        const listings = parseFlatfyListPage(html);
+        if (listings.length === 0) {
+          // No verified empty-results marker exists yet; an unknown page is not
+          // evidence that this ordered search finished successfully.
+          throw new Error(`no listing cards; HTTP ${status ?? 'unknown'}; title=${JSON.stringify(await page.title())}; url=${page.url()}`);
+        }
+
+        let added = 0;
+        for (const l of listings) {
+          if (seen.has(l.url)) continue;
+          seen.add(l.url);
+          all.push(l);
+          added++;
+        }
+        // A single all-duplicate page can happen at a resume boundary or when
+        // listings shift between pages, so only treat it as the end of pagination
+        // after ZERO_ADD_TOLERANCE consecutive zero-add pages.
+        if (added === 0) {
+          zeroAddStreak++;
+          if (zeroAddStreak >= ZERO_ADD_TOLERANCE) break;
+        } else {
+          zeroAddStreak = 0;
+        }
+
+        if (all.length >= TARGET_LISTINGS) break;
+
+        if (p % 10 === 0) {
           // eslint-disable-next-line no-console
-          console.warn(
-            `[scrape-flatfy] DataDome wall on page ${p} (attempt ${attempt + 1}/` +
-              `${WALL_RETRIES}); backing off ${backoff / 1000}s and retrying.`
-          );
-          await sleep(backoff);
+          console.log(`[scrape-flatfy] page ${p}: ${all.length} listings so far`);
         }
-      }
 
-      if (walled) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[scrape-flatfy] DataDome wall persisted on page ${p} after ` +
-            `${WALL_RETRIES} retries; stopping with ${all.length} listings.`
-        );
+        // Slower, jittered pacing to stay under DataDome's rate threshold.
+        await page.waitForTimeout(3500 + Math.floor(Math.random() * 2500));
+      } catch (error) {
+        const message = `[scrape-flatfy] page ${p}: ${error instanceof Error ? error.message : String(error)}`;
+        if (all.length === 0) throw new Error(message);
+        degraded = `${message}; sample is partial (${all.length} listings)`;
+        console.warn(degraded);
         break;
       }
-
-      const listings = parseFlatfyListPage(html);
-      if (listings.length === 0) break;
-
-      let added = 0;
-      for (const l of listings) {
-        if (seen.has(l.url)) continue;
-        seen.add(l.url);
-        all.push(l);
-        added++;
-      }
-      // A single all-duplicate page can happen at a resume boundary or when
-      // listings shift between pages, so only treat it as the end of pagination
-      // after two consecutive zero-add pages.
-      if (added === 0) {
-        zeroAddStreak++;
-        if (zeroAddStreak >= ZERO_ADD_TOLERANCE) break;
-      } else {
-        zeroAddStreak = 0;
-      }
-
-      if (all.length >= TARGET_LISTINGS) break;
-
-      if (p % 10 === 0) {
-        // eslint-disable-next-line no-console
-        console.log(`[scrape-flatfy] page ${p}: ${all.length} listings so far`);
-      }
-
-      // Slower, jittered pacing to stay under DataDome's rate threshold.
-      await page.waitForTimeout(3500 + Math.floor(Math.random() * 2500));
     }
 
-    return all;
+    return { listings: all, degraded };
   } finally {
     await browser.close();
   }

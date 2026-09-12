@@ -154,6 +154,7 @@ export async function scrapeRent(): Promise<RentScrapeSummary> {
         const result = await scrape();
         const raw = Array.isArray(result) ? result : result.listings;
         const degraded = Array.isArray(result) ? undefined : result.degraded;
+        if (degraded) outcome.error = degraded;
         outcome.raw = raw.length;
         totalRaw += raw.length;
         const normalized: RentListingNormalized[] = [];
@@ -170,7 +171,6 @@ export async function scrapeRent(): Promise<RentScrapeSummary> {
         const inserted = await repo.insertMany(country.id, target.city, normalized);
         outcome.inserted = inserted;
         outcome.status = degraded ? 'degraded' : 'ok';
-        if (degraded) outcome.error = degraded;
         usableSources++;
         totalInserted += inserted;
         logger.info(

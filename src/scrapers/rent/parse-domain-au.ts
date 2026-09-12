@@ -24,7 +24,7 @@ function absoluteUrl(url: string): string {
   return url.startsWith('http') ? url : `${BASE}${url}`;
 }
 
-function getListingMap(data: unknown): DomainListing[] {
+function getListingMap(data: unknown): DomainListing[] | null {
   const pageProps = (data as any)?.props?.pageProps;
   const componentProps = [pageProps?.componentProps?.componentProps, pageProps?.componentProps].find(
     (candidate) =>
@@ -34,33 +34,43 @@ function getListingMap(data: unknown): DomainListing[] {
   );
   const ids = componentProps?.listingSearchResultIds;
   const listingsMap = componentProps?.listingsMap;
-  if (!Array.isArray(ids) || !listingsMap || typeof listingsMap !== 'object') return [];
+  if (!Array.isArray(ids) || !listingsMap || typeof listingsMap !== 'object') return null;
+  if (ids.some((id) => !listingsMap[String(id)]?.listingModel)) return null;
   return ids.map((id) => listingsMap[String(id)]).filter(Boolean);
 }
 
-export function parseDomainAuListPage(html: string): ListingRaw[] {
+export function parseDomainAuListPage(html: string, requireSearchPayload = false): ListingRaw[] {
+  const invalidPayload = (): ListingRaw[] => {
+    if (requireSearchPayload) throw new Error('Missing or invalid Domain search payload');
+    return [];
+  };
   const match = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
-  if (!match) return [];
+  if (!match) return invalidPayload();
 
   let data: unknown;
   try {
     data = JSON.parse(match[1]);
   } catch {
-    return [];
+    return invalidPayload();
   }
 
+  const items = getListingMap(data);
+  if (!items) return invalidPayload();
   const out: ListingRaw[] = [];
-  for (const item of getListingMap(data)) {
+  for (const item of items) {
     const listing = item.listingModel;
     if (!listing?.url || !listing.price) continue;
 
     const beds = listing.features?.beds;
+    const isStudio = listing.features?.propertyTypeFormatted === 'Studio';
     const roomsText =
-      typeof beds === 'number'
-        ? beds === 0
-          ? 'Studio'
-          : `${beds} ${beds === 1 ? 'Bed' : 'Beds'}`
-        : '';
+      isStudio
+        ? 'Studio'
+        : typeof beds === 'number'
+          ? beds === 0
+            ? 'Studio'
+            : `${beds} ${beds === 1 ? 'Bed' : 'Beds'}`
+          : '';
     if (!roomsText) continue;
 
     const sqm =

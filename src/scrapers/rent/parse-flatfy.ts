@@ -67,7 +67,7 @@ export function parseFlatfyListPage(html: string): ListingRaw[] {
     subTitles.each((__, a) => {
       if (district) return;
       const text = $(a).text().replace(/\s+/g, ' ').trim();
-      if (!text || /^ЖК\b/i.test(text)) return;
+      if (!text || /^ЖК(?:\s|$)/i.test(text)) return;
       const raw = $(a).attr('href') || '';
       let decoded = raw;
       try {
@@ -75,7 +75,7 @@ export function parseFlatfyListPage(html: string): ListingRaw[] {
       } catch {
         /* keep raw */
       }
-      if (/район/.test(decoded)) {
+      if (/(?:^|[-/])район(?:$|[-/?#])/.test(decoded)) {
         district = text;
       }
     });

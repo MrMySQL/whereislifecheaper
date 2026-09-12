@@ -1,6 +1,7 @@
 import { chromium, Browser, Page } from 'playwright';
 import { parseDomriaListPage } from './parse-domria';
 import { ListingRaw } from './types';
+import type { ScrapeResult } from './RentScraperService';
 
 const BASE_URL = 'https://dom.ria.com/uk/arenda-kvartir/kiev/?page=';
 const MAX_PAGES = 50;
@@ -11,9 +12,10 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function scrapeDomria(): Promise<ListingRaw[]> {
+export async function scrapeDomria(): Promise<ScrapeResult> {
   const browser: Browser = await chromium.launch({ headless: true });
   const collected: ListingRaw[] = [];
+  let degraded: string | undefined;
 
   try {
     const context = await browser.newContext({
@@ -27,21 +29,33 @@ export async function scrapeDomria(): Promise<ListingRaw[]> {
       const url = `${BASE_URL}${pageNum}`;
       console.log(`[domria] fetching page ${pageNum}: ${url}`);
 
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+      let pageListings: ListingRaw[];
+      try {
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        if (response && response.status() >= 400) {
+          throw new Error(`HTTP ${response.status()}`);
+        }
+        await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
-      const html = await page.content();
-      const pageListings = parseDomriaListPage(html);
-      console.log(`[domria] page ${pageNum}: ${pageListings.length} listings`);
-
-      if (pageListings.length === 0) {
-        console.log('[domria] empty page, stopping pagination');
+        const html = await page.content();
+        pageListings = parseDomriaListPage(html);
+        // No verified empty-results marker is available for this source.
+        // A zero-card HTTP 200 page may instead be a challenge or changed markup.
+        if (pageListings.length === 0) throw new Error('no listings parsed; end of results is unconfirmed');
+      } catch (error) {
+        const message = `[domria] page ${pageNum}: ${error instanceof Error ? error.message : String(error)}`;
+        if (collected.length === 0) throw new Error(message);
+        degraded = `${message} after ${collected.length} listings; sample is partial`;
+        console.warn(degraded);
         break;
       }
+      console.log(`[domria] page ${pageNum}: ${pageListings.length} listings`);
+
       const seen = new Set(collected.map((l) => l.url));
       let newCount = 0;
       for (const l of pageListings) {
         if (!seen.has(l.url)) {
+          seen.add(l.url);
           collected.push(l);
           newCount++;
         }
@@ -63,5 +77,5 @@ export async function scrapeDomria(): Promise<ListingRaw[]> {
     await browser.close();
   }
 
-  return collected;
+  return { listings: collected, degraded };
 }

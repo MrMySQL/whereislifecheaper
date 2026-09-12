@@ -10,6 +10,7 @@ function fixture(name: string): string {
 }
 
 const listPage = fixture('domain-au-list-page.html');
+const emptyPage = '<script id="__NEXT_DATA__">{"props":{"pageProps":{"componentProps":{"listingSearchResultIds":[],"listingsMap":{}}}}}</script>';
 
 function ok(body: string): Response {
   return { ok: true, status: 200, text: async () => body } as unknown as Response;
@@ -28,11 +29,39 @@ beforeEach(() => {
 });
 
 describe('scrapeDomainAu', () => {
+  test.each([
+    '<html><body>Access denied</body></html>',
+    '<script id="__NEXT_DATA__">invalid JSON</script>',
+    '<script id="__NEXT_DATA__">{"props":{"pageProps":{"componentProps":{"listingSearchResultIds":[123],"listingsMap":{}}}}}</script>',
+  ])('reports missing or incomplete search data as a failure', async (html) => {
+    fetchMock.mockResolvedValue(ok(html));
+
+    await expect(scrapeDomainAu()).rejects.toThrow(/search payload/i);
+  });
+
+  test('marks the sample partial when a later HTTP 200 response loses the search payload', async () => {
+    fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(ok('<html></html>'));
+
+    const result = await scrapeDomainAu();
+
+    expect(result.listings).toHaveLength(2);
+    expect(result.degraded).toMatch(/search payload.*partial/i);
+  });
+
+  test('preserves a partial sample when a later request fails', async () => {
+    fetchMock.mockResolvedValueOnce(ok(listPage)).mockRejectedValue(new Error('connection reset'));
+
+    const result = await scrapeDomainAu();
+
+    expect(result.listings).toHaveLength(2);
+    expect(result.degraded).toMatch(/connection reset.*partial/i);
+  });
+
   test('fetches over plain HTTP rather than driving a browser', async () => {
     // domain.com.au serves the full __NEXT_DATA__ payload to a plain request
     // carrying browser headers, but returns nothing usable to Playwright. A
     // browser here is what made this source look permanently blocked.
-    fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(ok(''));
+    fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(ok(emptyPage));
 
     const { listings } = await scrapeDomainAu();
 
@@ -69,7 +98,7 @@ describe('scrapeDomainAu', () => {
     fetchMock
       .mockResolvedValueOnce(ok(listPage))
       .mockResolvedValueOnce(ok(secondPage))
-      .mockResolvedValue(ok(''));
+      .mockResolvedValue(ok(emptyPage));
 
     const { listings } = await scrapeDomainAu();
     const urls = listings.map((l) => l.url);
@@ -114,7 +143,7 @@ describe('scrapeDomainAu', () => {
   });
 
   test('leaves degraded unset for a scrape that ran to the end', async () => {
-    fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(ok(''));
+    fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(ok(emptyPage));
 
     const { degraded } = await scrapeDomainAu();
 
@@ -122,7 +151,7 @@ describe('scrapeDomainAu', () => {
   });
 
   test('bounds each request so a stalled portal cannot hang the whole rent run', async () => {
-    fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(ok(''));
+    fetchMock.mockResolvedValueOnce(ok(listPage)).mockResolvedValue(ok(emptyPage));
 
     await scrapeDomainAu();
 

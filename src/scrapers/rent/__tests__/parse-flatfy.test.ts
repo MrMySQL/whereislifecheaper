@@ -23,6 +23,17 @@ describe('isDataDomeWall', () => {
 });
 
 describe('parseFlatfyListPage', () => {
+  it('skips microdistrict and residential-complex links when selecting the administrative district', () => {
+    // The live Kyiv page puts the microdistrict before the administrative one.
+    const listings = parseFlatfyListPage(`
+      <article class="realty-preview" id="4713104101">
+        <a class="realty-preview-sub-title" href="/uk/жк-оболонський-район">ЖК ObolonSky</a>
+        <a class="realty-preview-sub-title" href="/uk/оренда-квартир-київ-мікрорайон-оболонь">Оболонь</a>
+        <a class="realty-preview-sub-title" href="/uk/оренда-квартир-київ-оболонський-район">Оболонський</a>
+      </article>`);
+    expect(listings[0].district).toBe('Оболонський');
+  });
+
   it('returns [] for a DataDome wall', () => {
     expect(parseFlatfyListPage(blockedFixture)).toEqual([]);
   });
