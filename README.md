@@ -18,7 +18,7 @@ A multi-country grocery price comparison system that scrapes supermarket website
 | Layer | Technology |
 |-------|------------|
 | **Frontend** | React 19, Vite 7, TailwindCSS, TanStack Query |
-| **Backend** | Node.js 18+, Express.js, TypeScript |
+| **Backend** | Node.js 20+, Express.js, TypeScript |
 | **Scraping** | Playwright (Chromium) |
 | **Database** | PostgreSQL 15 |
 | **Authentication** | Google OAuth 2.0, Passport.js |
@@ -44,7 +44,7 @@ A multi-country grocery price comparison system that scrapes supermarket website
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - Docker and Docker Compose
 - Git
 
