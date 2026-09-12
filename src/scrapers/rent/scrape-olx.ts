@@ -39,12 +39,13 @@ export async function scrapeOlx(): Promise<ScrapeResult> {
         if (response && response.status() >= 400) {
           throw new Error(`HTTP ${response.status()}`);
         }
+        const originalHtml = response ? await response.text() : undefined;
         await page
           .waitForSelector('[data-cy="l-card"]', { timeout: 15000 })
           .catch(() => {});
 
         const html = await page.content();
-        pageListings = parseOlxListPage(html, true);
+        pageListings = parseOlxListPage(html, true, originalHtml);
       } catch (error) {
         const message = `[olx] page ${pageNum}: ${error instanceof Error ? error.message : String(error)}`;
         if (collected.length === 0) throw new Error(message);

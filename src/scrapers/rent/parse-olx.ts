@@ -46,9 +46,18 @@ function parseStructuredListing(script: string): { attributes: Map<string, OlxAt
   return result;
 }
 
-export function parseOlxListPage(html: string, requireListingEvidence = false): ListingRaw[] {
+export function parseOlxListPage(
+  html: string,
+  requireListingEvidence = false,
+  originalHtml?: string,
+): ListingRaw[] {
   const $ = cheerio.load(html);
-  const { attributes, empty } = parseStructuredListing($('#olx-init-config').text());
+  const current = parseStructuredListing($('#olx-init-config').text());
+  // Hydration removes the init script. Recover only room/area metadata from
+  // the navigation response; cards, prices and empty-state evidence stay live.
+  const attributes = current.attributes.size > 0 || !originalHtml
+    ? current.attributes
+    : parseStructuredListing(cheerio.load(originalHtml)('#olx-init-config').text()).attributes;
   $('style, script').remove();
   const cards = $(CARD_SELECTOR);
 
@@ -85,7 +94,7 @@ export function parseOlxListPage(html: string, requireListingEvidence = false): 
     });
   });
 
-  if (requireListingEvidence && listings.length === 0 && !empty) {
+  if (requireListingEvidence && listings.length === 0 && !current.empty) {
     throw new Error('no listings parsed and no explicit empty-results state');
   }
   return listings;

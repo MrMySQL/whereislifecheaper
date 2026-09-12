@@ -1,4 +1,6 @@
 import { chromium } from 'playwright';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { scrapeOlx } from '../scrape-olx';
 
 jest.mock('playwright', () => ({ chromium: { launch: jest.fn() } }));
@@ -7,7 +9,7 @@ const card = '<div data-cy="l-card"><a href="/d/uk/obyavlenie/test-ID123.html"><
 
 function browserWithPage(html: string, status = 200) {
   const page = {
-    goto: jest.fn().mockResolvedValue({ status: () => status }),
+    goto: jest.fn().mockResolvedValue({ status: () => status, text: async () => html }),
     waitForSelector: jest.fn().mockResolvedValue(undefined),
     content: jest.fn().mockResolvedValue(html),
   };
@@ -48,7 +50,7 @@ describe('scrapeOlx', () => {
 
   test.each(['HTTP error', 'navigation timeout'])('preserves collected listings after a later %s', async failure => {
     const { page, browser } = browserWithPage(card);
-    page.goto.mockReset().mockResolvedValueOnce({ status: () => 200 });
+    page.goto.mockReset().mockResolvedValueOnce({ status: () => 200, text: async () => card });
     if (failure === 'HTTP error') page.goto.mockResolvedValueOnce({ status: () => 403 });
     else page.goto.mockRejectedValueOnce(new Error('navigation timed out'));
     const result = scrapeOlx();
@@ -94,6 +96,32 @@ describe('scrapeOlx', () => {
     );
     const checked = expect(scrapeOlx()).resolves.toMatchObject({ degraded: expect.stringMatching(/page 2.*partial/) });
     await Promise.all([checked, jest.runAllTimersAsync()]);
+    expect(browser.close).toHaveBeenCalledTimes(1);
+  });
+
+  test('retains response room metadata after hydration removes it, using live card prices', async () => {
+    const originalHtml = readFileSync(join(__dirname, 'fixtures', 'olx-structured-list-page.html'), 'utf8');
+    const hydratedHtml = originalHtml
+      .replace(/<script id="olx-init-config">[\s\S]*?<\/script>/, '')
+      .replace('12 999 грн.', '14 999 грн.');
+    const { page, browser } = browserWithPage(hydratedHtml);
+    page.goto.mockResolvedValue({ status: () => 200, text: async () => originalHtml });
+    const result = scrapeOlx();
+    await jest.runAllTimersAsync();
+    const sample = await result;
+    expect(sample.listings).toHaveLength(2);
+    expect(sample.listings[0]).toMatchObject({
+      roomsText: '1 кімната', sqmText: '57 м²', priceText: '14 999 грн.',
+    });
+    expect(sample.degraded).toBeUndefined();
+    expect(browser.close).toHaveBeenCalledTimes(1);
+  });
+
+  test('response metadata cannot turn missing live cards into a successful scrape', async () => {
+    const originalHtml = readFileSync(join(__dirname, 'fixtures', 'olx-structured-list-page.html'), 'utf8');
+    const { page, browser } = browserWithPage('<main>Verify you are human</main>');
+    page.goto.mockResolvedValue({ status: () => 200, text: async () => originalHtml });
+    await expect(scrapeOlx()).rejects.toThrow(/no listings/);
     expect(browser.close).toHaveBeenCalledTimes(1);
   });
 

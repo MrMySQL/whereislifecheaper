@@ -37,3 +37,9 @@ Follow-up PR review hardened HTTP 200 empty-page handling: an unverified zero-ca
 Regression fixtures include reduced examples from the captured OLX and Domain pages. CLI tests invoke the repository's installed ts-node directly, avoiding package resolution/network access from temporary working directories.
 
 Final verification: 135 tests passed across 17 suites covering rent parsers, scrapers, normalization, aggregation, source reporting, CLI health checks and the rent API. `npm run build` passed (backend and frontend); existing frontend Browserslist/chunk-size warnings remain. Independent reviews found no substantive introduced issue.
+
+## GitHub Actions follow-up
+
+Runner evidence showed continued OLX normalization loss despite the initial parser fix (1,214 raw / 959 normalized in the superseded verification run). A bounded live comparison of original navigation response HTML against the hydrated DOM confirmed that OLX removes its metadata script during hydration. On the same page-20 capture, response metadata recovery improved normalization from 36/52 to 51/52 and area coverage from 6/52 to 52/52. The remaining listing specifies `5+ кімнат` and remains excluded because its exact bedroom count is unknown.
+
+The scraper now retains room/area metadata from the original response while reading cards, prices, and empty-result evidence from the current DOM. Metadata is matched by canonical listing URL, and original response data cannot turn a missing live card page into a successful sample. The weekly Actions workflow also builds the backend and runs the rent regression suite before scraping.
