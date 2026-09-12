@@ -47,7 +47,7 @@ active and zero products were saved. The old proxy is not a demonstrated fix.
 
 Direct-runner comparison: run 34661707198, same challenge-handler code with the
 proxy mapping removed. **Succeeded: 13,047 products stored across all 15
-categories, 142 listing pages, zero failed products, zero errors, 24 minutes
+categories, 132 listing pages, zero failed products, zero errors, 24 minutes
 13 seconds.** The log confirms the initial Cloudflare challenge was solved on
 the first attempt after the closed-shadow checkbox click, followed by delivery
 market 240557 for 10115. This was a real challenged hosted-runner session, not
