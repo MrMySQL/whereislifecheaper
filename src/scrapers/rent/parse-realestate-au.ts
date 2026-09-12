@@ -74,18 +74,20 @@ function extractJsonObject(text: string, start: number): string | null {
   return null;
 }
 
-function getRentSearchListings(exchange: Record<string, unknown> | null): ReaListing[] {
+function getRentSearchListings(exchange: Record<string, unknown> | null): ReaListing[] | null {
   const app = exchange?.['resi-property_listing-experience-web'] as { urqlClientCache?: string } | undefined;
-  if (!app?.urqlClientCache) return [];
+  if (!app?.urqlClientCache) return null;
 
   let cache: Record<string, ReaCacheEntry>;
   try {
     cache = JSON.parse(app.urqlClientCache);
   } catch {
-    return [];
+    return null;
   }
+  if (!cache || typeof cache !== 'object') return null;
 
   const listings: ReaListing[] = [];
+  let foundSearch = false;
   for (const entry of Object.values(cache)) {
     if (!entry?.data) continue;
     let data: any;
@@ -97,11 +99,12 @@ function getRentSearchListings(exchange: Record<string, unknown> | null): ReaLis
 
     const items = data?.rentSearch?.results?.exact?.items;
     if (!Array.isArray(items)) continue;
+    foundSearch = true;
     for (const item of items) {
       if (item?.listing) listings.push(item.listing);
     }
   }
-  return listings;
+  return foundSearch ? listings : null;
 }
 
 function sqmText(listing: ReaListing): string | null {
@@ -111,8 +114,12 @@ function sqmText(listing: ReaListing): string | null {
   return null;
 }
 
-export function parseRealestateAuListPage(html: string): ListingRaw[] {
+export function parseRealestateAuListPage(html: string, requireSearchPayload = false): ListingRaw[] {
   const listings = getRentSearchListings(parseArgonautExchange(html));
+  if (!listings) {
+    if (requireSearchPayload) throw new Error('Missing or invalid realestate.com.au search payload');
+    return [];
+  }
   const out: ListingRaw[] = [];
 
   for (const listing of listings) {

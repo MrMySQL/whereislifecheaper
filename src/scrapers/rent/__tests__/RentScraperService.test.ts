@@ -148,3 +148,36 @@ describe('scrapeRent source health reporting', () => {
     await expect(scrapeRent()).rejects.toThrow(/No usable rent listings/i);
   });
 });
+
+
+describe('partial scraper results', () => {
+  beforeEach(() => {
+    (normalizeListing as jest.Mock).mockImplementation((r) => ({ ...r, bedrooms: 1 }));
+    insertManyMock.mockResolvedValue(1);
+  });
+
+  test('keeps a partial sample and flags the healthy source as regressed', async () => {
+    (scrapeOlx as jest.Mock).mockResolvedValue({
+      listings: [rawListing],
+      degraded: 'page 2 returned HTTP 403',
+    });
+    const summary = await scrapeRent();
+    expect(summary.regressions).toContainEqual(expect.objectContaining({
+      name: 'olx', status: 'degraded', inserted: 1, error: 'page 2 returned HTTP 403',
+    }));
+  });
+
+  test('retains the refusal reason even when every partial listing is rejected', async () => {
+    (scrapeFlatfy as jest.Mock).mockResolvedValue({
+      listings: [{ ...rawListing, source: 'flatfy' }],
+      degraded: 'page 2 returned HTTP 403',
+    });
+    (normalizeListing as jest.Mock).mockImplementation((r) =>
+      r.source === 'flatfy' ? null : { ...r, bedrooms: 1 });
+    const summary = await scrapeRent();
+    expect(summary.sources.find((s) => s.name === 'flatfy')).toMatchObject({
+      status: 'dead', raw: 1, normalized: 0, error: 'page 2 returned HTTP 403',
+    });
+    expect(summary.recovered).toEqual([]);
+  });
+});

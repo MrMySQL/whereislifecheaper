@@ -33,7 +33,7 @@ test('aborts when the previous summary cannot be cleared', () => {
   // undeletable leftover (a read-only mount, a permission change) lands here.
   fs.mkdirSync(path.join(dir, 'logs', 'rent-scrape-summary.json'), { recursive: true });
 
-  const res = spawnSync('npx', ['ts-node', SCRIPT], {
+  const res = spawnSync(process.execPath, [require.resolve('ts-node/dist/bin.js'), SCRIPT], {
     cwd: dir,
     encoding: 'utf8',
     env: {

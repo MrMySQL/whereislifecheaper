@@ -50,7 +50,7 @@ function writeSummary(summary: Record<string, unknown>): void {
 }
 
 function runGate(): { status: number; out: string } {
-  const res = spawnSync('npx', ['ts-node', SCRIPT], {
+  const res = spawnSync(process.execPath, [require.resolve('ts-node/dist/bin.js'), SCRIPT], {
     cwd: dir,
     encoding: 'utf8',
     env: { ...process.env, GITHUB_ACTIONS: 'true', TS_NODE_PROJECT: path.join(ROOT, 'tsconfig.json') },
@@ -186,4 +186,19 @@ describe('rent source health gate', () => {
     expect(out).toMatch(/::notice::UA\/Kyiv\/olx: 10 listings inserted/);
     expect(out).not.toMatch(/\[notice\] /);
   });
+});
+
+
+test('reports an interrupted healthy source as partial, not as producing nothing', () => {
+  const partial = outcome({
+    status: 'degraded', inserted: 4, error: 'page 2 returned HTTP 403',
+  });
+  writeSummary({ sources: [partial], regressions: [partial], recovered: [], totalInserted: 4 });
+
+  const { status, out } = runGate();
+
+  expect(status).toBe(1);
+  expect(out).toMatch(/UA\/Kyiv\/olx.*partial sample/);
+  expect(out).toMatch(/page 2 returned HTTP 403/);
+  expect(out).not.toMatch(/produced nothing/);
 });

@@ -9,6 +9,32 @@ const FIXTURE = readFileSync(
 );
 
 describe('parseOlxListPage', () => {
+  const structuredFixture = readFileSync(
+    join(__dirname, 'fixtures', 'olx-structured-list-page.html'), 'utf-8',
+  );
+
+  test('uses structured room counts when the title does not identify rooms', () => {
+    const [listing] = parseOlxListPage(structuredFixture);
+    expect(listing.roomsText).toBe('1 кімната');
+    expect(roomsTextToBedrooms(listing.roomsText)).toBe(0);
+    expect(listing.sqmText).toBe('57 м²');
+  });
+
+  test('removes tracking parameters so promoted and organic URLs identify the same listing', () => {
+    const [listing] = parseOlxListPage(structuredFixture);
+    expect(listing.url).toBe('https://www.olx.ua/d/uk/obyavlenie/orenda-vul-urlvska-11-44-vlna-poruch-metro-osokorki-ID10veof.html');
+  });
+
+  test('does not include inline style contents in prices', () => {
+    expect(parseOlxListPage(structuredFixture)[0].priceText).toBe('12 999 грн.');
+  });
+
+  test('falls back to card titles when embedded state is malformed', () => {
+    const brokenState = structuredFixture.replace(/window\.__PRERENDERED_STATE__[\s\S]*?<\/script>/,
+      'window.__PRERENDERED_STATE__ = "invalid JSON";</script>');
+    expect(parseOlxListPage(brokenState)[1].roomsText).toBe('Без %! Ексклюзивна 3к сталінка на Бульварно-Кудрявській. Київ. Центр.');
+  });
+
   test('extracts at least 20 cards from the fixture', () => {
     const listings = parseOlxListPage(FIXTURE);
     expect(listings.length).toBeGreaterThanOrEqual(20);

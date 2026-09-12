@@ -1,6 +1,7 @@
 import { chromium, Browser, Page } from 'playwright';
 import { parseOlxListPage } from './parse-olx';
 import { ListingRaw } from './types';
+import type { ScrapeResult } from './RentScraperService';
 
 // Use the canonical category path. The legacy `arenda-kvartir/kiev/` URL
 // 301-redirects and strips the `page=` param, so every page request returned
@@ -15,9 +16,10 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function scrapeOlx(): Promise<ListingRaw[]> {
+export async function scrapeOlx(): Promise<ScrapeResult> {
   const browser: Browser = await chromium.launch({ headless: true });
   const collected: ListingRaw[] = [];
+  let degraded: string | undefined;
 
   try {
     const context = await browser.newContext({
@@ -31,16 +33,29 @@ export async function scrapeOlx(): Promise<ListingRaw[]> {
       const url = `${BASE_URL}${pageNum}`;
       console.log(`[olx] fetching page ${pageNum}: ${url}`);
 
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await page
-        .waitForSelector('[data-cy="l-card"]', { timeout: 15000 })
-        .catch(() => {});
+      let pageListings: ListingRaw[];
+      try {
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        if (response && response.status() >= 400) {
+          throw new Error(`HTTP ${response.status()}`);
+        }
+        await page
+          .waitForSelector('[data-cy="l-card"]', { timeout: 15000 })
+          .catch(() => {});
 
-      const html = await page.content();
-      const pageListings = parseOlxListPage(html);
+        const html = await page.content();
+        pageListings = parseOlxListPage(html);
+      } catch (error) {
+        const message = `[olx] page ${pageNum}: ${error instanceof Error ? error.message : String(error)}`;
+        if (collected.length === 0) throw new Error(message);
+        degraded = `${message} after ${collected.length} listings; sample is partial`;
+        console.warn(degraded);
+        break;
+      }
       console.log(`[olx] page ${pageNum}: ${pageListings.length} listings`);
 
       if (pageListings.length === 0) {
+        if (pageNum === 1) throw new Error('[olx] no listings parsed from the first page');
         console.log('[olx] empty page, stopping pagination');
         break;
       }
@@ -50,6 +65,7 @@ export async function scrapeOlx(): Promise<ListingRaw[]> {
       let newCount = 0;
       for (const l of pageListings) {
         if (!seen.has(l.url)) {
+          seen.add(l.url);
           collected.push(l);
           newCount++;
         }
@@ -71,5 +87,5 @@ export async function scrapeOlx(): Promise<ListingRaw[]> {
     await browser.close();
   }
 
-  return collected;
+  return { listings: collected, degraded };
 }

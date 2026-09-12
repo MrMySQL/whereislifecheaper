@@ -6,6 +6,14 @@ const fixture = (name: string) =>
   fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
 
 describe('parseDomainAuListPage', () => {
+  test('recognizes declared studios with one or missing bedrooms without importing parking spaces', () => {
+    const listings = parseDomainAuListPage(fixture('domain-au-studios.html'));
+
+    expect(listings).toHaveLength(2);
+    expect(listings.map((listing) => listing.roomsText)).toEqual(['Studio', 'Studio']);
+    expect(listings.map((listing) => listing.priceText)).toEqual(['$750 per week', '$700 per week']);
+  });
+
   test('extracts listings from Domain __NEXT_DATA__ payload', () => {
     const listings = parseDomainAuListPage(fixture('domain-au-list-page.html'));
 

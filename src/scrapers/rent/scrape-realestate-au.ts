@@ -1,6 +1,7 @@
 import { chromium, Browser, Page } from 'playwright';
 import { parseRealestateAuListPage } from './parse-realestate-au';
 import { ListingRaw } from './types';
+import type { ScrapeResult } from './RentScraperService';
 
 // `%2B` is the '+' joining suburb and state: `in-sydney+nsw`. This read
 // `%2Besw` from the first commit onwards - 'esw' is not a state, so the region
@@ -15,13 +16,14 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function collect(headless: boolean): Promise<ListingRaw[]> {
+async function collect(headless: boolean): Promise<ScrapeResult> {
   const browser: Browser = await chromium.launch({
     headless,
     args: ['--disable-blink-features=AutomationControlled'],
   });
   const collected: ListingRaw[] = [];
   const seen = new Set<string>();
+  let degraded: string | undefined;
 
   try {
     const context = await browser.newContext({
@@ -39,10 +41,20 @@ async function collect(headless: boolean): Promise<ListingRaw[]> {
     for (let pageNum = 1; pageNum <= MAX_PAGES; pageNum++) {
       const url = `${BASE_URL}${pageNum}`;
       console.log(`[realestateau] fetching page ${pageNum}: ${url}`);
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await page.waitForTimeout(3000);
-
-      const pageListings = parseRealestateAuListPage(await page.content());
+      let pageListings: ListingRaw[];
+      try {
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        if (!response) throw new Error('navigation returned no response');
+        if (!response.ok()) throw new Error(`returned HTTP ${response.status()}`);
+        await page.waitForTimeout(3000);
+        pageListings = parseRealestateAuListPage(await page.content(), true);
+      } catch (error) {
+        const message = `[realestateau] page ${pageNum}: ${error instanceof Error ? error.message : String(error)}`;
+        if (collected.length === 0) throw new Error(message);
+        degraded = `${message} after ${collected.length} listings; sample is partial`;
+        console.warn(degraded);
+        break;
+      }
       console.log(`[realestateau] page ${pageNum}: ${pageListings.length} listings`);
       if (pageListings.length === 0) break;
 
@@ -60,14 +72,14 @@ async function collect(headless: boolean): Promise<ListingRaw[]> {
     await browser.close();
   }
 
-  return collected;
+  return { listings: collected, degraded };
 }
 
-export async function scrapeRealestateAu(): Promise<ListingRaw[]> {
+export async function scrapeRealestateAu(): Promise<ScrapeResult> {
   const forceHeaded = process.env.RENT_SCRAPER_HEADED === 'true';
-  const listings = await collect(!forceHeaded);
-  if (listings.length > 0 || forceHeaded || process.env.RENT_SCRAPER_DISABLE_HEADED_FALLBACK === 'true') {
-    return listings;
+  const result = await collect(!forceHeaded);
+  if (result.listings.length > 0 || forceHeaded || process.env.RENT_SCRAPER_DISABLE_HEADED_FALLBACK === 'true') {
+    return result;
   }
   console.warn('[realestateau] no listings in headless mode; retrying headed');
   return collect(false);

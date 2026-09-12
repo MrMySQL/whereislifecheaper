@@ -110,7 +110,8 @@ function main(): void {
     for (const s of summary.regressions) {
       annotate(
         'error',
-        `${label(s)} is expected to be healthy but produced nothing` +
+        `${label(s)} is expected to be healthy but ` +
+          (s.status === 'degraded' ? 'returned a partial sample' : 'produced nothing') +
           `${s.error ? ` (${s.error})` : ''} - the portal likely changed its markup or started blocking`,
       );
     }

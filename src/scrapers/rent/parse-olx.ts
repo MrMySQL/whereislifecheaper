@@ -8,8 +8,45 @@ const TITLE_SELECTOR = 'h4, h6';
 const LOCATION_SELECTOR = '[data-testid="location-date"]';
 const LINK_SELECTOR = 'a[href]';
 
+interface OlxAttributes {
+  roomsText?: string;
+  sqmText?: string;
+}
+
+function canonicalUrl(href: string): string {
+  return (href.startsWith('http') ? href : `https://www.olx.ua${href}`).split(/[?#]/)[0];
+}
+
+function parseStructuredAttributes(script: string): Map<string, OlxAttributes> {
+  const attributes = new Map<string, OlxAttributes>();
+  // OLX serializes its state as a JSON string assigned inside this script.
+  // Decode the string and object with JSON.parse, never execute page scripts.
+  const match = script.match(/window\.__PRERENDERED_STATE__\s*=\s*("(?:\\.|[^"\\])*")/);
+  if (!match) return attributes;
+  try {
+    const state = JSON.parse(JSON.parse(match[1]));
+    const ads = state?.listing?.listing?.ads;
+    if (!Array.isArray(ads)) return attributes;
+    for (const ad of ads) {
+      if (typeof ad?.url !== 'string' || !Array.isArray(ad.params)) continue;
+      const values: OlxAttributes = {};
+      for (const param of ad.params) {
+        if (typeof param?.value !== 'string' || !param.value.trim()) continue;
+        if (param.key === 'number_of_rooms_string') values.roomsText = param.value.trim();
+        if (param.key === 'total_area') values.sqmText = param.value.trim();
+      }
+      attributes.set(canonicalUrl(ad.url), values);
+    }
+  } catch {
+    // Card markup remains usable when OLX changes or omits its embedded state.
+  }
+  return attributes;
+}
+
 export function parseOlxListPage(html: string): ListingRaw[] {
   const $ = cheerio.load(html);
+  const attributes = parseStructuredAttributes($('#olx-init-config').text());
+  $('style, script').remove();
   const cards = $(CARD_SELECTOR);
 
   const listings: ListingRaw[] = [];
@@ -19,14 +56,15 @@ export function parseOlxListPage(html: string): ListingRaw[] {
 
     const href = card.find(LINK_SELECTOR).first().attr('href') ?? '';
     if (!href) return;
-    const url = href.startsWith('http') ? href : `https://www.olx.ua${href}`;
+    const url = canonicalUrl(href);
+    const structured = attributes.get(url);
 
     const priceText = card.find(PRICE_SELECTOR).first().text().trim();
     const title = card.find(TITLE_SELECTOR).first().text().trim();
     if (!priceText || !title) return;
 
     const sqmMatch = title.match(/(\d+(?:[.,]\d+)?)\s*(?:м²|кв\.?\s*м|кв\.м|м2)/i);
-    const sqmText = sqmMatch ? sqmMatch[0] : null;
+    const sqmText = structured?.sqmText ?? (sqmMatch ? sqmMatch[0] : null);
 
     const locationDate = card.find(LOCATION_SELECTOR).first().text().trim();
     // Location is typically "Київ, Подільський - 30 травня 2026 р."
@@ -37,7 +75,7 @@ export function parseOlxListPage(html: string): ListingRaw[] {
       source: 'olx',
       url,
       priceText,
-      roomsText: title,
+      roomsText: structured?.roomsText ?? title,
       sqmText,
       district,
       listedAtText: locationDate || null,
