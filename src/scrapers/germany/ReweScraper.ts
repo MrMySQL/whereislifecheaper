@@ -6,6 +6,7 @@ import stealth from 'puppeteer-extra-plugin-stealth';
 import topUserAgents from 'top-user-agents';
 import * as path from 'path';
 import * as os from 'os';
+import type { Frame } from 'playwright';
 
 // Apply stealth plugin to avoid bot detection
 chromium.use(stealth());
@@ -311,59 +312,53 @@ export class ReweScraper extends BaseScraper {
         // Wait for the page to stabilize
         await this.page.waitForTimeout(2000);
 
-        // Look for Turnstile iframe
-        const turnstileSelectors = [
-          'iframe[src*="challenges.cloudflare.com"]',
-          'iframe[src*="turnstile"]',
-          'iframe[title*="challenge"]',
-          '#turnstile-wrapper iframe',
-          '.cf-turnstile iframe',
-        ];
-
-        let iframe = null;
-        for (const selector of turnstileSelectors) {
-          iframe = await this.page.$(selector);
-          if (iframe) {
-            this.logger.debug(`Found Turnstile iframe with selector: ${selector}`);
-            break;
+        // The challenge iframe can live under a closed shadow root, where
+        // page.$ cannot find it. Playwright still exposes the attached frame.
+        const frame = this.page.frames().find(candidate => {
+          try {
+            return new URL(candidate.url()).hostname === 'challenges.cloudflare.com';
+          } catch {
+            return false;
           }
-        }
+        });
+        this.logger.debug(`Challenge frames: ${this.page.frames().map(f => f.url()).join(', ')}`);
 
-        if (iframe) {
-          // Get the iframe's content frame
-          const frame = await iframe.contentFrame();
-          if (frame) {
-            this.logger.info('Found Cloudflare Turnstile iframe, attempting to click checkbox...');
+        if (frame) {
+          this.logger.info('Found Cloudflare Turnstile iframe, attempting to click checkbox...');
 
-            // Look for the checkbox inside the iframe
-            const checkboxSelectors = [
-              'input[type="checkbox"]',
-              '.ctp-checkbox-label',
-              '#challenge-stage input',
-              'label',
-            ];
+          // Look for the checkbox inside the iframe
+          const checkboxSelectors = [
+            'input[type="checkbox"]',
+            '.ctp-checkbox-label',
+            '#challenge-stage input',
+            'label',
+          ];
 
-            for (const selector of checkboxSelectors) {
-              try {
-                const checkbox = await frame.$(selector);
-                if (checkbox) {
-                  // Move mouse naturally before clicking
-                  const box = await checkbox.boundingBox();
-                  if (box) {
-                    // Random offset within the element for more human-like click
-                    const x = box.x + box.width / 2 + (Math.random() - 0.5) * 10;
-                    const y = box.y + box.height / 2 + (Math.random() - 0.5) * 10;
-                    await this.page.mouse.move(x, y, { steps: 10 });
-                    await this.page.waitForTimeout(100 + Math.random() * 200);
-                  }
-                  await checkbox.click();
-                  this.logger.info('Clicked Turnstile checkbox');
-                  break;
+          let clicked = false;
+          for (const selector of checkboxSelectors) {
+            try {
+              const checkbox = await frame.$(selector);
+              if (checkbox) {
+                // Move mouse naturally before clicking
+                const box = await checkbox.boundingBox();
+                if (box) {
+                  // Random offset within the element for more human-like click
+                  const x = box.x + box.width / 2 + (Math.random() - 0.5) * 10;
+                  const y = box.y + box.height / 2 + (Math.random() - 0.5) * 10;
+                  await this.page.mouse.move(x, y, { steps: 10 });
+                  await this.page.waitForTimeout(100 + Math.random() * 200);
                 }
-              } catch {
-                // Continue trying other selectors
+                await checkbox.click({ timeout: 3000 });
+                this.logger.info('Clicked Turnstile checkbox');
+                clicked = true;
+                break;
               }
+            } catch {
+              // Continue trying other selectors
             }
+          }
+          if (!clicked && await this.clickClosedShadowCheckbox(frame)) {
+            this.logger.info('Clicked Turnstile checkbox inside closed shadow root');
           }
         } else {
           // No iframe found - maybe it's a different type of challenge or auto-solving
@@ -389,12 +384,8 @@ export class ReweScraper extends BaseScraper {
           return true;
         }
 
-        // Also check if the page URL changed (redirect after solving)
-        const currentUrl = this.page.url();
-        if (currentUrl.includes('/shop/') && !currentUrl.includes('challenge')) {
-          this.logger.info('Cloudflare challenge solved (URL redirect detected)!');
-          return true;
-        }
+        // A Cloudflare interstitial retains /shop/ in the address bar. The
+        // URL alone does not establish that the challenge has completed.
 
       } catch (error) {
         this.logger.debug(`Cloudflare solve attempt ${attempt} failed:`, error);
@@ -409,6 +400,45 @@ export class ReweScraper extends BaseScraper {
 
     this.logger.warn('Could not solve Cloudflare challenge after all attempts');
     return false;
+  }
+
+  /** Chromium exposes rendered nodes inside Turnstile's closed shadow root. */
+  private async clickClosedShadowCheckbox(frame: Frame): Promise<boolean> {
+    if (!this.page) return false;
+    const session = await this.page.context().newCDPSession(frame);
+    try {
+      const { root } = await session.send('DOM.getDocument', { depth: -1, pierce: true });
+      const findCheckbox = (node: typeof root): typeof root | undefined => {
+        const attributes = node.attributes || [];
+        const isCheckbox = attributes.some((value, index) =>
+          index % 2 === 0 && value === 'type' && attributes[index + 1] === 'checkbox');
+        if (node.nodeName === 'INPUT' && isCheckbox) return node;
+        for (const child of [...(node.children || []), ...(node.shadowRoots || [])]) {
+          const match = findCheckbox(child);
+          if (match) return match;
+        }
+        return undefined;
+      };
+      const checkbox = findCheckbox(root);
+      if (!checkbox) return false;
+      const { model } = await session.send('DOM.getBoxModel', { backendNodeId: checkbox.backendNodeId });
+      if (model.width <= 0 || model.height <= 0) return false;
+      const element = await frame.frameElement();
+      try {
+        const frameBox = await element.boundingBox();
+        if (!frameBox) return false;
+        await this.page.mouse.click(
+          frameBox.x + (model.content[0] + model.content[2]) / 2,
+          frameBox.y + (model.content[1] + model.content[5]) / 2
+        );
+        return true;
+      } finally {
+        await element.dispose();
+      }
+    } finally {
+      // A successful click can detach the frame as the shop reloads.
+      await session.detach().catch(() => undefined);
+    }
   }
 
   /**
