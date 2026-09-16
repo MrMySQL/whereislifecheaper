@@ -101,6 +101,7 @@ Detailed documentation is available in the [docs/](docs/) folder:
 | [Database Schema](docs/database-schema.md) | Complete database schema documentation |
 | [API Reference](docs/api-reference.md) | REST API endpoints and usage |
 | [Scrapers](docs/scrapers.md) | Scraper architecture and development guide |
+| [Rental Scraper Handbook](docs/rental-scraper-handbook.md) | Rental pipeline, source implementation, normalization, testing and health checks |
 | [Deployment](docs/deployment.md) | Deployment guide for Vercel and local |
 | [Development](docs/development.md) | Development setup and workflow |
 | [Frontend](docs/frontend.md) | React frontend documentation |
