@@ -69,6 +69,8 @@ export interface MaintenanceSuggestion {
   canonical_name: string;
   country_id: MaintenanceId;
   country_name?: string;
+  country_code?: string;
+  country_flag?: string | null;
   supermarket_id: MaintenanceId;
   supermarket_name: string;
   mapping_id: MaintenanceId;

@@ -25,6 +25,9 @@ export interface Suggestion {
     canonical_product_id: string;
     canonical_name: string;
     country_id: string;
+    country_name: string;
+    country_code: string;
+    country_flag: string | null;
     supermarket_id: string;
     supermarket_name: string;
     mapping_id: string;
