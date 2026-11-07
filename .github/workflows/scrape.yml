@@ -42,6 +42,13 @@ jobs:
       - name: Install xvfb for headed browser support
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
+      # Before seeding and scraping: the scraper writes columns that migrations add
+      # (020_price_periods), and this workflow can run before scrape-rent does.
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run migrate
+
       - name: Seed database
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
