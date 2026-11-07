@@ -28,8 +28,8 @@ This document covers deployment options for WhereIsLifeCheaper.
 
 2. **Install dependencies**
    ```bash
-   npm install
-   cd frontend && npm install && cd ..
+   bun install
+   cd frontend && bun install && cd ..
    ```
 
 3. **Install Playwright browsers**
@@ -110,20 +110,45 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
 ```json
 {
   "version": 2,
-  "buildCommand": "npm run migrate && npm run build",
+  "buildCommand": "bash scripts/vercel/build.sh",
   "outputDirectory": "dist/frontend",
+  "installCommand": "bash scripts/vercel/install.sh",
+  "ignoreCommand": "bash scripts/vercel/ignore-build.sh",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/sitemap.xml", "destination": "/api" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
+      "excludeFiles": "node_modules/@google-cloud/**",
       "memory": 1024,
       "maxDuration": 30
     }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  }
 }
 ```
+
+**How the build stays fast** (`scripts/vercel/`):
+- `install.sh` runs `bun install --frozen-lockfile` for root and `frontend/`
+  side by side. Bun keeps devDependencies (esbuild) even under
+  `NODE_ENV=production`.
+- `build.sh` runs `vite build` and the esbuild bundles of the API
+  (`src/api/vercel.ts` → `dist/vercel-api/index.js`) and of
+  `scripts/migrate.ts` (`dist/migrate.js`) in parallel, then - only if all of
+  them built - applies the migrations with plain `node dist/migrate.js`.
+- It does **no type-checking**: `.github/workflows/ci.yml` does that on every
+  PR and on pushes to `main`. A deploy from a branch pushed without a PR is
+  not type-checked by anything.
+- `api/index.js` is a one-line JS re-export of that bundle, so `@vercel/node`
+  traces and packages one bundle rather than compiling each backend
+  TypeScript file itself.
+- On serverless the logger writes Cloud Logging JSON to stdout itself
+  (`src/utils/cloudLoggingStdout.ts`) instead of through
+  `@google-cloud/logging-winston`, which `vercel.json` excludes from the
+  function (it was over half of the files Vercel traced and packaged).
+- `ignore-build.sh` skips deployments whose changes are limited to docs, CI,
+  Terraform, Docker or test files.
 
 ### Deployment Steps
 
@@ -175,7 +200,9 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
 
 6. **Run Migrations**
 
-   Migrations run automatically during build (`npm run migrate`).
+   Migrations run automatically at the end of every Vercel build
+   (`scripts/vercel/build.sh` runs an esbuild bundle of `scripts/migrate.ts`,
+   transpiled without type-checking, once the frontend and API have built).
 
    For manual migration:
    ```bash
@@ -199,7 +226,7 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │           Serverless Function                         │  │
-│  │              /api/* → api/index.ts                    │  │
+│  │              /api/* → api/index.js                    │  │
 │  │                                                       │  │
 │  │     ┌─────────────────────────────────────────┐      │  │
 │  │     │         Express.js Application          │      │  │
@@ -266,10 +293,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install Playwright with system deps
         run: npx playwright install chromium --with-deps
@@ -442,8 +473,9 @@ RUN apt-get update && apt-get install -y \
     libgbm1 libpango-1.0-0 libcairo2 fonts-liberation
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
+COPY --from=oven/bun:1.4.4 /usr/local/bin/bun /usr/local/bin/bun
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
 COPY . .
 RUN npm run build:backend
 RUN npx playwright install chromium

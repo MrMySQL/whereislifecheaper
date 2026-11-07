@@ -3,7 +3,7 @@ import path from 'path';
 import ts from 'typescript';
 
 /**
- * `api/index.ts` (the Vercel serverless entry) and `src/api/server.ts` (the
+ * `src/api/vercel.ts` (the Vercel serverless entry) and `src/api/server.ts` (the
  * local/long-running entry) each build their own Express app and register
  * routes by hand. They drift silently: the rent feature was mounted only in
  * server.ts, so `/api/rent` 404'd in production for three months while every
@@ -23,7 +23,7 @@ import ts from 'typescript';
  */
 
 const ROOT = path.join(__dirname, '..', '..', '..');
-const ENTRIES = ['api/index.ts', 'src/api/server.ts'] as const;
+const ENTRIES = ['src/api/vercel.ts', 'src/api/server.ts'] as const;
 
 const ROUTE_METHODS = new Set(['use', 'get', 'post', 'put', 'patch', 'delete', 'all']);
 
@@ -32,14 +32,14 @@ const ROUTE_METHODS = new Set(['use', 'get', 'post', 'put', 'patch', 'delete', '
  * must exist in both.
  */
 const ENTRY_SPECIFIC: Record<string, string[]> = {
-  'api/index.ts': [],
+  'src/api/vercel.ts': [],
   // Vercel serves the built SPA and its assets straight from outputDirectory
   // via the `/((?!api/).*)` rewrite, so only the long-running server needs its
   // own static handler and SPA fallback.
   //
   // `/health` for the same reason: that rewrite claims every non-`/api/` path
   // before the function is invoked, so a root-level `/health` mounted in
-  // api/index.ts is unreachable in production. The function answers
+  // src/api/vercel.ts is unreachable in production. The function answers
   // `/api/health`; the long-running server answers both.
   'src/api/server.ts': ['*', '/health'],
 };
@@ -132,7 +132,7 @@ describe('API entry point parity', () => {
   });
 
   test('both entry points register the same routes', () => {
-    expect(routeSet('api/index.ts')).toEqual(routeSet('src/api/server.ts'));
+    expect(routeSet('src/api/vercel.ts')).toEqual(routeSet('src/api/server.ts'));
   });
 
   test.each(ENTRIES)('%s registers the /api/* 404 handler last', (relPath) => {

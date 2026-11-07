@@ -1,6 +1,8 @@
 # Dependencies
 node_modules
 yarn.lock
+# Bun installs from bun.lock; a stray `npm install` must not add a second lockfile.
+package-lock.json
 
 # Build output
 dist/
