@@ -101,13 +101,26 @@ describe('CloudLoggingStdout matches @google-cloud/logging-winston redirectToStd
     expect([...ids].sort()).toEqual(ids);
   });
 
-  test('unserialisable metadata is dropped without throwing', async () => {
+  test('an entry with unserialisable metadata is replaced by a warning, not lost silently', async () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     const entries = await capture(new CloudLoggingStdout(options), (l) => {
-      l.info('circular', { circular });
+      l.error('circular', { circular });
       l.info('after');
     });
-    expect(entries.map((e) => e.message)).toEqual(['after']);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      severity: 'WARNING',
+      'logging.googleapis.com/labels': options.labels,
+      logName: 'projects/whereislifecheaper/logs/whereislifecheaper-api',
+    });
+    expect(entries[0].message).toMatch(/^Dropped a ERROR log entry .*: circular$/);
+    expect(entries[1].message).toBe('after');
+  });
+
+  test('an unknown level throws, as in the library', () => {
+    const transport = new CloudLoggingStdout({ ...options, write: () => undefined });
+    expect(() => transport.log({ level: 'fatal', message: 'x', [Symbol.for('level')]: 'fatal' }, () => undefined))
+      .toThrow('Unknown log level: fatal');
   });
 });

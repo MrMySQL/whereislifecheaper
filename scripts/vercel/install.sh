@@ -6,16 +6,22 @@
 #   (esbuild) and which @vercel/node's own install would otherwise re-add.
 # - node_modules comes back from Vercel's build cache, so a frozen install is
 #   usually a no-op check.
-# - The two installs are independent, so they run side by side.
+# - The two installs are independent, so they run side by side; if one fails,
+#   the other is stopped rather than left running.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 echo "bun $(bun --version)"
 
-bun install --frozen-lockfile &
-root=$!
-(cd frontend && bun install --frozen-lockfile) &
-frontend=$!
+pids=()
+trap 'kill "${pids[@]}" 2>/dev/null || true' EXIT
 
-wait "$root"
-wait "$frontend"
+bun install --frozen-lockfile &
+pids+=($!)
+(cd frontend && bun install --frozen-lockfile) &
+pids+=($!)
+
+for pid in "${pids[@]}"; do
+  wait "$pid"
+done
+trap - EXIT

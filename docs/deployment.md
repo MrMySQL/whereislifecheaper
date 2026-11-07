@@ -132,12 +132,16 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
 - `install.sh` runs `bun install --frozen-lockfile` for root and `frontend/`
   side by side. Bun keeps devDependencies (esbuild) even under
   `NODE_ENV=production`.
-- `build.sh` runs the migrations (from an esbuild bundle, `dist/migrate.js`,
-  run with plain node), `vite build` and an esbuild bundle of the API (`src/api/vercel.ts` →
-  `dist/vercel-api/index.js`) in parallel. It does **no type-checking**;
-  `.github/workflows/ci.yml` does that on every push and PR.
+- `build.sh` runs `vite build` and the esbuild bundles of the API
+  (`src/api/vercel.ts` → `dist/vercel-api/index.js`) and of
+  `scripts/migrate.ts` (`dist/migrate.js`) in parallel, then - only if all of
+  them built - applies the migrations with plain `node dist/migrate.js`.
+- It does **no type-checking**: `.github/workflows/ci.yml` does that on every
+  PR and on pushes to `main`. A deploy from a branch pushed without a PR is
+  not type-checked by anything.
 - `api/index.js` is a one-line JS re-export of that bundle, so `@vercel/node`
-  traces one file instead of compiling and type-checking each backend file.
+  traces and packages one bundle rather than compiling each backend
+  TypeScript file itself.
 - On serverless the logger writes Cloud Logging JSON to stdout itself
   (`src/utils/cloudLoggingStdout.ts`) instead of through
   `@google-cloud/logging-winston`, which `vercel.json` excludes from the
@@ -195,7 +199,9 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
 
 6. **Run Migrations**
 
-   Migrations run automatically during build (`npm run migrate`).
+   Migrations run automatically at the end of every Vercel build
+   (`scripts/vercel/build.sh` runs an esbuild bundle of `scripts/migrate.ts`,
+   transpiled without type-checking, once the frontend and API have built).
 
    For manual migration:
    ```bash

@@ -2,10 +2,11 @@ import request from 'supertest';
 import app from '../vercel';
 import { closePool } from '../../config/database';
 
-// Exercises the app Vercel actually runs (api/index.js is a one-line shim over
-// the esbuild bundle of src/api/vercel.ts). Nothing else in the test suite
-// loads this entry - which is how /api/rent stayed unmounted in production for
-// three months.
+// Exercises the Express app exported by src/api/vercel.ts - the source of what
+// Vercel runs. It does not load api/index.js or the esbuild bundle behind it;
+// CI's "Vercel build and function entry" step builds and loads those. Nothing
+// else in the test suite loads this entry - which is how /api/rent stayed
+// unmounted in production for three months.
 //
 // The assertions are all "not 404" rather than "200" on purpose: what these
 // tests prove is that the route is mounted, and an unmounted route is exactly

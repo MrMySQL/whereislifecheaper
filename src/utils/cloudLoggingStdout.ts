@@ -13,8 +13,10 @@ import { randomBytes } from 'crypto';
  * and packages on every deploy. The library is still used, lazily, for the
  * direct gRPC path off serverless.
  *
- * The library's one-time "diagnostic" entry (its own version telemetry) is not
- * reproduced. cloudLoggingStdout.test.ts runs the library and this transport
+ * Two deliberate differences: the library's one-time "diagnostic" entry (its
+ * own version telemetry) is not reproduced, and an entry whose metadata cannot
+ * be serialised is replaced by a WARNING line instead of vanishing silently.
+ * cloudLoggingStdout.test.ts runs the library and this transport
  * on the same calls and compares the output.
  */
 
@@ -76,11 +78,24 @@ export class CloudLoggingStdout extends TransportStream {
   }
 
   log(info: Record<string | symbol, any>, callback: () => void): void {
+    // An unknown level throws from toEntry, as it does in the library.
+    const entry = this.toEntry(info);
+    let line: string;
     try {
-      this.writeLine(JSON.stringify(this.toEntry(info)) + '\n');
+      line = JSON.stringify(entry);
     } catch {
-      // Unserialisable metadata (e.g. circular): dropped, as the library does.
+      // Unserialisable metadata (e.g. circular): the entry is dropped, as the
+      // library does - but not silently.
+      line = JSON.stringify({
+        severity: 'WARNING',
+        [LABELS_KEY]: entry[LABELS_KEY],
+        [INSERT_ID_KEY]: entry[INSERT_ID_KEY],
+        message: `Dropped a ${String(entry.severity)} log entry whose metadata could not be serialised: ${String(entry.message).slice(0, 500)}`,
+        timestamp: entry.timestamp,
+        logName: entry.logName,
+      });
     }
+    this.writeLine(line + '\n');
     callback();
   }
 

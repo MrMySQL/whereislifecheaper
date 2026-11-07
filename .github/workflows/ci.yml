@@ -9,6 +9,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -77,3 +80,12 @@ jobs:
 
       - name: Frontend tests
         run: npm run test:frontend
+
+      # What Vercel runs: the bundles, the migrations (against the service
+      # database), then loading api/index.js -> dist/vercel-api/index.js. The
+      # tests above import the TypeScript sources, so a bundling problem would
+      # otherwise only show up in a deploy.
+      - name: Vercel build and function entry
+        run: |
+          bash scripts/vercel/build.sh
+          node -e "const app = require('./api/index.js'); if (typeof app !== 'function') throw new Error('api/index.js does not export the Express app');"

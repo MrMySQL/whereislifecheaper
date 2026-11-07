@@ -1,5 +1,5 @@
 // Vercel function entry. The Express app is src/api/vercel.ts, bundled to
 // dist/vercel-api/ by scripts/vercel/build.sh before this function is built.
-// Shipping plain JS here means @vercel/node traces one bundle instead of
-// compiling and type-checking every backend file itself; CI type-checks.
+// Plain JS, so @vercel/node traces and packages one bundle rather than
+// compiling each backend TypeScript file itself. CI does the type-checking.
 module.exports = require('../dist/vercel-api/index.js').default;
