@@ -137,6 +137,10 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
   `.github/workflows/ci.yml` does that on every push and PR.
 - `api/index.js` is a one-line JS re-export of that bundle, so `@vercel/node`
   traces one file instead of compiling and type-checking each backend file.
+- On serverless the logger writes Cloud Logging JSON to stdout itself
+  (`src/utils/cloudLoggingStdout.ts`) instead of through
+  `@google-cloud/logging-winston`, which `vercel.json` excludes from the
+  function (it was over half of the files Vercel traced and packaged).
 - `ignore-build.sh` skips deployments whose changes are limited to docs, CI,
   Terraform, Docker or test files.
 
