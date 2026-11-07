@@ -44,7 +44,8 @@ A multi-country grocery price comparison system that scrapes supermarket website
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 20.19+ or 22.12+ (Vite 8's minimum for the frontend)
+- [Bun](https://bun.sh) 1.4+ (installs dependencies; Node runs everything)
 - Docker and Docker Compose
 - Git
 
@@ -56,8 +57,8 @@ git clone <repository-url>
 cd whereislifecheaper
 
 # Install dependencies
-npm install
-cd frontend && npm install && cd ..
+bun install
+cd frontend && bun install && cd ..
 
 # Install Playwright
 npx playwright install chromium

@@ -70,7 +70,7 @@ frontend/
 
 ```bash
 cd frontend
-npm install
+bun install
 npm run dev
 ```
 

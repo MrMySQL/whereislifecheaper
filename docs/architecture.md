@@ -282,7 +282,7 @@ Emails in `ADMIN_EMAILS` environment variable are flagged as admins.
 │                                         │
 │  ┌─────────────────────────────────┐   │
 │  │    Serverless Function          │   │
-│  │    /api/* → api/index.ts        │   │
+│  │    /api/* → api/index.js        │   │
 │  │    1024MB, 30s timeout          │   │
 │  └─────────────────────────────────┘   │
 │                                         │
@@ -369,7 +369,7 @@ Emails in `ADMIN_EMAILS` environment variable are flagged as admins.
 ```
 whereislifecheaper/
 ├── api/                    # Vercel serverless entry
-│   └── index.ts
+│   └── index.js            # re-exports the esbuild bundle of src/api/vercel.ts
 ├── docs/                   # Documentation
 ├── frontend/               # React application
 │   ├── src/

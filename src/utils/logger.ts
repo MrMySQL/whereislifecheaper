@@ -2,7 +2,7 @@ import winston from 'winston';
 import path from 'path';
 import { config } from '../config/env';
 import fs from 'fs';
-import { LoggingWinston } from '@google-cloud/logging-winston';
+import { CloudLoggingStdout } from './cloudLoggingStdout';
 
 // Detect serverless environment (Vercel, AWS Lambda, etc.)
 const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
@@ -70,23 +70,28 @@ const createGoogleCloudTransport = (logName: string) => {
 
   const credentials = getGoogleCredentials();
 
-  // In serverless environments, use redirectToStdout to avoid gRPC connection blocking
-  // Logs will be in structured JSON format, can be forwarded to GCP via log drain
+  // In serverless environments, write structured JSON to stdout instead of
+  // holding a gRPC connection; it can be forwarded to GCP via log drain. This is
+  // the format @google-cloud/logging-winston's `redirectToStdout` produced,
+  // without shipping that library in the Vercel function (see
+  // cloudLoggingStdout.ts).
   if (isServerless) {
-    return new LoggingWinston({
-      projectId: gcpProjectId,
+    return new CloudLoggingStdout({
+      projectId: gcpProjectId!,
       logName: `whereislifecheaper-${logName}`,
       labels: {
         app: 'whereislifecheaper',
         component: logName,
         environment: 'vercel',
       },
-      redirectToStdout: true,
-      useMessageField: false, // Put message in jsonPayload for better querying
     });
   }
 
-  // Non-serverless: use direct gRPC connection to GCP
+  // Non-serverless: use direct gRPC connection to GCP. Required here, not
+  // imported at the top, so serverless never loads it - vercel.json excludes
+  // it from the function.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { LoggingWinston } = require('@google-cloud/logging-winston') as typeof import('@google-cloud/logging-winston');
   return new LoggingWinston({
     projectId: gcpProjectId,
     logName: `whereislifecheaper-${logName}`,

@@ -2,26 +2,26 @@ import express from 'express';
 import cors from 'cors';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
-import { config } from '../src/config/env';
-import { apiLogger } from '../src/utils/logger';
-import pool from '../src/config/database';
+import { config } from '../config/env';
+import { apiLogger } from '../utils/logger';
+import pool from '../config/database';
 
 // Auth imports
-import { initializePassport, passport, authRouter } from '../src/auth';
+import { initializePassport, passport, authRouter } from '../auth';
 
 // Import routes
-import countriesRouter from '../src/api/routes/countries';
-import supermarketsRouter from '../src/api/routes/supermarkets';
-import productsRouter from '../src/api/routes/products';
-import pricesRouter from '../src/api/routes/prices';
-import canonicalRouter from '../src/api/routes/canonical';
-import maintenanceRouter from '../src/api/routes/maintenance';
-import scraperRouter from '../src/api/routes/scraper';
-import ratesRouter from '../src/api/routes/rates';
-import translateRouter from '../src/api/routes/translate';
-import rentRouter from '../src/api/routes/rent';
-import healthRouter from '../src/api/routes/health';
-import sitemapRouter from '../src/api/routes/sitemap';
+import countriesRouter from './routes/countries';
+import supermarketsRouter from './routes/supermarkets';
+import productsRouter from './routes/products';
+import pricesRouter from './routes/prices';
+import canonicalRouter from './routes/canonical';
+import maintenanceRouter from './routes/maintenance';
+import scraperRouter from './routes/scraper';
+import ratesRouter from './routes/rates';
+import translateRouter from './routes/translate';
+import rentRouter from './routes/rent';
+import healthRouter from './routes/health';
+import sitemapRouter from './routes/sitemap';
 
 const app = express();
 
