@@ -45,4 +45,25 @@ integration('applyMigrations (PostgreSQL)', () => {
     // Lock released: a normal run still goes through on the same connection.
     await expect(applyMigrations(client)).resolves.toContain('020_price_periods.sql');
   }, 60000);
+
+  test('a file ending in a comment or without its final semicolon does not swallow the next', async () => {
+    // The batched run joins every file into one query string.
+    const fs = await import('fs');
+    const os = await import('os');
+    const path = await import('path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'migrations-'));
+    fs.writeFileSync(path.join(dir, '001_no_semicolon.sql'), 'CREATE TABLE separator_probe_a (id int)');
+    fs.writeFileSync(path.join(dir, '002_trailing_comment.sql'), 'CREATE TABLE separator_probe_b (id int); -- trailing comment');
+    fs.writeFileSync(path.join(dir, '003_last.sql'), 'CREATE TABLE separator_probe_c (id int);');
+    const client = await connect();
+    const query = jest.spyOn(client, 'query');
+    await expect(applyMigrations(client, dir)).resolves.toHaveLength(3);
+    // One round trip: the batch itself succeeded, not the file-by-file fallback.
+    expect(query).toHaveBeenCalledTimes(1);
+    query.mockRestore();
+    const { rows } = await client.query(
+      "SELECT to_regclass('separator_probe_a') AS a, to_regclass('separator_probe_b') AS b, to_regclass('separator_probe_c') AS c"
+    );
+    expect(rows[0]).toEqual({ a: 'separator_probe_a', b: 'separator_probe_b', c: 'separator_probe_c' });
+  }, 60000);
 });

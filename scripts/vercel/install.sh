@@ -18,7 +18,8 @@ trap 'kill "${pids[@]}" 2>/dev/null || true' EXIT
 
 bun install --frozen-lockfile &
 pids+=($!)
-(cd frontend && bun install --frozen-lockfile) &
+# `exec`, so the trap's kill reaches bun itself and not just the subshell.
+(cd frontend && exec bun install --frozen-lockfile) &
 pids+=($!)
 
 for pid in "${pids[@]}"; do

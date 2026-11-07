@@ -121,6 +121,7 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
   ],
   "functions": {
     "api/index.js": {
+      "excludeFiles": "node_modules/@google-cloud/**",
       "memory": 1024,
       "maxDuration": 30
     }

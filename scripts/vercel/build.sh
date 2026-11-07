@@ -22,18 +22,18 @@ cd "$(dirname "$0")/../.."
 pids=()
 trap 'kill "${pids[@]}" 2>/dev/null || true' EXIT
 
-bundle() {
-  node_modules/.bin/esbuild "$1" --outfile="$2" \
-    --bundle --platform=node --format=cjs --target=node20 \
-    --packages=external --log-level=warning
-}
-
 # vite is the long CPU-bound step; the esbuild bundles fit alongside it.
-(cd frontend && node_modules/.bin/vite build) &
+# `exec`, so the trap's kill reaches vite itself and not just the subshell.
+(cd frontend && exec node_modules/.bin/vite build) &
 pids+=($!)
 
-bundle src/api/vercel.ts dist/vercel-api/index.js
-bundle scripts/migrate.ts dist/migrate.js
+# One esbuild run, two bundles: dist/vercel-api/index.js and dist/migrate.js.
+node_modules/.bin/esbuild \
+  vercel-api/index=src/api/vercel.ts \
+  migrate=scripts/migrate.ts \
+  --outdir=dist \
+  --bundle --platform=node --format=cjs --target=node20 \
+  --packages=external --log-level=warning
 
 for pid in "${pids[@]}"; do
   wait "$pid"

@@ -41,8 +41,10 @@ export async function applyMigrations(client: MigrationClient, dir: string = mig
     logger.info(`✓ All ${files.length} migrations completed successfully`);
     return files;
   } catch (batchError) {
+    // Logged before the ROLLBACK: if the connection is gone, ROLLBACK throws
+    // too, and its error would otherwise be the only one reported.
+    logger.warn('Batched migration run failed; rolling back and re-running file by file to locate the failure', batchError);
     await client.query('ROLLBACK');
-    logger.warn('Batched migration run failed and was rolled back; re-running file by file to locate the failure', batchError);
   }
 
   await client.query('BEGIN');
