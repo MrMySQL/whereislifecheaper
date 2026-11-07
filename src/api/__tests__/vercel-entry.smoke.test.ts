@@ -1,10 +1,11 @@
 import request from 'supertest';
-import app from '../../../api/index';
+import app from '../vercel';
 import { closePool } from '../../config/database';
 
-// Exercises the file Vercel actually runs. api/index.ts is outside tsconfig's
-// include, so nothing else in the build or the test suite ever loads it - which
-// is how /api/rent stayed unmounted in production for three months.
+// Exercises the app Vercel actually runs (api/index.js is a one-line shim over
+// the esbuild bundle of src/api/vercel.ts). Nothing else in the test suite
+// loads this entry - which is how /api/rent stayed unmounted in production for
+// three months.
 //
 // The assertions are all "not 404" rather than "200" on purpose: what these
 // tests prove is that the route is mounted, and an unmounted route is exactly
@@ -13,7 +14,7 @@ import { closePool } from '../../config/database';
 // the guard to a reachable, seeded database - both handlers answer 500 when the
 // pool is down, and that failure reads as "the route is missing" when the mount
 // is perfectly fine.
-describe('Vercel entry (api/index.ts)', () => {
+describe('Vercel entry (src/api/vercel.ts)', () => {
   // Importing the entry opens the session store's pg pool; leave it open and
   // jest never exits.
   afterAll(async () => {

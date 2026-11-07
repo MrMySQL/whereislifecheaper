@@ -1,15 +1,16 @@
 {
   "version": 2,
-  "buildCommand": "npm run build && npm run migrate",
+  "buildCommand": "bash scripts/vercel/build.sh",
   "outputDirectory": "dist/frontend",
-  "installCommand": "npm install && cd frontend && npm install",
+  "installCommand": "bash scripts/vercel/install.sh",
+  "ignoreCommand": "bash scripts/vercel/ignore-build.sh",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/sitemap.xml", "destination": "/api" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "memory": 1024,
       "maxDuration": 30
     }

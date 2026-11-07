@@ -283,7 +283,7 @@ Emails in `ADMIN_EMAILS` environment variable are flagged as admins.
 │                                         │
 │  ┌─────────────────────────────────┐   │
 │  │    Serverless Function          │   │
-│  │    /api/* → api/index.ts        │   │
+│  │    /api/* → api/index.js        │   │
 │  │    1024MB, 30s timeout          │   │
 │  └─────────────────────────────────┘   │
 │                                         │

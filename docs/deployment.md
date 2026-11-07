@@ -110,20 +110,35 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
 ```json
 {
   "version": 2,
-  "buildCommand": "npm run migrate && npm run build",
+  "buildCommand": "bash scripts/vercel/build.sh",
   "outputDirectory": "dist/frontend",
+  "installCommand": "bash scripts/vercel/install.sh",
+  "ignoreCommand": "bash scripts/vercel/ignore-build.sh",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/sitemap.xml", "destination": "/api" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "memory": 1024,
       "maxDuration": 30
     }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  }
 }
 ```
+
+**How the build stays fast** (`scripts/vercel/`):
+- `install.sh` installs root and `frontend/` side by side, keeping root
+  devDependencies (esbuild, ts-node) even under `NODE_ENV=production`.
+- `build.sh` runs the migrations (`ts-node --transpile-only`), `vite build`
+  and an esbuild bundle of the API (`src/api/vercel.ts` →
+  `dist/vercel-api/index.js`) in parallel. It does **no type-checking**;
+  `.github/workflows/ci.yml` does that on every push and PR.
+- `api/index.js` is a one-line JS re-export of that bundle. A `.ts` entry would
+  make `@vercel/node` type-check the whole backend on every deploy.
+- `ignore-build.sh` skips deployments whose changes are limited to docs, CI,
+  Terraform, Docker or test files.
 
 ### Deployment Steps
 
@@ -199,7 +214,7 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │           Serverless Function                         │  │
-│  │              /api/* → api/index.ts                    │  │
+│  │              /api/* → api/index.js                    │  │
 │  │                                                       │  │
 │  │     ┌─────────────────────────────────────────┐      │  │
 │  │     │         Express.js Application          │      │  │
