@@ -4,7 +4,10 @@ jest.mock('../../../utils/logger', () => {
   return { logger: stub, scraperLogger: stub, createPrefixedLogger: () => stub };
 });
 
-import { parseTileImages } from '../CarrefourItScraper';
+import https from 'https';
+import { EventEmitter } from 'events';
+import { CarrefourItScraper, carrefourItConfig, parseTileImages } from '../CarrefourItScraper';
+import { ScraperConfig } from '../../../types/scraper.types';
 
 const STATIC = '/on/demandware.static/-/Sites-carrefour-master-catalog-IT/default';
 const CDN = 'https://www.carrefour.it/dw/image/v2/BDWP_PRD';
@@ -61,5 +64,51 @@ describe('parseTileImages', () => {
 
   it('skips tiles without an image', () => {
     expect(parseTileImages('<div data-pid="333"><span>no image</span></div>').size).toBe(0);
+  });
+});
+
+describe('Carrefour Italy image lookup', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  /** Only the HTTPS hop is stubbed. Records every request path. */
+  function stubHttps(reply: (path: string) => string): string[] {
+    const paths: string[] = [];
+    jest.spyOn(https, 'request').mockImplementation(((options: https.RequestOptions, onResponse: (res: unknown) => void) => {
+      const req = Object.assign(new EventEmitter(), {
+        setTimeout: () => undefined,
+        destroy: () => undefined,
+        end: () => queueMicrotask(() => {
+          paths.push(String(options.path));
+          const res = Object.assign(new EventEmitter(), { statusCode: 200 });
+          onResponse(res);
+          res.emit('data', reply(String(options.path)));
+          res.emit('end');
+        }),
+      });
+      return req;
+    }) as unknown as typeof https.request);
+    return paths;
+  }
+
+  it('asks the HTML page for the same product set as the JSON page', async () => {
+    const product = { id: '777', productName: 'Olio 1 L', brand: 'Simpl', price: { sales: { value: 1.99 } }, available: true };
+    const paths = stubHttps(path => {
+      if (path.includes('Search-ShowAjax')) return JSON.stringify({ productIds: [product], countResult: 1 });
+      // The unfiltered category page lists different products than the JSON request
+      return path.includes('pmin=0%2C01') ? tile('777', 'o/large/O-1.jpg', 'o/large/O-1.png') : tile('999', 'x/large/X-1.jpg', 'x/large/X-1.jpg');
+    });
+    const subject = new CarrefourItScraper({
+      ...carrefourItConfig,
+      supermarketId: 'carrefour-it',
+      categories: [{ id: 'condimenti', name: 'Condimenti', url: '/spesa-online/condimenti/' }],
+      maxRetries: 0,
+    } as ScraperConfig);
+
+    const [scraped] = await subject.scrapeProductList();
+
+    expect(scraped.imageUrl).toBe(`https://www.carrefour.it${STATIC}/o/large/O-1.jpg`);
+    const query = (path: string) => path.slice(path.indexOf('?') + 1).split('&').filter(p => !p.startsWith('cgid=')).sort();
+    const [api, html] = [paths.find(p => p.includes('Search-ShowAjax'))!, paths.find(p => p.startsWith('/spesa-online/'))!];
+    expect(query(html)).toEqual(query(api));
   });
 });
