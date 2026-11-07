@@ -4,6 +4,33 @@ import { extractQuantity } from '../../utils/normalizer';
 import { retry, sleep } from '../../utils/retry';
 import https from 'https';
 
+const TILE_IMAGE_SRC =
+  /\b(?:data-)?src="(\/on\/demandware\.static\/-\/Sites-carrefour-master-catalog-IT\/[^"\s]+)"/;
+
+/**
+ * Map product id → image URL from a rendered category page.
+ *
+ * Each tile's <img> carries the image both in `data-srcset` (a comma-separated
+ * list of CDN renditions) and in `data-src` (the single file the site loads).
+ * Only `data-src` is used: the srcset's static path can name an extension that
+ * does not exist (e.g. `-1.png` where only `-1.jpg` is stored), and a greedy
+ * match over it captures the whole list as one broken URL.
+ */
+export function parseTileImages(html: string): Map<string, string> {
+  const images = new Map<string, string>();
+  for (const block of html.split('data-pid="').slice(1)) {
+    const pid = block.match(/^(\d+)"/)?.[1];
+    if (!pid || images.has(pid)) continue;
+
+    // Search only this tile, not the next one
+    const nextTileIdx = block.indexOf('data-pid="', 100);
+    const tile = nextTileIdx > 0 ? block.substring(0, nextTileIdx) : block.substring(0, 5000);
+    const src = tile.match(TILE_IMAGE_SRC)?.[1];
+    if (src) images.set(pid, `https://www.carrefour.it${src.replace(/&amp;/g, '&')}`);
+  }
+  return images;
+}
+
 /**
  * Demandware API response types for Carrefour Italy
  */
@@ -324,24 +351,7 @@ export class CarrefourItScraper extends BaseScraper {
         req.end();
       });
 
-      // Parse HTML tiles: each product tile has data-pid="xxx" and a master-catalog image
-      const tileBlocks = html.split('data-pid="').slice(1);
-      for (const block of tileBlocks) {
-        const pidMatch = block.match(/^(\d+)"/);
-        if (!pidMatch) continue;
-
-        const pid = pidMatch[1];
-        // Find the first master-catalog image URL within this tile (before next tile)
-        const nextTileIdx = block.indexOf('data-pid="', 100);
-        const tileContent = nextTileIdx > 0 ? block.substring(0, nextTileIdx) : block.substring(0, 5000);
-        const imgMatch = tileContent.match(
-          /(\/on\/demandware\.static\/-\/Sites-carrefour-master-catalog-IT\/[^"]+\.(?:jpg|png|webp))/
-        );
-
-        if (imgMatch) {
-          imageMap.set(pid, `https://www.carrefour.it${imgMatch[1]}`);
-        }
-      }
+      for (const [pid, url] of parseTileImages(html)) imageMap.set(pid, url);
     } catch (error) {
       this.logger.debug('Failed to fetch page images:', (error as Error).message);
     }
