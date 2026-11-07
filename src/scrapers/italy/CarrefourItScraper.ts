@@ -4,6 +4,16 @@ import { extractQuantity } from '../../utils/normalizer';
 import { retry, sleep } from '../../utils/retry';
 import https from 'https';
 
+/**
+ * Paging and filter query shared by the JSON product request and the HTML page
+ * that supplies its images. Both must ask for the same product set: without the
+ * `pmin` price filter the HTML page lists a different selection, so beyond the
+ * first page few products from the JSON (often none) appear in it.
+ */
+export function pageQuery(start: number, sz: number): string {
+  return `start=${start}&sz=${sz}&pmin=0%2C01`;
+}
+
 const TILE_IMAGE_SRC =
   /\b(?:data-)?src="(\/on\/demandware\.static\/-\/Sites-carrefour-master-catalog-IT\/[^"\s]+)"/;
 
@@ -243,7 +253,7 @@ export class CarrefourItScraper extends BaseScraper {
     start: number,
     sz: number
   ): Promise<DemandwareSearchResponse> {
-    const path = `/on/demandware.store/Sites-carrefour-IT-Site/it_IT/Search-ShowAjax?cgid=${encodeURIComponent(cgid)}&start=${start}&sz=${sz}&pmin=0%2C01`;
+    const path = `/on/demandware.store/Sites-carrefour-IT-Site/it_IT/Search-ShowAjax?cgid=${encodeURIComponent(cgid)}&${pageQuery(start, sz)}`;
     const url = `https://www.carrefour.it${path}`;
     return retry(
       async () => {
@@ -325,7 +335,7 @@ export class CarrefourItScraper extends BaseScraper {
 
     try {
       const html = await new Promise<string>((resolve, reject) => {
-        const path = `${categoryUrl}?start=${start}&sz=${sz}`;
+        const path = `${categoryUrl}?${pageQuery(start, sz)}`;
         const options = {
           hostname: 'www.carrefour.it',
           port: 443,
