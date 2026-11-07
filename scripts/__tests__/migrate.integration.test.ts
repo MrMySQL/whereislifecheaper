@@ -1,7 +1,7 @@
 /** Run against a disposable server: TEST_DATABASE_URL=postgres://... npm test -- migrate.integration */
 import { Client } from 'pg';
 import { applyMigrations } from '../migrate';
-import { createIsolatedDatabase } from '../../src/database/__tests__/isolatedDatabase';
+import { createIsolatedDatabase, runTeardown } from '../../src/database/__tests__/isolatedDatabase';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -19,10 +19,7 @@ integration('applyMigrations (PostgreSQL)', () => {
   }
 
   beforeAll(async () => ({ url, drop } = await createIsolatedDatabase(databaseUrl!, 'migrate')));
-  afterAll(async () => {
-    await Promise.all(clients.map(c => c.end()));
-    if (drop) await drop();
-  });
+  afterAll(() => runTeardown([...clients.map(c => () => c.end()), drop]));
 
   test('concurrent runners on a fresh database both succeed', async () => {
     // scrape.yml and scrape-rent.yml can migrate at the same time. Without the

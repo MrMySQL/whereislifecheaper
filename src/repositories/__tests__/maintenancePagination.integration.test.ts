@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { createIsolatedDatabase } from '../../database/__tests__/isolatedDatabase';
+import { createIsolatedDatabase, runTeardown } from '../../database/__tests__/isolatedDatabase';
 
 const integration = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 integration('maintenance pagination PostgreSQL', () => {
@@ -34,20 +34,8 @@ integration('maintenance pagination PostgreSQL', () => {
       SELECT $1,id,product_id,$2,supermarket_id,'{}'::jsonb FROM product_mappings WHERE supermarket_id=$3`, [canonicals[0],country,store]);
   }, 30000);
 
-  afterAll(async () => {
-    if (store) {
-      await query('DELETE FROM product_maintenance_reviews WHERE suggestion_id IN (SELECT id FROM product_maintenance_suggestions WHERE supermarket_id=$1)', [store]);
-      await query('DELETE FROM product_maintenance_suggestions WHERE supermarket_id=$1', [store]);
-      await query('DELETE FROM prices WHERE product_mapping_id IN (SELECT id FROM product_mappings WHERE supermarket_id=$1)', [store]);
-      await query('DELETE FROM product_mappings WHERE supermarket_id=$1', [store]);
-      await query('DELETE FROM supermarkets WHERE id=$1', [store]);
-    }
-    await query('DELETE FROM products WHERE name LIKE $1', [`${prefix}%`]);
-    await query('DELETE FROM canonical_products WHERE id=ANY($1::int[])', [canonicals]);
-    if (country) await query('DELETE FROM countries WHERE id=$1', [country]);
-    await closePool();
-    if (dropDatabase) await dropDatabase();
-  });
+  // The whole isolated database is dropped, so no per-row cleanup is needed.
+  afterAll(() => runTeardown([closePool, dropDatabase]));
 
   test('all coverage gaps remain reachable beyond 1000 with stable totals and country filtering', async () => {
     const first = await repository.coverage({country,gapsOnly:true,limit:200});

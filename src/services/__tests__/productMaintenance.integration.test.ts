@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
-import { createIsolatedDatabase } from '../../database/__tests__/isolatedDatabase';
+import { createIsolatedDatabase, runTeardown } from '../../database/__tests__/isolatedDatabase';
 import express from 'express';
 import request from 'supertest';
 
@@ -47,7 +47,7 @@ integration('offer observations and current comparisons (PostgreSQL)', () => {
     canonicalId = String((await client.query("INSERT INTO canonical_products(name,show_per_unit_price) VALUES('Water',true) RETURNING id")).rows[0].id);
   });
 
-  afterAll(async () => { if (closePool) await closePool(); if (client) await client.end(); if (dropDatabase) await dropDatabase(); });
+  afterAll(() => runTeardown([closePool, client && (() => client.end()), dropDatabase]));
 
   const bottle = (overrides: Record<string, unknown> = {}) => ({
     name: 'Abant water 5 L', unit: 'pieces', unitQuantity: 1, price: 100,

@@ -29,3 +29,21 @@ export async function createIsolatedDatabase(baseUrl: string, label: string): Pr
     },
   };
 }
+
+/**
+ * Run every teardown step even when an earlier one throws (or was never set
+ * because beforeAll failed), so an isolated database is always dropped; put
+ * the drop last. Rethrows the first error once all steps have run.
+ */
+export async function runTeardown(steps: Array<(() => Promise<unknown>) | undefined>): Promise<void> {
+  let firstError: unknown;
+  for (const step of steps) {
+    if (!step) continue;
+    try {
+      await step();
+    } catch (error) {
+      firstError ??= error;
+    }
+  }
+  if (firstError !== undefined) throw firstError;
+}

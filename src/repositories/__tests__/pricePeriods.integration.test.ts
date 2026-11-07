@@ -1,7 +1,7 @@
 /** Run against a disposable database: TEST_DATABASE_URL=postgres://... npm test -- pricePeriods.integration */
 import { Client } from 'pg';
 import { applyMigrations } from '../../../scripts/migrate';
-import { createIsolatedDatabase } from '../../database/__tests__/isolatedDatabase';
+import { createIsolatedDatabase, runTeardown } from '../../database/__tests__/isolatedDatabase';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -38,11 +38,7 @@ integration('price periods (PostgreSQL)', () => {
     store = String(stores.rows[0].id);
   });
 
-  afterAll(async () => {
-    if (closePool) await closePool();
-    if (client) await client.end();
-    if (dropDatabase) await dropDatabase();
-  });
+  afterAll(() => runTeardown([closePool, client && (() => client.end()), dropDatabase]));
 
   const bottle = (overrides: Record<string, unknown> = {}) => ({
     name: 'Abant water 5 L', unit: 'pieces', unitQuantity: 1, price: 100,

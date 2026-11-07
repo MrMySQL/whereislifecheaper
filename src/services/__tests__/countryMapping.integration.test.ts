@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import {Client} from 'pg';
-import {createIsolatedDatabase} from '../../database/__tests__/isolatedDatabase';
+import {createIsolatedDatabase,runTeardown} from '../../database/__tests__/isolatedDatabase';
 const url=process.env.TEST_DATABASE_URL;
 const integration=url?describe:describe.skip;
 integration('country onboarding against PostgreSQL',()=>{
@@ -25,7 +25,7 @@ integration('country onboarding against PostgreSQL',()=>{
   const {ProductService}=await import('../ProductService');const products=new ProductService();
   await products.bulkSaveProducts([{name:'Zucchero bianco 1 kg',unit:'kg',unitQuantity:1,price:2,currency:'EUR',isAvailable:true,isOnSale:false,externalId:'sugar',productUrl:'https://it.example/sugar'}],store,'EUR');
  });
- afterAll(async()=>{if(close)await close();if(db)await db.end();if(dropDatabase)await dropDatabase();});
+ afterAll(()=>runTeardown([close,db&&(()=>db.end()),dropDatabase]));
  test('new country has zero mappings, translated discovery finds it and preview leaves tables untouched',async()=>{
   expect((await db.query('SELECT count(*)::int n FROM products WHERE canonical_product_id IS NOT NULL')).rows[0].n).toBe(0);
   const result=await service.run(25,true,{country:italy});
