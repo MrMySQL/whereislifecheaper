@@ -1,4 +1,4 @@
-import { PoolClient } from 'pg';
+import { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { query } from '../config/database';
 import { ProductData } from '../types/scraper.types';
 import { interpretProductQuantity, QuantityInterpretation } from '../utils/productQuantity';
@@ -8,6 +8,31 @@ import {
   BasketEntry,
   PriceCompareEntry,
 } from '../types/db.types';
+
+/**
+ * Longest gap a price period may bridge. Scrapes run every 3 days, so this
+ * tolerates one missed run; a longer outage starts a new period.
+ */
+export const PRICE_PERIOD_MAX_GAP_DAYS = 7;
+
+interface PriceObservation {
+  mapping_id: number;
+  price: number;
+  currency: string;
+  original_price: number | null;
+  is_on_sale: boolean;
+  price_per_unit: number | null;
+  quantity_info: QuantityInterpretation | null;
+}
+
+export interface PriceWriteResult {
+  /** Observations that extended the mapping's current price period. */
+  continued: number;
+  /** Observations that opened a new period (first sighting or a change). */
+  inserted: number;
+}
+
+type QueryExecutor = <R extends QueryResultRow>(text: string, params?: unknown[]) => Promise<QueryResult<R>>;
 
 export class PriceRepository {
   async recordPrice(
@@ -20,34 +45,36 @@ export class PriceRepository {
       pricePerUnit?: number;
       quantityInfo?: QuantityInterpretation;
     }
-  ): Promise<void> {
-    if (!Number.isFinite(priceData.price) || priceData.price <= 0) return;
-    await query(
-      `INSERT INTO prices (
-        product_mapping_id, price, currency, original_price, is_on_sale, price_per_unit, quantity_info, scraped_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, CURRENT_TIMESTAMP)`,
-      [
-        productMappingId,
-        priceData.price,
-        priceData.currency,
-        priceData.originalPrice || null,
-        priceData.isOnSale,
-        priceData.quantityInfo
-          ? priceData.quantityInfo.comparablePrice
-          : priceData.pricePerUnit ?? null,
-        priceData.quantityInfo ? JSON.stringify(priceData.quantityInfo) : null,
-      ]
-    );
+  ): Promise<PriceWriteResult> {
+    if (!Number.isFinite(priceData.price) || priceData.price <= 0) return { continued: 0, inserted: 0 };
+    return this.writeObservations(query, [{
+      mapping_id: Number(productMappingId),
+      price: priceData.price,
+      currency: priceData.currency,
+      original_price: priceData.originalPrice || null,
+      is_on_sale: priceData.isOnSale,
+      price_per_unit: priceData.quantityInfo
+        ? priceData.quantityInfo.comparablePrice
+        : priceData.pricePerUnit ?? null,
+      quantity_info: priceData.quantityInfo ?? null,
+    }]);
   }
 
+  /**
+   * Record one scrape's prices as price periods (migration 020).
+   *
+   * Must run before ProductMappingRepository.recordObservations in the same
+   * transaction: it reads the mapping's previous last_checked_at to tell
+   * whether the product was seen without a price since its last period.
+   */
   async batchInsertPrices(
     mappingIds: string[],
     products: ProductData[],
     currency: string,
     client?: PoolClient
-  ): Promise<void> {
+  ): Promise<PriceWriteResult> {
     if (mappingIds.length !== products.length) throw new Error('Price mappings and products must align');
-    const observations = products.flatMap((product, index) => {
+    const observations = products.flatMap((product, index): PriceObservation[] => {
       if (!product.isAvailable || !Number.isFinite(product.price) || product.price <= 0) return [];
       const quantity = interpretProductQuantity(product);
       return [{
@@ -57,15 +84,74 @@ export class PriceRepository {
         price_per_unit: quantity.comparablePrice, quantity_info: quantity,
       }];
     });
-    if (observations.length === 0) return;
     const execute = client ? client.query.bind(client) : query;
-    await execute(
-      `INSERT INTO prices (product_mapping_id, price, currency, original_price, is_on_sale, price_per_unit, quantity_info, scraped_at)
-       SELECT mapping_id, price, currency, original_price, is_on_sale, price_per_unit, quantity_info, CURRENT_TIMESTAMP
-       FROM jsonb_to_recordset($1::jsonb) AS o(mapping_id int, price numeric, currency text,
-         original_price numeric, is_on_sale boolean, price_per_unit numeric, quantity_info jsonb)`,
-      [JSON.stringify(observations)]
+    return this.writeObservations(execute, observations);
+  }
+
+  /**
+   * An observation continues the mapping's newest period (moving its
+   * scraped_at to now) when all of these hold, and opens a new period
+   * otherwise:
+   * - every stored value is equal, compared after rounding to the column
+   *   type, so a sub-cent difference cannot open a period on every scrape;
+   * - the previous check of the mapping saw this period's price, i.e. it was
+   *   not seen out of stock in between (pm.last_checked_at is still the
+   *   previous check, see batchInsertPrices);
+   * - the period was last seen within PRICE_PERIOD_MAX_GAP_DAYS, so a long
+   *   scraper outage shows up as a gap instead of being bridged.
+   */
+  private async writeObservations(
+    execute: QueryExecutor,
+    observations: PriceObservation[]
+  ): Promise<PriceWriteResult> {
+    if (observations.length === 0) return { continued: 0, inserted: 0 };
+    const result = await execute<{ continued: string; inserted: string }>(
+      `WITH o AS (
+         SELECT idx, mapping_id, currency, is_on_sale, quantity_info,
+           price::numeric(16,2) AS price,
+           original_price::numeric(16,2) AS original_price,
+           price_per_unit::numeric(16,2) AS price_per_unit
+         FROM jsonb_to_recordset($1::jsonb) AS r(idx int, mapping_id int, price numeric, currency text,
+           original_price numeric, is_on_sale boolean, price_per_unit numeric, quantity_info jsonb)
+       ),
+       continued AS (
+         SELECT o.idx, latest.id AS price_id
+         FROM o
+         JOIN product_mappings pm ON pm.id = o.mapping_id
+         CROSS JOIN LATERAL (
+           SELECT p.* FROM prices p
+           WHERE p.product_mapping_id = o.mapping_id
+           ORDER BY p.scraped_at DESC, p.id DESC
+           LIMIT 1
+         ) latest
+         WHERE latest.price = o.price
+           AND latest.currency = o.currency
+           AND latest.original_price IS NOT DISTINCT FROM o.original_price
+           AND latest.is_on_sale IS NOT DISTINCT FROM o.is_on_sale
+           AND latest.price_per_unit IS NOT DISTINCT FROM o.price_per_unit
+           AND latest.quantity_info IS NOT DISTINCT FROM o.quantity_info
+           AND (pm.last_checked_at IS NULL OR latest.scraped_at >= pm.last_checked_at)
+           AND latest.scraped_at >= CURRENT_TIMESTAMP - ($2 * INTERVAL '1 day')
+       ),
+       extended AS (
+         UPDATE prices p SET scraped_at = CURRENT_TIMESTAMP
+         WHERE p.id IN (SELECT price_id FROM continued)
+         RETURNING 1
+       ),
+       inserted AS (
+         INSERT INTO prices (product_mapping_id, price, currency, original_price, is_on_sale,
+           price_per_unit, quantity_info, first_seen_at, scraped_at)
+         SELECT mapping_id, price, currency, original_price, is_on_sale,
+           price_per_unit, quantity_info, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+         FROM o
+         WHERE o.idx NOT IN (SELECT idx FROM continued)
+         RETURNING 1
+       )
+       SELECT (SELECT count(*) FROM extended) AS continued, (SELECT count(*) FROM inserted) AS inserted`,
+      [JSON.stringify(observations.map((o, idx) => ({ ...o, idx }))), PRICE_PERIOD_MAX_GAP_DAYS]
     );
+    const row = result.rows[0];
+    return { continued: Number(row?.continued ?? 0), inserted: Number(row?.inserted ?? 0) };
   }
 
   async cleanupOld(daysToKeep: number): Promise<number> {

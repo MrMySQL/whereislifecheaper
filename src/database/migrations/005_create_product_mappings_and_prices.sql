@@ -48,9 +48,9 @@ CREATE TABLE IF NOT EXISTS prices (
 );
 
 -- Create indexes for prices
-CREATE INDEX IF NOT EXISTS idx_prices_mapping ON prices(product_mapping_id);
-CREATE INDEX IF NOT EXISTS idx_prices_scraped_at ON prices(scraped_at);
-CREATE INDEX IF NOT EXISTS idx_prices_currency ON prices(currency);
+-- idx_prices_mapping, idx_prices_scraped_at and idx_prices_currency used to be
+-- created here; 020_price_periods drops them. Migrations re-run every time, so
+-- creating them here would rebuild them on every run.
 CREATE INDEX IF NOT EXISTS idx_prices_on_sale ON prices(is_on_sale) WHERE is_on_sale = true;
 
 -- Create composite index for latest price queries

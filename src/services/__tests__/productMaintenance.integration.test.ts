@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
+import { createIsolatedDatabase, runTeardown } from '../../database/__tests__/isolatedDatabase';
 import express from 'express';
 import request from 'supertest';
 
@@ -17,9 +18,14 @@ integration('offer observations and current comparisons (PostgreSQL)', () => {
   let secondStore: string;
   let canonicalId: string;
 
+  let dropDatabase: (() => Promise<void>) | undefined;
+
   beforeAll(async () => {
-    process.env.DATABASE_URL = databaseUrl;
-    client = new Client({ connectionString: databaseUrl });
+    // Own database, so parallel suites' TRUNCATEs cannot hit these fixtures.
+    const isolated = await createIsolatedDatabase(databaseUrl!, 'product_maintenance');
+    dropDatabase = isolated.drop;
+    process.env.DATABASE_URL = isolated.url;
+    client = new Client({ connectionString: isolated.url });
     await client.connect();
     const dir = path.join(__dirname, '../../database/migrations');
     for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
@@ -41,7 +47,7 @@ integration('offer observations and current comparisons (PostgreSQL)', () => {
     canonicalId = String((await client.query("INSERT INTO canonical_products(name,show_per_unit_price) VALUES('Water',true) RETURNING id")).rows[0].id);
   });
 
-  afterAll(async () => { if (closePool) await closePool(); if (client) await client.end(); });
+  afterAll(() => runTeardown([closePool, client && (() => client.end()), dropDatabase]));
 
   const bottle = (overrides: Record<string, unknown> = {}) => ({
     name: 'Abant water 5 L', unit: 'pieces', unitQuantity: 1, price: 100,

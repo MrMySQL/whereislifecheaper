@@ -217,24 +217,35 @@ Links products to specific supermarkets with external IDs.
 
 ### prices
 
-Historical price data with timestamps.
+Price history as **periods**: one row per unbroken stretch of an unchanged price
+for a product mapping (migration 020). A scrape that sees the same price moves
+the newest row's `scraped_at` forward instead of adding a row; a new row starts
+when any stored value changes (price, currency, original price, sale flag, unit
+price, quantity interpretation), when the product was seen out of stock in
+between, or when the previous sighting is older than
+`PRICE_PERIOD_MAX_GAP_DAYS` (7, i.e. more than one missed 3-day scrape). See
+`PriceRepository.batchInsertPrices`.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | SERIAL | PRIMARY KEY | Auto-increment ID |
 | product_mapping_id | INTEGER | NOT NULL, FK | Reference to product_mappings |
-| price | DECIMAL(10,2) | NOT NULL | Current price |
+| price | DECIMAL(16,2) | NOT NULL | Price during this period |
 | currency | VARCHAR(3) | NOT NULL | Currency code |
-| original_price | DECIMAL(10,2) | | Price before discount |
-| is_on_sale | BOOLEAN | DEFAULT false | Whether currently on sale |
-| price_per_unit | DECIMAL(10,4) | | Calculated price per kg/L |
-| scraped_at | TIMESTAMP | NOT NULL | When price was scraped |
-| created_at | TIMESTAMP | DEFAULT NOW() | Record creation time |
+| original_price | DECIMAL(16,2) | | Price before discount |
+| is_on_sale | BOOLEAN | DEFAULT false | Whether on sale |
+| price_per_unit | DECIMAL(16,2) | | Calculated price per kg/L |
+| quantity_info | JSONB | | Quantity interpretation the price was read with |
+| first_seen_at | TIMESTAMP | NOT NULL | First scrape that saw this price |
+| scraped_at | TIMESTAMP | | Latest scrape that saw this price |
+
+`scraped_at` still means "latest observation", so "newest price" and freshness
+queries read it as before. Price history should use both ends of the period
+(`ProductRepository.getPriceHistory` does).
 
 **Indexes:**
-- `idx_prices_mapping_id` on `product_mapping_id`
-- `idx_prices_scraped_at` on `scraped_at`
 - `idx_prices_mapping_scraped` on `(product_mapping_id, scraped_at DESC)`
+- `idx_prices_on_sale` on `is_on_sale` (partial, sale rows only)
 
 ---
 

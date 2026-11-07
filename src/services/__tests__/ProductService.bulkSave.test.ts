@@ -36,7 +36,7 @@ function harness() {
     ),
     recordObservations: jest.fn().mockResolvedValue(undefined),
   };
-  const priceRepo = { batchInsertPrices: jest.fn().mockResolvedValue(undefined) };
+  const priceRepo = { batchInsertPrices: jest.fn().mockResolvedValue({ continued: 0, inserted: 0 }) };
   const service = new ProductService(
     {} as ProductRepository,
     mappingRepo as unknown as ProductMappingRepository,
@@ -100,5 +100,20 @@ describe('ProductService.bulkSaveProducts and products without a name', () => {
     expect(saved).toBe(0);
     expect(mappingRepo.batchFindMappingsByExternalIds).not.toHaveBeenCalled();
     expect(mappingRepo.batchCreateProductsAndMappings).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProductService.bulkSaveProducts write order', () => {
+  // Continuing a price period reads the mapping's previous last_checked_at,
+  // which recordObservations overwrites; prices must be written first.
+  it('records prices before it overwrites the mapping observations', async () => {
+    const { service, mappingRepo, priceRepo } = harness();
+
+    await service.bulkSaveProducts([product('Молоко 2.5% 1 л', '100')], '7', 'UAH');
+
+    expect(priceRepo.batchInsertPrices).toHaveBeenCalledTimes(1);
+    expect(mappingRepo.recordObservations).toHaveBeenCalledTimes(1);
+    expect(priceRepo.batchInsertPrices.mock.invocationCallOrder[0])
+      .toBeLessThan(mappingRepo.recordObservations.mock.invocationCallOrder[0]);
   });
 });

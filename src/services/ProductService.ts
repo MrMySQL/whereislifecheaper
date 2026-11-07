@@ -157,9 +157,12 @@ export class ProductService {
     const client = await getClient();
     try {
       await client.query('BEGIN');
+      // Prices first: continuing a price period depends on the mapping's
+      // previous last_checked_at, which recordObservations overwrites.
+      const prices = await this.priceRepository.batchInsertPrices(mappingIds, products, currency, client);
       await this.productMappingRepository.recordObservations(mappingIds, products, client);
-      await this.priceRepository.batchInsertPrices(mappingIds, products, currency, client);
       await client.query('COMMIT');
+      scraperLogger.debug(`Prices: ${prices.continued} unchanged, ${prices.inserted} new or changed`);
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

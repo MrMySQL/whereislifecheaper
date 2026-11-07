@@ -47,8 +47,10 @@ export interface Price {
   original_price: number | null;
   is_on_sale: boolean;
   price_per_unit: number | null;
+  /** First scrape that saw this price; the row covers first_seen_at..scraped_at. */
+  first_seen_at: Date;
+  /** Latest scrape that saw this price. */
   scraped_at: Date;
-  created_at: Date;
 }
 
 export interface Category {
