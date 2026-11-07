@@ -1,15 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- WhereIsLifeCheaper: grocery basket with a price-drop arrow -->
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#c25a3c"/>
-      <stop offset="100%" style="stop-color:#a84832"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#cc6444"/>
+      <stop offset="1" stop-color="#a84832"/>
     </linearGradient>
   </defs>
-  <rect width="32" height="32" rx="6" fill="url(#grad)"/>
-  <!-- Location pin body with integrated down arrow -->
-  <path d="M16 5c-3.5 0-6.5 2.8-6.5 6.3 0 2.2 1.2 4.2 3 5.7l3.5 4.5 3.5-4.5c1.8-1.5 3-3.5 3-5.7C22.5 7.8 19.5 5 16 5z" fill="white"/>
-  <!-- Inner circle (location marker) -->
-  <circle cx="16" cy="11" r="2.5" fill="url(#grad)"/>
-  <!-- Down arrow (cheaper indicator) -->
-  <polygon points="16,27 11,22 13.5,22 13.5,20 18.5,20 18.5,22 21,22" fill="white"/>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <path d="M22 27C22 10 42 10 42 27" fill="none" stroke="#faf7f0" stroke-width="4.5" stroke-linecap="round"/>
+  <rect x="10" y="25" width="44" height="6.5" rx="3.25" fill="#faf7f0"/>
+  <path d="M13 33h38l-3.6 17.1a3 3 0 0 1-2.9 2.4h-25a3 3 0 0 1-2.9-2.4Z" fill="#faf7f0"/>
+  <g fill="none" stroke="#b04d34" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="32,37 32,47.5"/>
+    <polyline points="26.5,42.5 32,48 37.5,42.5"/>
+  </g>
 </svg>

@@ -17,11 +17,20 @@
   <circle cx="1100" cy="100" r="200" fill="#c25a3c" opacity="0.1"/>
   <circle cx="100" cy="530" r="150" fill="#6b8e4e" opacity="0.1"/>
 
-  <!-- Logo icon -->
-  <g transform="translate(100, 200)">
-    <rect width="80" height="80" rx="16" fill="url(#accent)"/>
-    <path d="M40 20 L40 50 M40 50 C40 60 30 70 20 70 M40 50 C40 60 50 70 60 70" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
-    <circle cx="40" cy="20" r="6" fill="white"/>
+  <!-- Logo icon (same artwork as favicon.svg) -->
+  <g transform="translate(100, 200) scale(1.25)">
+    <linearGradient id="logo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#cc6444"/>
+      <stop offset="1" stop-color="#a84832"/>
+    </linearGradient>
+    <rect width="64" height="64" rx="14" fill="url(#logo)"/>
+    <path d="M22 27C22 10 42 10 42 27" fill="none" stroke="#faf7f0" stroke-width="4.5" stroke-linecap="round"/>
+    <rect x="10" y="25" width="44" height="6.5" rx="3.25" fill="#faf7f0"/>
+    <path d="M13 33h38l-3.6 17.1a3 3 0 0 1-2.9 2.4h-25a3 3 0 0 1-2.9-2.4Z" fill="#faf7f0"/>
+    <g fill="none" stroke="#b04d34" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="32,37 32,47.5"/>
+      <polyline points="26.5,42.5 32,48 37.5,42.5"/>
+    </g>
   </g>
 
   <!-- Title -->
