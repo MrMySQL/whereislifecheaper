@@ -341,7 +341,7 @@ export class ProductService {
     return this.productRepository.getLatestPricesBySupermarket(supermarketId);
   }
 
-  async cleanupOldPrices(daysToKeep: number = 90): Promise<number> {
+  async cleanupOldPrices(daysToKeep: number = 30): Promise<number> {
     const deletedCount = await this.priceRepository.cleanupOld(daysToKeep);
     scraperLogger.info(`Cleaned up ${deletedCount} old price records`);
     return deletedCount;

@@ -19,6 +19,7 @@
     "check:freshness": "ts-node scripts/check-freshness.ts",
     "api": "ts-node src/api/server.ts",
     "rates:sync": "ts-node scripts/sync-exchange-rates.ts",
+    "prices:cleanup": "ts-node scripts/cleanup-prices.ts",
     "rent:scrape": "ts-node scripts/scrape-rent.ts",
     "rent:aggregate": "ts-node scripts/aggregate-rent.ts",
     "rent:check-sources": "ts-node scripts/check-rent-sources.ts",
