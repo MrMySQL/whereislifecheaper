@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { User, Country, CanonicalProduct, CanonicalProductBasic, CanonicalMappedProduct, PriceStats, Product, AuthStatus, Supermarket, PriceHistoryEntry, CountryRent } from '../types';
+import type { User, Country, CanonicalProduct, CanonicalProductBasic, CanonicalMappedProduct, PriceStats, Product, AuthStatus, Supermarket, CountryRent } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -133,19 +133,6 @@ export const translateApi = {
   },
   getLanguages: async (): Promise<Record<string, string>> => {
     const response = await api.get<Record<string, string>>('/translate/languages');
-    return response.data;
-  },
-};
-
-// Products API
-export const productsApi = {
-  getPriceHistory: async (productId: number, days: number = 30): Promise<{
-    data: PriceHistoryEntry[];
-    count: number;
-  }> => {
-    const response = await api.get(`/products/${productId}/price-history`, {
-      params: { days },
-    });
     return response.data;
   },
 };

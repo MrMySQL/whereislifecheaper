@@ -1,12 +1,10 @@
-import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TrendingDown, Tag, Trophy, Package, ImageOff, Store, Calendar, Calculator, ChevronDown } from 'lucide-react';
+import { TrendingDown, Tag, Trophy, Package, ImageOff, Store, Calendar, Calculator } from 'lucide-react';
 import type { CanonicalProduct, CountryPrice, Country } from '../../types';
 import { formatPrice, convertToEUR, findCheapestCountry, isNormalizableUnit, getUnitLabel, formatPackageSize } from '../../utils/currency';
 import { formatFullDate } from '../../utils/dateFormat';
 import { track } from '../../lib/analytics';
-
-const PriceHistoryChart = lazy(() => import('./PriceHistoryChart'));
 
 // A hover card counts as "viewed" only once it has stayed open this long, so
 // sweeping the pointer across the table doesn't register every cell.
@@ -350,31 +348,6 @@ export default function ComparisonTable({
   loading = false,
 }: ComparisonTableProps) {
   const { t } = useTranslation();
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-
-  const toggleRowExpanded = (product: CanonicalProduct, rowIndex: number, cheapestCode: string | null) => {
-    const canonicalId = product.canonical_id;
-    if (!expandedRows.has(canonicalId)) {
-      track('price_history_opened', {
-        canonical_id: canonicalId,
-        product_name: product.canonical_name,
-        category: product.category,
-        row_position: rowIndex + 1,
-        countries_with_price: selectedCountries.filter((code) => product.prices_by_country[code]),
-        cheapest_country: cheapestCode,
-      });
-    }
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(canonicalId)) {
-        next.delete(canonicalId);
-      } else {
-        next.add(canonicalId);
-      }
-      return next;
-    });
-  };
-
   // Calculate summary totals per country - must be before early returns to satisfy Rules of Hooks
   const summaryData = useMemo(() => {
     const totals: Record<string, { total: number; count: number }> = {};
@@ -489,127 +462,85 @@ export default function ComparisonTable({
                 product.show_per_unit_price
               );
 
-              const isExpanded = expandedRows.has(product.canonical_id);
-
               return (
-                <React.Fragment key={product.canonical_id}>
-                  <tr
-                    className={`border-b border-cream-100 hover:bg-cream-50/50 transition-colors cursor-pointer ${
-                      isExpanded ? 'bg-cream-50/30' : ''
-                    }`}
-                    onClick={() => toggleRowExpanded(product, rowIndex, cheapest?.code ?? null)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        toggleRowExpanded(product, rowIndex, cheapest?.code ?? null);
-                      }
-                    }}
-                    tabIndex={0}
-                    role="button"
-                    aria-expanded={isExpanded}
-                    aria-label={`${product.canonical_name}, ${isExpanded ? t('comparison.collapseDetails') : t('comparison.expandDetails')}`}
-                  >
-                    <td className="py-2.5 px-4">
-                      <div className="flex items-center gap-3">
-                        {/* Expand/Collapse indicator */}
-                        <ChevronDown
-                          className={`w-4 h-4 text-charcoal-400 transition-transform duration-200 flex-shrink-0 ${
-                            isExpanded ? 'rotate-180' : ''
-                          }`}
-                          aria-hidden="true"
-                        />
-                        {/* Product image - find first real image URL from selected countries only */}
-                        {(() => {
-                          const prices = selectedCountries
-                            .map(code => product.prices_by_country[code])
-                            .filter(Boolean);
-                          const imageUrl = prices.find(p => p.image_url?.startsWith('http'))?.image_url
-                            || prices.find(p => p.image_url && !p.image_url.includes('default'))?.image_url;
-                          return imageUrl ? (
-                            <img
-                              src={imageUrl}
-                              alt={product.canonical_name}
-                              className="w-10 h-10 rounded-lg object-cover bg-cream-100 flex-shrink-0"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove('hidden');
-                              }}
-                            />
-                          ) : null;
-                        })()}
-                        <div className={`w-10 h-10 rounded-lg bg-cream-100 flex items-center justify-center flex-shrink-0 ${selectedCountries.some(code => product.prices_by_country[code]?.image_url?.startsWith('http')) ? 'hidden' : ''}`}>
-                          <ImageOff className="w-4 h-4 text-cream-400" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-charcoal-900 truncate max-w-[180px]">
-                            {product.canonical_name}
-                          </p>
-                          {product.category && (
-                            <span className="text-[10px] text-charcoal-400">{product.category}</span>
-                          )}
-                        </div>
+                <tr
+                  key={product.canonical_id}
+                  className="border-b border-cream-100 hover:bg-cream-50/50 transition-colors"
+                >
+                  <td className="py-2.5 px-4">
+                    <div className="flex items-center gap-3">
+                      {/* Product image - find first real image URL from selected countries only */}
+                      {(() => {
+                        const prices = selectedCountries
+                          .map(code => product.prices_by_country[code])
+                          .filter(Boolean);
+                        const imageUrl = prices.find(p => p.image_url?.startsWith('http'))?.image_url
+                          || prices.find(p => p.image_url && !p.image_url.includes('default'))?.image_url;
+                        return imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={product.canonical_name}
+                            className="w-10 h-10 rounded-lg object-cover bg-cream-100 flex-shrink-0"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null;
+                      })()}
+                      <div className={`w-10 h-10 rounded-lg bg-cream-100 flex items-center justify-center flex-shrink-0 ${selectedCountries.some(code => product.prices_by_country[code]?.image_url?.startsWith('http')) ? 'hidden' : ''}`}>
+                        <ImageOff className="w-4 h-4 text-cream-400" />
                       </div>
-                    </td>
+                      <div className="min-w-0">
+                        <p className="font-medium text-charcoal-900 truncate max-w-[180px]">
+                          {product.canonical_name}
+                        </p>
+                        {product.category && (
+                          <span className="text-[10px] text-charcoal-400">{product.category}</span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
 
-                    {selectedCountries.map((code) => {
-                      const priceData = product.prices_by_country[code];
-                      const isCheapest = cheapest?.code === code;
+                  {selectedCountries.map((code) => {
+                    const priceData = product.prices_by_country[code];
+                    const isCheapest = cheapest?.code === code;
 
-                      if (!priceData) {
-                        return (
-                          <td key={code} className="text-center py-2.5 px-3">
-                            <span className="text-cream-400">—</span>
-                          </td>
-                        );
-                      }
-
+                    if (!priceData) {
                       return (
-                        <PriceCell
-                          key={code}
-                          priceData={priceData}
-                          countryCode={code}
-                          productName={product.canonical_name}
-                          isCheapest={isCheapest}
-                          rowIndex={rowIndex}
-                          showPerUnitPrice={product.show_per_unit_price}
-                        />
+                        <td key={code} className="text-center py-2.5 px-3">
+                          <span className="text-cream-400">—</span>
+                        </td>
                       );
-                    })}
+                    }
 
-                    <td className="text-center py-2.5 px-3">
-                      {cheapest && (
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span className="font-bold text-saffron-700">{cheapest.code}</span>
-                          {cheapest.savings > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-olive-600 font-medium">
-                              <TrendingDown className="h-2.5 w-2.5" />
-                              {cheapest.savings}%
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                    return (
+                      <PriceCell
+                        key={code}
+                        priceData={priceData}
+                        countryCode={code}
+                        productName={product.canonical_name}
+                        isCheapest={isCheapest}
+                        rowIndex={rowIndex}
+                        showPerUnitPrice={product.show_per_unit_price}
+                      />
+                    );
+                  })}
 
-                  {/* Expanded row with chart */}
-                  {isExpanded && (
-                    <tr>
-                      <td
-                        colSpan={selectedCountries.length + 2}
-                        className="p-0 border-b border-cream-100"
-                      >
-                        <div className="p-4" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} role="presentation">
-                          <Suspense fallback={<div className="flex items-center justify-center py-8"><div className="w-5 h-5 border-2 border-terracotta-300 border-t-terracotta-600 rounded-full animate-spin" /></div>}>
-                            <PriceHistoryChart
-                              product={product}
-                              selectedCountries={selectedCountries}
-                            />
-                          </Suspense>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+                  <td className="text-center py-2.5 px-3">
+                    {cheapest && (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="font-bold text-saffron-700">{cheapest.code}</span>
+                        {cheapest.savings > 0 && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-olive-600 font-medium">
+                            <TrendingDown className="h-2.5 w-2.5" />
+                            {cheapest.savings}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
               );
             })}
           </tbody>

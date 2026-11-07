@@ -127,22 +127,6 @@ export interface ProductPriceEntry {
   product_url: string;
 }
 
-export interface PriceHistoryEntry {
-  id: string;
-  product_mapping_id: string;
-  price: number;
-  currency: string;
-  original_price: number | null;
-  is_on_sale: boolean;
-  price_per_unit: number | null;
-  scraped_at: Date;
-  product_id: string;
-  supermarket_id: string;
-  supermarket_name: string;
-  country_name: string;
-  country_code: string;
-}
-
 export interface CountryComparisonEntry {
   country_id: string;
   country_name: string;

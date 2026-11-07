@@ -9,7 +9,6 @@ const integration = databaseUrl ? describe : describe.skip;
 integration('price periods (PostgreSQL)', () => {
   let client: Client;
   let products: import('../../services/ProductService').ProductService;
-  let history: import('../ProductRepository').ProductRepository;
   let closePool: () => Promise<void>;
   let store: string;
   let dropDatabase: (() => Promise<void>) | undefined;
@@ -25,10 +24,8 @@ integration('price periods (PostgreSQL)', () => {
     await client.connect();
     await migrate();
     const { ProductService } = await import('../../services/ProductService');
-    const { ProductRepository } = await import('../ProductRepository');
     closePool = (await import('../../config/database')).closePool;
     products = new ProductService();
-    history = new ProductRepository();
   }, 60000);
 
   beforeEach(async () => {
@@ -143,24 +140,5 @@ integration('price periods (PostgreSQL)', () => {
     await products.saveProduct(bottle(), store);
     await products.saveProduct(bottle(), store);
     expect(await periods()).toHaveLength(1);
-  });
-
-  test('price history draws both ends of a period, clipped to the window', async () => {
-    await products.bulkSaveProducts([bottle()], store, 'TRY');
-    await ageEverything(5);
-    await products.bulkSaveProducts([bottle()], store, 'TRY');
-    await ageEverything(5);
-    await products.bulkSaveProducts([bottle()], store, 'TRY');
-    const productId = String((await client.query('SELECT id FROM products')).rows[0].id);
-
-    const wide = await history.getPriceHistory(productId, { days: 30 });
-    expect(wide).toHaveLength(2);
-    const [newest, oldest] = wide.map(p => new Date(p.scraped_at).getTime());
-    expect(Date.now() - newest).toBeLessThan(60_000);
-    expect(Math.round((Date.now() - oldest) / 86_400_000)).toBe(10);
-
-    const narrow = await history.getPriceHistory(productId, { days: 7 });
-    expect(narrow).toHaveLength(2);
-    expect(Math.round((Date.now() - new Date(narrow[1].scraped_at).getTime()) / 86_400_000)).toBe(7);
   });
 });

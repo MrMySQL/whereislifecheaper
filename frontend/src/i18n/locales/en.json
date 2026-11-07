@@ -79,9 +79,7 @@
     "sale": "Sale",
     "avgOf": "avg of {{count}}",
     "averageProducts": "Average of {{count}} products",
-    "avg": "Avg",
-    "expandDetails": "press to expand price history",
-    "collapseDetails": "press to collapse price history"
+    "avg": "Avg"
   },
   "countryCard": {
     "products": "Products",
@@ -191,11 +189,6 @@
     "showingInverse": "showing inverse rate",
     "showingRate": "showing standard rate",
     "pressToToggle": "press to toggle rate direction"
-  },
-  "priceHistory": {
-    "priceHistory": "Price History",
-    "loadingHistory": "Loading price history...",
-    "noHistory": "No price history available for this product"
   },
   "loading": {
     "loadingCountries": "Loading countries...",
