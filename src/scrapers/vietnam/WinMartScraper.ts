@@ -266,7 +266,9 @@ export class WinMartScraper extends BaseScraper {
       }
     }
 
-    const productUrl = `${this.config.baseUrl}/${item.seoName}`;
+    // Product pages live under /products/; the bare /{seoName} path renders
+    // an empty "undefined" page.
+    const productUrl = `${this.config.baseUrl}/products/${item.seoName}`;
     const imageUrl = item.mediaUrl || item.mediaItems?.[0]?.mediaUrl;
 
     return {
