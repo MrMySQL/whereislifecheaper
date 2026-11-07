@@ -79,9 +79,7 @@
     "sale": "Знижка",
     "avgOf": "сер. з {{count}}",
     "averageProducts": "Середнє з {{count}} товарів",
-    "avg": "Сер.",
-    "expandDetails": "натисніть, щоб показати історію цін",
-    "collapseDetails": "натисніть, щоб сховати історію цін"
+    "avg": "Сер."
   },
   "countryCard": {
     "products": "Товари",
@@ -191,11 +189,6 @@
     "showingInverse": "показано зворотний курс",
     "showingRate": "показано стандартний курс",
     "pressToToggle": "натисніть для перемикання напрямку курсу"
-  },
-  "priceHistory": {
-    "priceHistory": "Історія цін",
-    "loadingHistory": "Завантаження історії цін...",
-    "noHistory": "Історія цін для цього товару недоступна"
   },
   "loading": {
     "loadingCountries": "Завантаження країн...",

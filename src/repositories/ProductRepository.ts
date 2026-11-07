@@ -3,7 +3,6 @@ import {
   ProductWithCategory,
   ProductWithPricesResult,
   ProductPriceEntry,
-  PriceHistoryEntry,
   CountryComparisonEntry,
   SupermarketProductEntry,
 } from '../types/db.types';
@@ -85,49 +84,6 @@ export class ProductRepository {
     );
 
     return { ...productResult.rows[0], prices: pricesResult.rows };
-  }
-
-  async getPriceHistory(
-    productId: string,
-    options: { supermarketId?: string; days: number; limit?: number; offset?: number }
-  ): Promise<PriceHistoryEntry[]> {
-    const limit = options.limit ?? 500;
-    const offset = options.offset ?? 0;
-
-    // A prices row is a period (first_seen_at..scraped_at) of one unchanged
-    // price. Emit a point at each end so the chart draws the flat stretch;
-    // a period that began before the window starts at the window's edge.
-    let sql = `
-      SELECT
-        pr.id, pr.product_mapping_id, pr.price, pr.currency, pr.original_price,
-        pr.is_on_sale, pr.price_per_unit, pt.at AS scraped_at,
-        pm.product_id, pm.supermarket_id,
-        s.name as supermarket_name,
-        c.name as country_name, c.code as country_code
-      FROM prices pr
-      INNER JOIN product_mappings pm ON pr.product_mapping_id = pm.id
-      INNER JOIN supermarkets s ON pm.supermarket_id = s.id
-      INNER JOIN countries c ON s.country_id = c.id
-      CROSS JOIN LATERAL (
-        SELECT pr.scraped_at AS at
-        UNION
-        SELECT GREATEST(pr.first_seen_at, CURRENT_TIMESTAMP - ($2 * INTERVAL '1 day'))
-      ) pt
-      WHERE pm.product_id = $1
-      AND pr.scraped_at >= CURRENT_TIMESTAMP - ($2 * INTERVAL '1 day')
-    `;
-    const params: unknown[] = [productId, options.days];
-    let i = 3;
-
-    if (options.supermarketId) {
-      sql += ` AND pm.supermarket_id = $${i++}`;
-      params.push(options.supermarketId);
-    }
-    sql += ` ORDER BY pt.at DESC, pr.id DESC LIMIT $${i++} OFFSET $${i++}`;
-    params.push(limit, offset);
-
-    const result = await query<PriceHistoryEntry>(sql, params);
-    return result.rows;
   }
 
   async compareByCountry(productName: string): Promise<CountryComparisonEntry[]> {

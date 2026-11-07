@@ -16,11 +16,6 @@ const compareCountriesSchema = z.object({
   product_name: z.string().min(1, 'product_name query parameter is required'),
 });
 
-const priceHistoryQuerySchema = z.object({
-  supermarket_id: z.string().regex(/^\d+$/, 'Must be a numeric ID').optional(),
-  days: z.coerce.number().int().min(1).max(365).default(30),
-});
-
 router.get('/', validateQuery(productListSchema), async (req, res, next) => {
   try {
     const { search, category_id, brand, limit, offset } = req.validatedQuery as z.infer<typeof productListSchema>;
@@ -92,22 +87,6 @@ router.get('/:id', async (req, res, next) => {
     }
 
     res.json({ data });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/:id/price-history', validateQuery(priceHistoryQuerySchema), async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { supermarket_id, days } = req.validatedQuery as z.infer<typeof priceHistoryQuerySchema>;
-
-    const data = await productRepository.getPriceHistory(id, {
-      supermarketId: supermarket_id,
-      days,
-    });
-
-    res.json({ data, count: data.length });
   } catch (error) {
     next(error);
   }

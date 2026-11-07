@@ -79,9 +79,7 @@
     "sale": "Скидка",
     "avgOf": "сред. из {{count}}",
     "averageProducts": "Среднее из {{count}} товаров",
-    "avg": "Сред.",
-    "expandDetails": "нажмите, чтобы показать историю цен",
-    "collapseDetails": "нажмите, чтобы скрыть историю цен"
+    "avg": "Сред."
   },
   "countryCard": {
     "products": "Товары",
@@ -191,11 +189,6 @@
     "showingInverse": "показан обратный курс",
     "showingRate": "показан стандартный курс",
     "pressToToggle": "нажмите для переключения направления курса"
-  },
-  "priceHistory": {
-    "priceHistory": "История цен",
-    "loadingHistory": "Загрузка истории цен...",
-    "noHistory": "История цен для этого товара недоступна"
   },
   "loading": {
     "loadingCountries": "Загрузка стран...",

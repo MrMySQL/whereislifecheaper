@@ -43,19 +43,6 @@ export interface AnalyticsEvents {
   };
 
   // Home: comparison table
-  price_history_opened: {
-    canonical_id: number;
-    product_name: string;
-    category: string | null;
-    row_position: number;
-    countries_with_price: string[];
-    cheapest_country: string | null;
-  };
-  price_history_range_changed: {
-    canonical_id: number;
-    product_name: string;
-    days: number;
-  };
   /** Hover card on a price cell stayed open long enough to be read. */
   price_details_viewed: {
     product_name: string;

@@ -217,7 +217,7 @@ Links products to specific supermarkets with external IDs.
 
 ### prices
 
-Price history as **periods**: one row per unbroken stretch of an unchanged price
+Prices as **periods**: one row per unbroken stretch of an unchanged price
 for a product mapping (migration 020). A scrape that sees the same price moves
 the newest row's `scraped_at` forward instead of adding a row; a new row starts
 when any stored value changes (price, currency, original price, sale flag, unit
@@ -240,8 +240,8 @@ between, or when the previous sighting is older than
 | scraped_at | TIMESTAMP | | Latest scrape that saw this price |
 
 `scraped_at` still means "latest observation", so "newest price" and freshness
-queries read it as before. Price history should use both ends of the period
-(`ProductRepository.getPriceHistory` does).
+queries read it as before. A query over a time range should use both ends of
+the period (`first_seen_at`..`scraped_at`).
 
 **Indexes:**
 - `idx_prices_mapping_scraped` on `(product_mapping_id, scraped_at DESC)`

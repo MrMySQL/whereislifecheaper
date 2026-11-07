@@ -144,22 +144,6 @@ export interface CanonicalMappedMarket {
   country_flag: string | null;
 }
 
-export interface PriceHistoryEntry {
-  id: number;
-  product_mapping_id: number;
-  product_id: number;
-  supermarket_id: number;
-  price: number;
-  currency: string;
-  original_price: number | null;
-  is_on_sale: boolean;
-  price_per_unit: number | null;
-  scraped_at: string;
-  supermarket_name: string;
-  country_name: string;
-  country_code: string;
-}
-
 export interface RentBucket {
   bedrooms: number;
   median: number;

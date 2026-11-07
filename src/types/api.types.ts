@@ -70,13 +70,6 @@ export interface ProductQueryParams {
   order?: 'asc' | 'desc';
 }
 
-export interface PriceHistoryParams {
-  product_id: number;
-  supermarket_id?: number;
-  start_date?: Date;
-  end_date?: Date;
-}
-
 export interface ComparisonParams {
   product_ids: number[];
   country_ids?: number[];

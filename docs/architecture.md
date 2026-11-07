@@ -104,7 +104,6 @@ The frontend is a React Single-Page Application built with Vite:
 - **State Management**: React Context for auth, TanStack Query 5.90 for server state
 - **Routing**: React Router v7 with protected routes
 - **Styling**: TailwindCSS 3.4 with responsive design
-- **Charts**: Recharts 3.6 for price history visualization
 - **Icons**: Lucide React
 - **i18n**: i18next with browser language detection
 - **HTTP Client**: Axios 1.13

@@ -10,7 +10,6 @@ The frontend is a Single-Page Application (SPA) built with:
 - **TailwindCSS 3.4** - Utility-first CSS
 - **React Router v7.12** - Client-side routing
 - **TanStack Query 5.90** - Server state management
-- **Recharts 3.6** - Data visualization
 - **Lucide React 0.562** - Icon library
 - **Axios 1.13** - HTTP client
 - **i18next 25.7** - Internationalization
@@ -30,8 +29,7 @@ frontend/
 │   │   │   ├── ComparisonTable.tsx
 │   │   │   ├── CountryCard.tsx
 │   │   │   ├── CountrySelector.tsx
-│   │   │   ├── CurrencyRatesTable.tsx
-│   │   │   └── PriceHistoryChart.tsx
+│   │   │   └── CurrencyRatesTable.tsx
 │   │   └── layout/          # Layout components
 │   │       ├── Header.tsx
 │   │       └── Layout.tsx
@@ -241,19 +239,6 @@ Summary card for a single country:
   lastScraped="2024-01-15T10:00:00Z"
 />
 ```
-
-#### PriceHistoryChart
-
-Line chart showing price trends:
-
-```tsx
-<PriceHistoryChart
-  productId={123}
-  countryCode="TR"
-/>
-```
-
-Uses Recharts for visualization.
 
 #### CurrencyRatesTable
 
