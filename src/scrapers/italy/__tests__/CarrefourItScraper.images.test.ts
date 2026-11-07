@@ -43,6 +43,15 @@ describe('parseTileImages', () => {
     for (const url of images.values()) expect(url).not.toMatch(/[\s,?]|&amp;/);
   });
 
+  it('reads plain src on eager-loaded tiles, which have no data-src', () => {
+    const html = `
+<div class="product-tile" data-pid="444">
+  <img class="tile-image" src="${STATIC}/e/large/E-1.jpg" alt="product" />
+</div>`;
+
+    expect(parseTileImages(html).get('444')).toBe(`https://www.carrefour.it${STATIC}/e/large/E-1.jpg`);
+  });
+
   it('skips tiles without an image', () => {
     expect(parseTileImages('<div data-pid="333"><span>no image</span></div>').size).toBe(0);
   });

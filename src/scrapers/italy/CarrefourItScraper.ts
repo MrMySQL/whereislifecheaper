@@ -10,11 +10,12 @@ const TILE_IMAGE_SRC =
 /**
  * Map product id → image URL from a rendered category page.
  *
- * Each tile's <img> carries the image both in `data-srcset` (a comma-separated
- * list of CDN renditions) and in `data-src` (the single file the site loads).
- * Only `data-src` is used: the srcset's static path can name an extension that
- * does not exist (e.g. `-1.png` where only `-1.jpg` is stored), and a greedy
- * match over it captures the whole list as one broken URL.
+ * Each tile's <img> names its single image file in `data-src` (lazy-loaded
+ * tiles) or plain `src` (the first few tiles on a page are eager-loaded and
+ * have no `data-src`); a tile never carries both. That attribute is used rather
+ * than `data-srcset`, a comma-separated list of CDN renditions whose static path
+ * can name an extension that does not exist (e.g. `-1.png` where only `-1.jpg`
+ * is stored), and which a greedy match captures as one broken URL.
  */
 export function parseTileImages(html: string): Map<string, string> {
   const images = new Map<string, string>();
