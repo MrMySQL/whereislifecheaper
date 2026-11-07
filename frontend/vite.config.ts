@@ -16,5 +16,7 @@ export default defineConfig({
   build: {
     outDir: '../dist/frontend',
     emptyOutDir: true,
+    // Gzip-sizing every chunk only feeds the build log; skip it.
+    reportCompressedSize: false,
   },
 })
