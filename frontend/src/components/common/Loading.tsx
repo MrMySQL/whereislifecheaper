@@ -16,9 +16,13 @@ export default function Loading({ text, fullScreen = false }: LoadingProps) {
       aria-busy="true"
       className="flex flex-col items-center justify-center gap-3"
     >
-      <div className="relative">
-        <AppLogo size={40} className="shadow-warm animate-pulse" />
-        <div className="absolute inset-0 rounded-lg border-2 border-terracotta-200 border-t-terracotta-500 animate-spin" aria-hidden="true" />
+      <div className="relative flex h-16 w-16 items-center justify-center">
+        <div
+          className="absolute inset-0 rounded-full border-[3px] border-terracotta-100 border-t-terracotta-500 animate-spin"
+          style={{ animationDuration: '0.9s' }}
+          aria-hidden="true"
+        />
+        <AppLogo size={36} />
       </div>
       <p className="text-sm text-charcoal-600 font-medium">{displayText}</p>
     </div>
