@@ -52,6 +52,13 @@ describe('parseTileImages', () => {
     expect(parseTileImages(html).get('444')).toBe(`https://www.carrefour.it${STATIC}/e/large/E-1.jpg`);
   });
 
+  it('decodes HTML-escaped ampersands in the image attribute', () => {
+    const html = tile('555', 'f/large/Salt&amp;Pepper-1.jpg?sw=260&amp;sfrm=jpg', 'f/large/Salt&amp;Pepper-1.png');
+
+    expect(parseTileImages(html).get('555'))
+      .toBe(`https://www.carrefour.it${STATIC}/f/large/Salt&Pepper-1.jpg?sw=260&sfrm=jpg`);
+  });
+
   it('skips tiles without an image', () => {
     expect(parseTileImages('<div data-pid="333"><span>no image</span></div>').size).toBe(0);
   });
