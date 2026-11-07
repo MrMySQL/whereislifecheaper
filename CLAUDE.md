@@ -73,11 +73,13 @@ Each scraper must implement:
 
 2. **First-time setup sequence**:
    ```bash
-   npm install
+   bun install   # and: cd frontend && bun install
    npx playwright install chromium
    npm run migrate  # Creates all tables
    npm run seed     # Loads initial data (countries, categories, supermarkets)
    ```
+
+Dependencies are installed with **Bun** (`bun.lock`; there is no `package-lock.json`). Node still runs everything, and `npm run <script>` works as before.
 
 ### Common Commands
 

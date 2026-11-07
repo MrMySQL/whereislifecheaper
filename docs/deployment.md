@@ -28,8 +28,8 @@ This document covers deployment options for WhereIsLifeCheaper.
 
 2. **Install dependencies**
    ```bash
-   npm install
-   cd frontend && npm install && cd ..
+   bun install
+   cd frontend && bun install && cd ..
    ```
 
 3. **Install Playwright browsers**
@@ -129,8 +129,9 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
 ```
 
 **How the build stays fast** (`scripts/vercel/`):
-- `install.sh` installs root and `frontend/` side by side, keeping root
-  devDependencies (esbuild) even under `NODE_ENV=production`.
+- `install.sh` runs `bun install --frozen-lockfile` for root and `frontend/`
+  side by side. Bun keeps devDependencies (esbuild) even under
+  `NODE_ENV=production`.
 - `build.sh` runs the migrations (from an esbuild bundle, `dist/migrate.js`,
   run with plain node), `vite build` and an esbuild bundle of the API (`src/api/vercel.ts` →
   `dist/vercel-api/index.js`) in parallel. It does **no type-checking**;
@@ -285,10 +286,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install Playwright with system deps
         run: npx playwright install chromium --with-deps
@@ -461,8 +466,9 @@ RUN apt-get update && apt-get install -y \
     libgbm1 libpango-1.0-0 libcairo2 fonts-liberation
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
+COPY --from=oven/bun:1.4.4 /usr/local/bin/bun /usr/local/bin/bun
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
 COPY . .
 RUN npm run build:backend
 RUN npx playwright install chromium

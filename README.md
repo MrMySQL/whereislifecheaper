@@ -56,8 +56,8 @@ git clone <repository-url>
 cd whereislifecheaper
 
 # Install dependencies
-npm install
-cd frontend && npm install && cd ..
+bun install
+cd frontend && bun install && cd ..
 
 # Install Playwright
 npx playwright install chromium

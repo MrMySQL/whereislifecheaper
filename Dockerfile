@@ -26,17 +26,19 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy package files first for better layer caching
-COPY package*.json ./
-RUN npm ci --omit=dev
+# Bun installs dependencies from bun.lock; Node still runs everything.
+COPY --from=oven/bun:1.4.4 /usr/local/bin/bun /usr/local/bin/bun
+
+# Copy package files first for better layer caching. --production still
+# installs typescript, ts-node and the @types the scripts need: they are
+# regular dependencies.
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
 
 # Copy application source
 COPY tsconfig.json ./
 COPY src/ ./src/
 COPY scripts/ ./scripts/
-
-# Install dev dependencies temporarily to compile TypeScript
-RUN npm install typescript ts-node @types/node @types/pg @types/express @types/cors @types/passport @types/passport-google-oauth20 @types/express-session @types/connect-pg-simple
 
 # Install Playwright Chromium browser
 RUN npx playwright install chromium

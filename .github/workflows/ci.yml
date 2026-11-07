@@ -46,15 +46,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            frontend/package-lock.json
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
         run: |
-          npm ci --no-audit --no-fund &
-          (cd frontend && npm ci --no-audit --no-fund) &
+          bun install --frozen-lockfile &
+          (cd frontend && bun install --frozen-lockfile) &
           wait -n && wait -n
 
       - name: Type-check backend

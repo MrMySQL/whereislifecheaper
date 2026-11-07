@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
 # Vercel install step (vercel.json "installCommand").
 #
+# - Bun installs from bun.lock; Vercel's build image ships it. Unlike npm under
+#   NODE_ENV=production it keeps devDependencies, which the build needs
+#   (esbuild) and which @vercel/node's own install would otherwise re-add.
+# - node_modules comes back from Vercel's build cache, so a frozen install is
+#   usually a no-op check.
 # - The two installs are independent, so they run side by side.
-# - Root keeps its devDependencies even when NODE_ENV=production: the build
-#   needs esbuild, and @vercel/node re-runs `npm install` for the
-#   function *with* devDependencies afterwards - omitting them here made every
-#   build delete ~260 packages only to reinstall them a minute later.
-# - node_modules comes back from Vercel's build cache, so `npm install` (not
-#   `npm ci`, which wipes it) is the fast path; audit/fund only print noise.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-flags=(--no-audit --no-fund --prefer-offline)
+echo "bun $(bun --version)"
 
-npm install --include=dev "${flags[@]}" &
+bun install --frozen-lockfile &
 root=$!
-(cd frontend && npm install "${flags[@]}") &
+(cd frontend && bun install --frozen-lockfile) &
 frontend=$!
 
 wait "$root"

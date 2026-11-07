@@ -23,11 +23,11 @@ This document provides guidelines for developing and contributing to WhereIsLife
 git clone <repository-url>
 cd whereislifecheaper
 
-# Install root dependencies
-npm install
+# Install root dependencies (Bun installs; Node runs)
+bun install
 
 # Install frontend dependencies
-cd frontend && npm install && cd ..
+cd frontend && bun install && cd ..
 
 # Install Playwright browsers
 npx playwright install chromium
@@ -662,7 +662,7 @@ npx playwright install chromium
 **TypeScript errors after dependency update**
 ```bash
 rm -rf node_modules
-npm install
+bun install
 ```
 
 ### Debugging
