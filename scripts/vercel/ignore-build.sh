@@ -16,6 +16,13 @@ if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
   exit 1
 fi
 
+# Same commit as the last deployment: a deliberate redeploy (new env vars, a
+# retry), not a push - never skip it.
+if [ "$(git rev-parse "${base}^{commit}")" = "$(git rev-parse HEAD)" ]; then
+  echo "Redeploy of the last deployed commit; building."
+  exit 1
+fi
+
 if git diff --quiet "$base" HEAD -- . \
   ':(exclude)docs' \
   ':(exclude).github' \
