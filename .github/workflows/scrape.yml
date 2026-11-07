@@ -85,16 +85,6 @@ jobs:
               npm run scraper:run
           fi
 
-      # Runs even when a scraper failed: retention must not depend on every
-      # scraper being healthy, or the volume fills up again.
-      - name: Prune old price history
-        if: always()
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          NODE_ENV: production
-          PRICE_RETENTION_DAYS: '30'
-        run: npm run prices:cleanup
-
       # always(), not failure(): a job killed by timeout-minutes ends as
       # 'cancelled', for which failure() is false — which is why the logs from
       # all 33 timed-out runs between 2026-05 and 2026-08 were discarded.

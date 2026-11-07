@@ -68,23 +68,10 @@ export class PriceRepository {
     );
   }
 
-  /**
-   * Delete price rows older than `daysToKeep`, except each mapping's newest
-   * row: a product whose scraper has been broken for a while must keep its
-   * last known price instead of silently dropping out of comparisons.
-   */
   async cleanupOld(daysToKeep: number): Promise<number> {
-    if (!Number.isInteger(daysToKeep) || daysToKeep < 1) {
-      throw new Error(`daysToKeep must be a positive integer, got ${daysToKeep}`);
-    }
     const result = await query(
-      `DELETE FROM prices p
-       WHERE p.scraped_at < CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')
-         AND EXISTS (
-           SELECT 1 FROM prices newer
-           WHERE newer.product_mapping_id = p.product_mapping_id
-             AND (newer.scraped_at, newer.id) > (p.scraped_at, p.id)
-         )`,
+      `DELETE FROM prices
+       WHERE scraped_at < CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day')`,
       [daysToKeep]
     );
     return result.rowCount || 0;
