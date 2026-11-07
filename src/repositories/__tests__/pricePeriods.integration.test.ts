@@ -1,7 +1,7 @@
 /** Run against a disposable database: TEST_DATABASE_URL=postgres://... npm test -- pricePeriods.integration */
-import fs from 'fs';
-import path from 'path';
 import { Client } from 'pg';
+import { applyMigrations } from '../../../scripts/migrate';
+import { createIsolatedDatabase } from '../../database/__tests__/isolatedDatabase';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -12,17 +12,16 @@ integration('price periods (PostgreSQL)', () => {
   let history: import('../ProductRepository').ProductRepository;
   let closePool: () => Promise<void>;
   let store: string;
+  let dropDatabase: (() => Promise<void>) | undefined;
 
-  const migrationsDir = path.join(__dirname, '../../database/migrations');
-  async function migrate() {
-    for (const file of fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort()) {
-      await client.query(fs.readFileSync(path.join(migrationsDir, file), 'utf8'));
-    }
-  }
+  const migrate = () => applyMigrations(client);
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = databaseUrl;
-    client = new Client({ connectionString: databaseUrl });
+    // Own database: the TRUNCATEs below must not hit other suites' rows.
+    const isolated = await createIsolatedDatabase(databaseUrl!, 'price_periods');
+    dropDatabase = isolated.drop;
+    process.env.DATABASE_URL = isolated.url;
+    client = new Client({ connectionString: isolated.url });
     await client.connect();
     await migrate();
     const { ProductService } = await import('../../services/ProductService');
@@ -39,7 +38,11 @@ integration('price periods (PostgreSQL)', () => {
     store = String(stores.rows[0].id);
   });
 
-  afterAll(async () => { if (closePool) await closePool(); if (client) await client.end(); });
+  afterAll(async () => {
+    if (closePool) await closePool();
+    if (client) await client.end();
+    if (dropDatabase) await dropDatabase();
+  });
 
   const bottle = (overrides: Record<string, unknown> = {}) => ({
     name: 'Abant water 5 L', unit: 'pieces', unitQuantity: 1, price: 100,

@@ -247,22 +247,6 @@ queries read it as before. Price history should use both ends of the period
 - `idx_prices_mapping_scraped` on `(product_mapping_id, scraped_at DESC)`
 - `idx_prices_on_sale` on `is_on_sale` (partial, sale rows only)
 
---------|------|-------------|-------------|
-| id | SERIAL | PRIMARY KEY | Auto-increment ID |
-| product_mapping_id | INTEGER | NOT NULL, FK | Reference to product_mappings |
-| price | DECIMAL(10,2) | NOT NULL | Current price |
-| currency | VARCHAR(3) | NOT NULL | Currency code |
-| original_price | DECIMAL(10,2) | | Price before discount |
-| is_on_sale | BOOLEAN | DEFAULT false | Whether currently on sale |
-| price_per_unit | DECIMAL(10,4) | | Calculated price per kg/L |
-| scraped_at | TIMESTAMP | NOT NULL | When price was scraped |
-| created_at | TIMESTAMP | DEFAULT NOW() | Record creation time |
-
-**Indexes:**
-- `idx_prices_mapping_id` on `product_mapping_id`
-- `idx_prices_scraped_at` on `scraped_at`
-- `idx_prices_mapping_scraped` on `(product_mapping_id, scraped_at DESC)`
-
 ---
 
 ### canonical_products

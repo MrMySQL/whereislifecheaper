@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { createIsolatedDatabase } from '../../database/__tests__/isolatedDatabase';
 
 const integration = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 integration('maintenance pagination PostgreSQL', () => {
@@ -10,9 +11,13 @@ integration('maintenance pagination PostgreSQL', () => {
   let store: string;
   let canonicals: string[] = [];
   const prefix = `pagination-${Date.now()}`;
+  let dropDatabase: (() => Promise<void>) | undefined;
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    // Own database, so parallel suites' TRUNCATEs cannot remove these fixtures.
+    const isolated = await createIsolatedDatabase(process.env.TEST_DATABASE_URL!, 'maintenance_pagination');
+    dropDatabase = isolated.drop;
+    process.env.DATABASE_URL = isolated.url;
     ({ query, closePool } = require('../../config/database'));
     const { ProductMaintenanceRepository } = require('../ProductMaintenanceRepository');
     repository = new ProductMaintenanceRepository();
@@ -41,6 +46,7 @@ integration('maintenance pagination PostgreSQL', () => {
     await query('DELETE FROM canonical_products WHERE id=ANY($1::int[])', [canonicals]);
     if (country) await query('DELETE FROM countries WHERE id=$1', [country]);
     await closePool();
+    if (dropDatabase) await dropDatabase();
   });
 
   test('all coverage gaps remain reachable beyond 1000 with stable totals and country filtering', async () => {

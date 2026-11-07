@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { createIsolatedDatabase } from '../../database/__tests__/isolatedDatabase';
 
 const integration = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 integration('maintenance review PostgreSQL', () => {
@@ -9,9 +10,13 @@ integration('maintenance review PostgreSQL', () => {
   let Service: typeof import('../ProductMaintenanceService').ProductMaintenanceService;
   let interpret: typeof import('../../utils/productQuantity').interpretProductQuantity;
   let serial = 0;
+  let dropDatabase: (() => Promise<void>) | undefined;
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    // Own database, so parallel suites' TRUNCATEs cannot remove these fixtures.
+    const isolated = await createIsolatedDatabase(process.env.TEST_DATABASE_URL!, 'maintenance_review');
+    dropDatabase = isolated.drop;
+    process.env.DATABASE_URL = isolated.url;
     ({ query, closePool } = require('../../config/database'));
     ({ ProductMaintenanceRepository: Repository } = require('../../repositories/ProductMaintenanceRepository'));
     ({ ProductMaintenanceService: Service } = require('../ProductMaintenanceService'));
@@ -23,7 +28,7 @@ integration('maintenance review PostgreSQL', () => {
       }
     }
   }, 30000);
-  afterAll(async () => { if (closePool) await closePool(); });
+  afterAll(async () => { if (closePool) await closePool(); if (dropDatabase) await dropDatabase(); });
 
   async function fixture() {
     const suffix = `${Date.now()}-${++serial}`;
