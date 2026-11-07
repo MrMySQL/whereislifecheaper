@@ -7,11 +7,13 @@
 # error - falls through to building.
 cd "$(dirname "$0")/../.." || exit 1
 
-# The last successful deployment of this branch, when Vercel knows it and the
-# clone has it; otherwise just the newest commit.
+# Compare against the last successful deployment of this branch. Without one
+# (a branch's first push) or when the shallow clone lacks it, build: diffing
+# just HEAD^..HEAD would judge a multi-commit push by its last commit alone.
 base="${VERCEL_GIT_PREVIOUS_SHA:-}"
 if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-  base="HEAD^"
+  echo "No previous deployment commit to compare against; building."
+  exit 1
 fi
 
 if git diff --quiet "$base" HEAD -- . \
