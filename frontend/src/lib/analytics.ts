@@ -103,6 +103,15 @@ export function identifyUser(id: string, properties: Record<string, unknown>) {
   safely(() => posthog.identify(id, properties));
 }
 
+/**
+ * Forget the signed-in identity (and super properties such as is_admin).
+ * reset() wipes every super property, so ui_language is restored afterwards:
+ * the UI language is a property of the browser, not of the account.
+ */
 export function resetUser() {
-  safely(() => posthog.reset());
+  safely(() => {
+    const uiLanguage = posthog.get_property('ui_language');
+    posthog.reset();
+    if (uiLanguage) posthog.register({ ui_language: uiLanguage });
+  });
 }

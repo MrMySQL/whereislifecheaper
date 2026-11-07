@@ -36,10 +36,12 @@ export default function LanguageSwitcher() {
   }, [isOpen, focusedIndex]);
 
   const handleLanguageChange = (langCode: SupportedLanguage) => {
-    if (langCode !== i18n.language) {
-      track('language_changed', { from: i18n.language, to: langCode });
-    }
-    i18n.changeLanguage(langCode);
+    const from = i18n.language;
+    // Track once the change has applied, so the languageChanged listener has
+    // already moved the ui_language super property to the new language.
+    i18n.changeLanguage(langCode).then(() => {
+      if (langCode !== from) track('language_changed', { from, to: langCode });
+    });
     setIsOpen(false);
     setFocusedIndex(-1);
     buttonRef.current?.focus();

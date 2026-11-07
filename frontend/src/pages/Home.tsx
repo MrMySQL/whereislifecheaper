@@ -133,7 +133,8 @@ export default function Home() {
   // means the product exists but not in the countries being compared.
   const lastTrackedSearch = useRef<string | null>(null);
   const searchQuery = debouncedSearch.trim().toLowerCase();
-  const searchSettled = !comparisonLoading && !!comparisonData;
+  // Nothing below the spinner is on screen until countries load.
+  const searchSettled = !countriesLoading && !comparisonLoading && !!comparisonData;
   useEffect(() => {
     if (!searchQuery) {
       lastTrackedSearch.current = null;
@@ -152,10 +153,11 @@ export default function Home() {
   const staleNoticeDays = comparisonData?.freshness?.newest_age_days ?? null;
   const staleNoticeTracked = useRef(false);
   useEffect(() => {
-    if (staleNoticeTracked.current || staleNoticeDays === null || staleNoticeDays < STALE_AFTER_DAYS) return;
+    if (countriesLoading || staleNoticeTracked.current) return;
+    if (staleNoticeDays === null || staleNoticeDays < STALE_AFTER_DAYS) return;
     staleNoticeTracked.current = true;
     track('stale_data_notice_shown', { days_stale: staleNoticeDays });
-  }, [staleNoticeDays]);
+  }, [countriesLoading, staleNoticeDays]);
 
   if (countriesLoading) {
     return <Loading text={t('loading.loadingCountries')} />;

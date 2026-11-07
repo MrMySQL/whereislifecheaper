@@ -273,7 +273,9 @@ function PriceCell({ priceData, countryCode, productName, isCheapest, rowIndex, 
       track('price_details_viewed', {
         product_name: productName,
         country: countryCode,
-        supermarket: priceData.supermarket,
+        // An average spans several stores; priceData.supermarket is only the
+        // first product's, so don't attribute the view to it.
+        supermarket: priceData.product_count > 1 ? 'multiple' : priceData.supermarket,
         product_count: priceData.product_count,
         is_cheapest: isCheapest,
       });
