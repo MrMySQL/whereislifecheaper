@@ -91,4 +91,13 @@ integration('maintenance pagination PostgreSQL', () => {
     expect(await repository.suggestions('pending',country,{offset:300})).toMatchObject({data:[],count:0,total:205});
     expect(await repository.suggestions('approved',country)).toMatchObject({data:[],total:0});
   });
+
+  test('suggestions show the mapping URL, not the one captured at proposal time', async () => {
+    const row = (await query(`UPDATE product_maintenance_suggestions SET payload=payload || '{"url":"https://test.invalid/stale","price":1}'::jsonb
+      WHERE id=(SELECT max(id) FROM product_maintenance_suggestions WHERE supermarket_id=$1) RETURNING id,mapping_id`, [store])).rows[0];
+    await query("UPDATE product_mappings SET url='https://test.invalid/products/fixed' WHERE id=$1", [row.mapping_id]);
+    const suggestion = (await repository.suggestions('pending',country,{limit:1})).data[0];
+    expect(String(suggestion.id)).toBe(String(row.id));
+    expect(suggestion.payload).toMatchObject({url:'https://test.invalid/products/fixed',price:1});
+  });
 });

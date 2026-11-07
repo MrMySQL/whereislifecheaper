@@ -113,11 +113,16 @@ export class ProductMaintenanceRepository {
     }
     async suggestions(status = 'pending', country?: string, { limit = 100, offset = 0 }: MaintenancePageOptions = {}): Promise<SuggestionPage> {
         const result = await query<{ data: Suggestion[]; total: number }>(`WITH filtered AS (
-          SELECT ms.*,cp.name canonical_name,p.name product_name,s.name supermarket_name,
+          -- payload is a snapshot from proposal time; take the source URL from
+          -- the mapping so scraper URL fixes reach existing suggestions.
+          SELECT ms.id,ms.canonical_product_id,ms.mapping_id,ms.product_id,ms.country_id,ms.supermarket_id,ms.status,
+            ms.payload || jsonb_build_object('url',pm.url) payload,
+            ms.created_at,ms.reviewed_at,ms.applied_product_updated_at,
+            cp.name canonical_name,p.name product_name,s.name supermarket_name,
             c.name country_name,c.code country_code,c.flag_emoji country_flag
           FROM product_maintenance_suggestions ms JOIN canonical_products cp ON cp.id=ms.canonical_product_id
           JOIN products p ON p.id=ms.product_id JOIN supermarkets s ON s.id=ms.supermarket_id
-          JOIN countries c ON c.id=ms.country_id
+          JOIN countries c ON c.id=ms.country_id JOIN product_mappings pm ON pm.id=ms.mapping_id
           WHERE ms.status=$1 AND ($2::int IS NULL OR ms.country_id=$2)
         ), page AS (SELECT * FROM filtered ORDER BY id DESC LIMIT $3 OFFSET $4)
         SELECT COALESCE((SELECT json_agg(page) FROM page),'[]'::json) data,
