@@ -71,7 +71,7 @@ function SuggestionCard({ suggestion, busy, selected, selectionDisabled, batchEr
               {payload.translated_name && payload.translated_name !== suggestion.product_name && <p className="mt-0.5 text-sm text-charcoal-600"><span className="text-charcoal-400">Translated:</span> {payload.translated_name}</p>}
             </div>
             <div className="shrink-0 text-sm sm:text-right">
-              {suggestion.country_name && <p className="font-semibold text-charcoal-900">{suggestion.country_flag && <span aria-hidden="true" className="mr-1">{suggestion.country_flag}</span>}{suggestion.country_name}</p>}
+              {suggestion.country_name && <p className="font-semibold text-charcoal-900"><span aria-hidden="true" className="mr-1">{suggestion.country_flag || '🏳️'}</span>{suggestion.country_name}</p>}
               <p className="text-xs text-charcoal-500">{suggestion.supermarket_name}</p>
             </div>
           </div>
