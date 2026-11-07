@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { track } from '../../lib/analytics';
 import { useQueries } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -170,6 +171,13 @@ export default function PriceHistoryChart({
               onClick={(e) => {
                 e.stopPropagation();
                 setDateRange(days);
+                if (days !== dateRange) {
+                  track('price_history_range_changed', {
+                    canonical_id: product.canonical_id,
+                    product_name: product.canonical_name,
+                    days,
+                  });
+                }
               }}
               className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
                 dateRange === days

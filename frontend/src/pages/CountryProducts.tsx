@@ -8,6 +8,7 @@ import { formatPrice } from '../utils/currency';
 import { formatRelativeTime } from '../utils/dateFormat';
 import type { Country, Supermarket, Product } from '../types';
 import { useSEO, generateCountrySchema, generateBreadcrumbSchema } from '../hooks/useSEO';
+import { track } from '../lib/analytics';
 
 const PRODUCTS_PER_PAGE = 100;
 
@@ -256,7 +257,15 @@ export default function CountryProducts() {
                         rel="noopener noreferrer"
                         className="shrink-0 p-1 text-charcoal-400 hover:text-terracotta-600 transition-colors"
                         title={t('countryProducts.viewOnSupermarket')}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          track('store_link_clicked', {
+                            source: 'country_page',
+                            country: (code ?? '').toUpperCase(),
+                            supermarket: product.supermarket_name,
+                            product_name: product.name,
+                          });
+                        }}
                       >
                         <ExternalLink className="h-4 w-4" />
                       </a>

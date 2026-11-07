@@ -1,6 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
+import { registerSuperProperties } from '../lib/analytics';
 
 import en from './locales/en.json';
 import ru from './locales/ru.json';
@@ -33,5 +34,11 @@ i18n
       caches: ['localStorage'],
     },
   });
+
+// Attach the UI language to every event so any metric can be split by it.
+// $browser_language is the browser's setting, which the user may have overridden.
+const registerLanguage = (lng: string) => registerSuperProperties({ ui_language: lng });
+if (i18n.language) registerLanguage(i18n.language);
+i18n.on('languageChanged', registerLanguage);
 
 export default i18n;

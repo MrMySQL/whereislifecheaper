@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation, Trans } from 'react-i18next';
 import { Search, RefreshCw, Globe2, TrendingDown, Sparkles, Layers, Check, AlertTriangle } from 'lucide-react';
@@ -10,6 +10,7 @@ import CurrencyRatesTable from '../components/comparison/CurrencyRatesTable';
 import RentComparison from '../components/comparison/RentComparison';
 import Loading from '../components/common/Loading';
 import { useSEO, generateWebsiteSchema, generateFAQSchema } from '../hooks/useSEO';
+import { track } from '../lib/analytics';
 
 const DEFAULT_COUNTRIES = ['TR', 'ES', 'ME', 'UA', 'KZ', 'UZ'];
 
@@ -82,13 +83,35 @@ export default function Home() {
   });
 
   const toggleCountry = (code: string) => {
-    setSelectedCountries((prev) => {
-      if (prev.includes(code)) {
-        if (prev.length <= 2) return prev;
-        return prev.filter((c) => c !== code);
-      }
-      return [...prev, code];
+    // Tracked from the current render's selection rather than inside the
+    // updater, which StrictMode runs twice in development.
+    const isSelected = selectedCountries.includes(code);
+    if (isSelected && selectedCountries.length <= 2) {
+      track('country_toggle_blocked', { country: code, selected_countries: selectedCountries });
+      return;
+    }
+    const next = isSelected
+      ? selectedCountries.filter((c) => c !== code)
+      : [...selectedCountries, code];
+    setSelectedCountries(next);
+    track('country_toggled', {
+      country: code,
+      action: isSelected ? 'removed' : 'added',
+      selected_count: next.length,
+      selected_countries: next,
     });
+  };
+
+  const selectAllCountries = () => {
+    const all = countries.map((c) => c.code);
+    track('all_countries_selected', { previous_count: selectedCountries.length, selected_count: all.length });
+    setSelectedCountries(all);
+  };
+
+  const toggleOnlyInAllCountries = () => {
+    const enabled = !showOnlyInAllCountries;
+    setShowOnlyInAllCountries(enabled);
+    track('all_countries_filter_toggled', { enabled, selected_countries: selectedCountries });
   };
 
   const filteredProducts = (comparisonData?.data || []).filter((product) => {
@@ -104,6 +127,37 @@ export default function Home() {
     // Toggle OFF (default): product must exist in at least 2 selected countries
     return availableCountries.length >= 2;
   });
+
+  // One event per settled search term, once its results are on screen.
+  // results_shown is after the country filter, so 0 with total_matches > 0
+  // means the product exists but not in the countries being compared.
+  const lastTrackedSearch = useRef<string | null>(null);
+  const searchQuery = debouncedSearch.trim().toLowerCase();
+  // Nothing below the spinner is on screen until countries load.
+  const searchSettled = !countriesLoading && !comparisonLoading && !!comparisonData;
+  useEffect(() => {
+    if (!searchQuery) {
+      lastTrackedSearch.current = null;
+      return;
+    }
+    if (!searchSettled || lastTrackedSearch.current === searchQuery) return;
+    lastTrackedSearch.current = searchQuery;
+    track('product_searched', {
+      query: searchQuery,
+      results_shown: filteredProducts.length,
+      total_matches: comparisonData?.total ?? 0,
+      selected_countries: selectedCountries,
+    });
+  }, [searchQuery, searchSettled, filteredProducts.length, comparisonData, selectedCountries]);
+
+  const staleNoticeDays = comparisonData?.freshness?.newest_age_days ?? null;
+  const staleNoticeTracked = useRef(false);
+  useEffect(() => {
+    if (countriesLoading || staleNoticeTracked.current) return;
+    if (staleNoticeDays === null || staleNoticeDays < STALE_AFTER_DAYS) return;
+    staleNoticeTracked.current = true;
+    track('stale_data_notice_shown', { days_stale: staleNoticeDays });
+  }, [countriesLoading, staleNoticeDays]);
 
   if (countriesLoading) {
     return <Loading text={t('loading.loadingCountries')} />;
@@ -204,7 +258,7 @@ export default function Home() {
               </span>
             </div>
             <button
-              onClick={() => setSelectedCountries(countries.map(c => c.code))}
+              onClick={selectAllCountries}
               disabled={selectedCountries.length === countries.length}
               className="text-xs text-terracotta-600 hover:text-terracotta-700 font-medium disabled:text-charcoal-400 disabled:cursor-not-allowed transition-colors"
             >
@@ -229,7 +283,7 @@ export default function Home() {
           <div className="flex gap-2 w-full sm:w-auto">
             {/* All countries filter toggle */}
             <button
-              onClick={() => setShowOnlyInAllCountries(!showOnlyInAllCountries)}
+              onClick={toggleOnlyInAllCountries}
               className={`
                 flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-all duration-200
                 ${showOnlyInAllCountries
@@ -257,7 +311,10 @@ export default function Home() {
             </div>
 
             <button
-              onClick={() => refetchComparison()}
+              onClick={() => {
+                track('comparison_refreshed', { search_active: !!debouncedSearch });
+                refetchComparison();
+              }}
               className="btn-secondary !py-2 !px-3"
               disabled={comparisonLoading}
               title={t('common.refresh')}
