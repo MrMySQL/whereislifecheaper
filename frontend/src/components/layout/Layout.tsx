@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Header from './Header';
-import { MapPin, Heart } from 'lucide-react';
+import { Heart } from 'lucide-react';
+import { AppLogo } from '../common/AppLogo';
 
 export default function Layout() {
   const { i18n } = useTranslation();
@@ -29,9 +30,9 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-gradient-to-br from-terracotta-500 to-terracotta-600 flex items-center justify-center" aria-hidden="true">
-                <MapPin className="h-3 w-3 text-white" />
-              </div>
+              <span aria-hidden="true" className="flex">
+                <AppLogo size={24} />
+              </span>
               <span className="font-display font-semibold text-charcoal-700">WhereIsLifeCheaper</span>
             </div>
 
