@@ -234,6 +234,21 @@ export default function ProductMaintenance() {
     setActionError('');
   };
 
+  // Rendered above and below the candidate list so long pages don't need a scroll back up.
+  // Only the top copy announces the notice, so screen readers don't hear it twice.
+  const renderBatchBar = (announce: boolean) => status === 'pending' && selectableIds.length > 0 && <div className="card !p-4">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <label className="flex items-center gap-2 text-sm text-charcoal-700"><input type="checkbox" checked={allSelectableSelected} disabled={reviewControlsLocked} onChange={(event) => { setBatchErrors({}); setBatchNotice(''); setSelectedIds(event.target.checked ? selectableIds.slice(0, 50) : []); }} className="h-4 w-4 rounded border-cream-300 text-terracotta-600" />Select up to 50 on this page</label>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-sm font-medium text-charcoal-700">{selectedIds.length} selected</span>
+        <button disabled={!selectedIds.length || reviewControlsLocked} onClick={() => { setActionError(''); setBatchErrors({}); setBatchNotice(''); batchMutation.mutate({ ids: selectedIds, action: 'reject' }); }} className="btn-secondary !px-3 !py-2 text-sm disabled:opacity-50"><X className="h-4 w-4" />Reject selected</button>
+        <button disabled={!selectedIds.length || reviewControlsLocked} onClick={() => { setActionError(''); setBatchErrors({}); setBatchNotice(''); batchMutation.mutate({ ids: selectedIds, action: 'approve' }); }} className="btn-olive !px-3 !py-2 text-sm disabled:opacity-50">{batchMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Approve selected</button>
+      </div>
+    </div>
+    {selectedIds.length === 50 && selectableIds.length > 50 && <p className="mt-2 text-xs text-charcoal-500">The API accepts 50 items per batch. Review this batch before selecting more.</p>}
+    {batchNotice && <div role={announce ? 'status' : undefined} className={`mt-3 rounded-lg border px-3 py-2 text-sm ${Object.keys(batchErrors).length ? 'border-saffron-200 bg-saffron-50 text-charcoal-700' : 'border-olive-200 bg-olive-50 text-olive-800'}`}>{batchNotice}</div>}
+  </div>;
+
   return <div className="space-y-6">
     <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div><h1 className="text-2xl font-bold text-charcoal-900">Product maintenance</h1><p className="text-charcoal-600 mt-1">Find coverage gaps and review replacement mappings with their source evidence.</p></div>
@@ -286,18 +301,7 @@ export default function ProductMaintenance() {
 
     <section className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3"><div><h2 className="text-lg font-semibold text-charcoal-900">Candidate review</h2><p className="text-sm text-charcoal-500">Every approval is explicit and audited. Approved mappings can be undone.</p></div><div className="flex gap-2"><select disabled={reviewControlsLocked} className="input !py-2 !w-auto disabled:opacity-50" aria-label="Suggestion status" value={status} onChange={(e) => { setStatus(e.target.value as MaintenanceStatus); setSuggestionsOffset(0); clearBatchSelection(); }}>{(['pending', 'approved', 'rejected', 'undone'] as const).map((value) => <option key={value} value={value}>{label(value)}</option>)}</select><select disabled={reviewControlsLocked} className="input !py-2 !w-auto max-w-48 disabled:opacity-50" aria-label="Country" value={countryId} onChange={(e) => { setCountryId(e.target.value); setCoverageOffset(0); setSuggestionsOffset(0); clearBatchSelection(); }}><option value="">All countries</option>{countries.data?.map((country) => <option value={country.id} key={country.id}>{country.flag_emoji} {country.name}</option>)}</select></div></div>
-      {status === 'pending' && selectableIds.length > 0 && <div className="card !p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <label className="flex items-center gap-2 text-sm text-charcoal-700"><input type="checkbox" checked={allSelectableSelected} disabled={reviewControlsLocked} onChange={(event) => { setBatchErrors({}); setBatchNotice(''); setSelectedIds(event.target.checked ? selectableIds.slice(0, 50) : []); }} className="h-4 w-4 rounded border-cream-300 text-terracotta-600" />Select up to 50 on this page</label>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 text-sm font-medium text-charcoal-700">{selectedIds.length} selected</span>
-            <button disabled={!selectedIds.length || reviewControlsLocked} onClick={() => { setActionError(''); setBatchErrors({}); setBatchNotice(''); batchMutation.mutate({ ids: selectedIds, action: 'reject' }); }} className="btn-secondary !px-3 !py-2 text-sm disabled:opacity-50"><X className="h-4 w-4" />Reject selected</button>
-            <button disabled={!selectedIds.length || reviewControlsLocked} onClick={() => { setActionError(''); setBatchErrors({}); setBatchNotice(''); batchMutation.mutate({ ids: selectedIds, action: 'approve' }); }} className="btn-olive !px-3 !py-2 text-sm disabled:opacity-50">{batchMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Approve selected</button>
-          </div>
-        </div>
-        {selectedIds.length === 50 && selectableIds.length > 50 && <p className="mt-2 text-xs text-charcoal-500">The API accepts 50 items per batch. Review this batch before selecting more.</p>}
-        {batchNotice && <div role="status" className={`mt-3 rounded-lg border px-3 py-2 text-sm ${Object.keys(batchErrors).length ? 'border-saffron-200 bg-saffron-50 text-charcoal-700' : 'border-olive-200 bg-olive-50 text-olive-800'}`}>{batchNotice}</div>}
-      </div>}
+      {renderBatchBar(true)}
       {suggestions.isLoading ? <div className="card"><Loading text="Loading suggestions…" /></div> : !suggestions.data?.data.length ? <div className="card text-center py-12"><PackageSearch className="h-10 w-10 text-charcoal-300 mx-auto mb-3" /><p className="font-medium text-charcoal-700">No {status} suggestions</p><p className="text-sm text-charcoal-500 mt-1">Run maintenance or choose another filter.</p></div> : <div className="space-y-4">{groupedSuggestions.map((group) => {
         const first = group[0];
         if (!first) return null;
@@ -318,6 +322,7 @@ export default function ProductMaintenance() {
           })}</div>
         </section>;
       })}</div>}
+      {!suggestions.isLoading && renderBatchBar(false)}
       {!!suggestions.data?.total && <Pagination label="suggestions" offset={suggestionsOffset} count={suggestions.data.data.length} total={suggestions.data.total} busy={reviewControlsLocked} onChange={(offset) => { clearBatchSelection(); setSuggestionsOffset(offset); }} />}
     </section>
   </div>;
