@@ -3,7 +3,10 @@ import posthog from 'posthog-js';
 const posthogKey = import.meta.env.VITE_PUBLIC_POSTHOG_KEY;
 const posthogHost = import.meta.env.VITE_PUBLIC_POSTHOG_HOST;
 
-if (posthogKey && posthogHost) {
+/** False when the env vars are missing (e.g. local dev); calls must then no-op. */
+export const posthogEnabled = Boolean(posthogKey && posthogHost);
+
+if (posthogEnabled) {
   posthog.init(posthogKey, {
     api_host: posthogHost,
     autocapture: true,
