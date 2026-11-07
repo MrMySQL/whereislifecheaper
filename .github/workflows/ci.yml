@@ -1,0 +1,71 @@
+name: CI
+
+# Type-checking and tests. The Vercel build deliberately does neither (see
+# scripts/vercel/build.sh), so this workflow is what stops a type error from
+# reaching a deploy - make it a required check on main.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: whereislifecheaper
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/whereislifecheaper
+      # Integration suites create and drop their own databases on this server.
+      TEST_DATABASE_URL: postgresql://postgres:password@localhost:5432/whereislifecheaper
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund &
+          (cd frontend && npm ci --no-audit --no-fund) &
+          wait -n && wait -n
+
+      - name: Type-check backend
+        run: npx tsc --noEmit
+
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npx tsc -b
+
+      - name: Backend tests
+        run: npm test
+
+      - name: Frontend tests
+        run: npm run test:frontend
