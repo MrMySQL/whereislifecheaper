@@ -1,11 +1,16 @@
-import React, { useState, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TrendingDown, Tag, Trophy, Package, ImageOff, Store, Calendar, Calculator, ChevronDown } from 'lucide-react';
 import type { CanonicalProduct, CountryPrice, Country } from '../../types';
 import { formatPrice, convertToEUR, findCheapestCountry, isNormalizableUnit, getUnitLabel, formatPackageSize } from '../../utils/currency';
 import { formatFullDate } from '../../utils/dateFormat';
+import { track } from '../../lib/analytics';
 
 const PriceHistoryChart = lazy(() => import('./PriceHistoryChart'));
+
+// A hover card counts as "viewed" only once it has stayed open this long, so
+// sweeping the pointer across the table doesn't register every cell.
+const HOVER_VIEW_MS = 600;
 
 interface ComparisonTableProps {
   products: CanonicalProduct[];
@@ -14,7 +19,7 @@ interface ComparisonTableProps {
   loading?: boolean;
 }
 
-function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
+function SingleProductCard({ priceData, countryCode }: { priceData: CountryPrice; countryCode: string }) {
   const { t } = useTranslation();
   const scrapedDate = priceData.scraped_at
     ? formatFullDate(priceData.scraped_at)
@@ -44,7 +49,15 @@ function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
               target="_blank"
               rel="noopener noreferrer"
               className="font-semibold text-charcoal-900 text-sm leading-tight line-clamp-2 hover:text-terracotta-600 hover:underline transition-colors"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                track('store_link_clicked', {
+                  source: 'comparison_hover_card',
+                  country: countryCode,
+                  supermarket: priceData.supermarket,
+                  product_name: priceData.product_name,
+                });
+              }}
             >
               {priceData.product_name}
             </a>
@@ -120,7 +133,7 @@ function SingleProductCard({ priceData }: { priceData: CountryPrice }) {
   );
 }
 
-function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
+function MultiProductCard({ priceData, countryCode }: { priceData: CountryPrice; countryCode: string }) {
   const { t } = useTranslation();
   const products = priceData.products || [];
 
@@ -159,7 +172,15 @@ function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs font-medium text-charcoal-900 hover:text-terracotta-600 hover:underline transition-colors block"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    track('store_link_clicked', {
+                      source: 'comparison_hover_card',
+                      country: countryCode,
+                      supermarket: product.supermarket,
+                      product_name: product.product_name,
+                    });
+                  }}
                 >
                   {product.product_name}
                 </a>
@@ -199,7 +220,7 @@ function MultiProductCard({ priceData }: { priceData: CountryPrice }) {
   );
 }
 
-function ProductHoverCard({ priceData, showBelow = false }: { priceData: CountryPrice; showBelow?: boolean }) {
+function ProductHoverCard({ priceData, countryCode, showBelow = false }: { priceData: CountryPrice; countryCode: string; showBelow?: boolean }) {
   const positionClasses = showBelow
     ? 'top-full mt-1'
     : 'bottom-full mb-1';
@@ -217,17 +238,52 @@ function ProductHoverCard({ priceData, showBelow = false }: { priceData: Country
       )}
 
       {isMultiProduct ? (
-        <MultiProductCard priceData={priceData} />
+        <MultiProductCard priceData={priceData} countryCode={countryCode} />
       ) : (
-        <SingleProductCard priceData={priceData} />
+        <SingleProductCard priceData={priceData} countryCode={countryCode} />
       )}
     </div>
   );
 }
 
-function PriceCell({ priceData, isCheapest, rowIndex, showPerUnitPrice }: { priceData: CountryPrice; isCheapest: boolean; rowIndex: number; showPerUnitPrice: boolean }) {
+interface PriceCellProps {
+  priceData: CountryPrice;
+  countryCode: string;
+  productName: string;
+  isCheapest: boolean;
+  rowIndex: number;
+  showPerUnitPrice: boolean;
+}
+
+function PriceCell({ priceData, countryCode, productName, isCheapest, rowIndex, showPerUnitPrice }: PriceCellProps) {
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
+  const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewTracked = useRef(false);
+
+  useEffect(() => () => {
+    if (viewTimer.current) clearTimeout(viewTimer.current);
+  }, []);
+
+  const handleMouseEnter = () => {
+    setIsHovered(true);
+    if (viewTracked.current) return;
+    viewTimer.current = setTimeout(() => {
+      viewTracked.current = true;
+      track('price_details_viewed', {
+        product_name: productName,
+        country: countryCode,
+        supermarket: priceData.supermarket,
+        product_count: priceData.product_count,
+        is_cheapest: isCheapest,
+      });
+    }, HOVER_VIEW_MS);
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+    if (viewTimer.current) clearTimeout(viewTimer.current);
+  };
   // Show hover card below for first 3 rows to avoid clipping
   const showBelow = rowIndex < 3;
 
@@ -251,8 +307,8 @@ function PriceCell({ priceData, isCheapest, rowIndex, showPerUnitPrice }: { pric
       {/* Wrapper div for hover detection that includes both content and popup */}
       <div
         className="relative"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         {/* Primary: EUR per-unit price (or total if no normalization) */}
         <p className={`font-bold ${isCheapest ? 'text-olive-700' : 'text-charcoal-800'}`}>
@@ -279,7 +335,7 @@ function PriceCell({ priceData, isCheapest, rowIndex, showPerUnitPrice }: { pric
         )}
 
         {/* Hover Card */}
-        {isHovered && <ProductHoverCard priceData={priceData} showBelow={showBelow} />}
+        {isHovered && <ProductHoverCard priceData={priceData} countryCode={countryCode} showBelow={showBelow} />}
       </div>
     </td>
   );
@@ -294,7 +350,18 @@ export default function ComparisonTable({
   const { t } = useTranslation();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
-  const toggleRowExpanded = (canonicalId: number) => {
+  const toggleRowExpanded = (product: CanonicalProduct, rowIndex: number, cheapestCode: string | null) => {
+    const canonicalId = product.canonical_id;
+    if (!expandedRows.has(canonicalId)) {
+      track('price_history_opened', {
+        canonical_id: canonicalId,
+        product_name: product.canonical_name,
+        category: product.category,
+        row_position: rowIndex + 1,
+        countries_with_price: selectedCountries.filter((code) => product.prices_by_country[code]),
+        cheapest_country: cheapestCode,
+      });
+    }
     setExpandedRows((prev) => {
       const next = new Set(prev);
       if (next.has(canonicalId)) {
@@ -428,11 +495,11 @@ export default function ComparisonTable({
                     className={`border-b border-cream-100 hover:bg-cream-50/50 transition-colors cursor-pointer ${
                       isExpanded ? 'bg-cream-50/30' : ''
                     }`}
-                    onClick={() => toggleRowExpanded(product.canonical_id)}
+                    onClick={() => toggleRowExpanded(product, rowIndex, cheapest?.code ?? null)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        toggleRowExpanded(product.canonical_id);
+                        toggleRowExpanded(product, rowIndex, cheapest?.code ?? null);
                       }
                     }}
                     tabIndex={0}
@@ -498,6 +565,8 @@ export default function ComparisonTable({
                         <PriceCell
                           key={code}
                           priceData={priceData}
+                          countryCode={code}
+                          productName={product.canonical_name}
                           isCheapest={isCheapest}
                           rowIndex={rowIndex}
                           showPerUnitPrice={product.show_per_unit_price}

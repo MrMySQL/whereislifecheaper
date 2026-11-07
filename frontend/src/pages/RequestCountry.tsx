@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Globe2 } from 'lucide-react';
 import { useSEO } from '../hooks/useSEO';
+import { track } from '../lib/analytics';
 
 export default function RequestCountry() {
   // Set SEO meta tags for request country page
@@ -20,6 +21,19 @@ export default function RequestCountry() {
     return () => {
       document.body.removeChild(script);
     };
+  }, []);
+
+  // The Tally embed posts a message to the parent window on submit. Only the
+  // fact of a submission is sent; the answers stay in Tally.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== 'https://tally.so' || typeof event.data !== 'string') return;
+      if (event.data.includes('Tally.FormSubmitted')) {
+        track('country_request_submitted', {});
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
   }, []);
 
   return (

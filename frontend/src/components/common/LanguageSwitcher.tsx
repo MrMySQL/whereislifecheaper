@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Globe, ChevronDown, Check } from 'lucide-react';
 import { supportedLanguages, type SupportedLanguage } from '../../i18n';
+import { track } from '../../lib/analytics';
 
 export default function LanguageSwitcher() {
   const { i18n, t } = useTranslation();
@@ -35,6 +36,9 @@ export default function LanguageSwitcher() {
   }, [isOpen, focusedIndex]);
 
   const handleLanguageChange = (langCode: SupportedLanguage) => {
+    if (langCode !== i18n.language) {
+      track('language_changed', { from: i18n.language, to: langCode });
+    }
     i18n.changeLanguage(langCode);
     setIsOpen(false);
     setFocusedIndex(-1);
