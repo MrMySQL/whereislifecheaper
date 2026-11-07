@@ -113,10 +113,10 @@ export class ProductMaintenanceRepository {
     }
     async suggestions(status = 'pending', country?: string, { limit = 100, offset = 0 }: MaintenancePageOptions = {}): Promise<SuggestionPage> {
         const result = await query<{ data: Suggestion[]; total: number }>(`WITH filtered AS (
-          -- payload is a snapshot from proposal time; take the source URL from
-          -- the mapping so scraper URL fixes reach existing suggestions.
+          -- payload is a snapshot from proposal time; take the source URL and
+          -- image from the live rows so scraper fixes reach existing suggestions.
           SELECT ms.id,ms.canonical_product_id,ms.mapping_id,ms.product_id,ms.country_id,ms.supermarket_id,ms.status,
-            ms.payload || jsonb_build_object('url',pm.url) payload,
+            ms.payload || jsonb_build_object('url',pm.url,'image_url',p.image_url) payload,
             ms.created_at,ms.reviewed_at,ms.applied_product_updated_at,
             cp.name canonical_name,p.name product_name,s.name supermarket_name,
             c.name country_name,c.code country_code,c.flag_emoji country_flag
