@@ -130,13 +130,13 @@ WhereIsLifeCheaper is configured for Vercel deployment with:
 
 **How the build stays fast** (`scripts/vercel/`):
 - `install.sh` installs root and `frontend/` side by side, keeping root
-  devDependencies (esbuild, ts-node) even under `NODE_ENV=production`.
-- `build.sh` runs the migrations (`ts-node --transpile-only`), `vite build`
-  and an esbuild bundle of the API (`src/api/vercel.ts` →
+  devDependencies (esbuild) even under `NODE_ENV=production`.
+- `build.sh` runs the migrations (from an esbuild bundle, `dist/migrate.js`,
+  run with plain node), `vite build` and an esbuild bundle of the API (`src/api/vercel.ts` →
   `dist/vercel-api/index.js`) in parallel. It does **no type-checking**;
   `.github/workflows/ci.yml` does that on every push and PR.
-- `api/index.js` is a one-line JS re-export of that bundle. A `.ts` entry would
-  make `@vercel/node` type-check the whole backend on every deploy.
+- `api/index.js` is a one-line JS re-export of that bundle, so `@vercel/node`
+  traces one file instead of compiling and type-checking each backend file.
 - `ignore-build.sh` skips deployments whose changes are limited to docs, CI,
   Terraform, Docker or test files.
 

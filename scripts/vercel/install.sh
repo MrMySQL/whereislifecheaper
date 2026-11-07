@@ -3,7 +3,7 @@
 #
 # - The two installs are independent, so they run side by side.
 # - Root keeps its devDependencies even when NODE_ENV=production: the build
-#   needs esbuild and ts-node, and @vercel/node re-runs `npm install` for the
+#   needs esbuild, and @vercel/node re-runs `npm install` for the
 #   function *with* devDependencies afterwards - omitting them here made every
 #   build delete ~260 packages only to reinstall them a minute later.
 # - node_modules comes back from Vercel's build cache, so `npm install` (not
