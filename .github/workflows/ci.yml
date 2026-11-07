@@ -12,10 +12,13 @@ on:
 permissions:
   contents: read
 
+# A PR's runs share a group, so a new push cancels the superseded run. Each push
+# to main gets its own group (its SHA): a group holds one running and one
+# pending run, and a newer pending run replaces the older one even without
+# cancel-in-progress, so a shared group would drop intermediate commits.
 concurrency:
-  group: ci-${{ github.ref }}
-  # Superseded PR runs are cancelled; every push to main keeps its own result.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
