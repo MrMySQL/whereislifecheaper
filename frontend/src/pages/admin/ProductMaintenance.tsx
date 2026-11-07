@@ -33,6 +33,8 @@ function SuggestionCard({ suggestion, busy, selected, selectionDisabled, batchEr
   onAction: (id: MaintenanceId, action: 'approve' | 'reject' | 'undo') => void;
 }) {
   const payload = suggestion.payload || {};
+  // A URL that fails to load gets the same placeholder as a missing one, not the browser's broken-image icon
+  const [failedImage, setFailedImage] = useState<string | null>(null);
   const quantity = typeof payload.quantity === 'object' ? payload.quantity : undefined;
   const evidence = [...new Set([...(payload.evidence || []), ...(payload.reasons || [])])];
   const price = payload.latest_price ?? payload.price;
@@ -55,8 +57,8 @@ function SuggestionCard({ suggestion, busy, selected, selectionDisabled, batchEr
           className="mt-1 h-4 w-4 shrink-0 rounded border-cream-300 text-terracotta-600 disabled:opacity-50"
         />}
         <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-cream-200 bg-cream-50">
-          {payload.image_url
-            ? <img src={payload.image_url} alt={suggestion.product_name} className="h-full w-full object-contain" loading="lazy" />
+          {payload.image_url && failedImage !== payload.image_url
+            ? <img src={payload.image_url} alt={suggestion.product_name} className="h-full w-full object-contain" loading="lazy" onError={() => setFailedImage(payload.image_url ?? null)} />
             : <div className="flex h-full w-full items-center justify-center text-charcoal-300"><ImageOff className="h-6 w-6" aria-label="No product image" /></div>}
         </div>
         <div className="min-w-0 flex-1">
