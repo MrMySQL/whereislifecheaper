@@ -152,6 +152,15 @@ describe('describeAjaxFailure', () => {
     expect(describeAjaxFailure({ ...ok, body: JSON.stringify({ html: { products_list: productHtml } }) })).toBeNull();
   });
 
+  it.each([
+    ['an error envelope', JSON.stringify({ success: false, message: 'Something went wrong' })],
+    ['no products_list', JSON.stringify({ success: true, html: {} })],
+    ['a non-string products_list', JSON.stringify({ html: { products_list: { items: [] } } })],
+    ['null', 'null'],
+  ])('reports a 2xx JSON payload with %s instead of passing it as a blank page', (_label, body) => {
+    expect(describeAjaxFailure({ ...ok, body })).toMatch(/Unexpected JSON payload without html\.products_list.*HTTP 200/);
+  });
+
   it('names the redirect when the store path is gone and the homepage comes back (Daily Scrape 2026-11-22)', () => {
     const failure = describeAjaxFailure({
       status: 200,

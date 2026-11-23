@@ -3,7 +3,7 @@ import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.
 import { extractQuantity } from '../../utils/normalizer';
 import { retry, sleep } from '../../utils/retry';
 import { config as envConfig } from '../../config/env';
-import { describeCloudflarePage, openPastCloudflare } from '../../utils/cloudflare';
+import { describeCloudflarePage, isRetryableOpenError, openPastCloudflare } from '../../utils/cloudflare';
 
 export {
   classifyCloudflarePage,
@@ -259,7 +259,11 @@ export class AuchanUaGraphQLScraper extends BaseScraper {
     await this.launchBrowser();
     this.page = await this.createPage();
 
-    const outcome = await this.retryOnFailure(() => this.openStorefront(), 'Open storefront');
+    const outcome = await this.retryOnFailure(
+      () => this.openStorefront(),
+      'Open storefront',
+      isRetryableOpenError
+    );
 
     this.logger.info(`Auchan Ukraine GraphQL scraper initialized (storefront open, ${outcome})`);
   }

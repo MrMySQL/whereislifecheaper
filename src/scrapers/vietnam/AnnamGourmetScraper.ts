@@ -2,7 +2,7 @@ import { BaseScraper, RequestFailure } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { extractQuantity } from '../../utils/normalizer';
 import { config as envConfig } from '../../config/env';
-import { describeCloudflarePage, openPastCloudflare } from '../../utils/cloudflare';
+import { describeCloudflarePage, isRetryableOpenError, openPastCloudflare } from '../../utils/cloudflare';
 
 /**
  * The Annam website (store) whose prices are scraped: Ha Noi - Xuan Dieu.
@@ -148,15 +148,26 @@ export function describeAjaxFailure(res: AjaxResponse): string | null {
   const cloudflare = describeCloudflarePage(res.body);
   if (cloudflare) return `Blocked by Cloudflare: HTTP ${res.status}, ${cloudflare}`;
   if (res.status < 200 || res.status >= 300) return `HTTP ${res.status}`;
+  let payload: unknown;
   try {
-    JSON.parse(res.body);
-    return null;
+    payload = JSON.parse(res.body);
   } catch {
     return (
       `Non-JSON response (HTTP ${res.status}, content-type ${res.contentType ?? 'unknown'}` +
       `, final URL ${res.finalUrl})`
     );
   }
+  // A JSON body without the product-list fragment (an error envelope, a
+  // different endpoint's reply) is a failure, not a blank page: treating it as
+  // blank loses its cause and can end the category's pagination early.
+  const productsList = (payload as { html?: { products_list?: unknown } } | null)?.html?.products_list;
+  if (typeof productsList !== 'string') {
+    return (
+      `Unexpected JSON payload without html.products_list (HTTP ${res.status}, final URL ${res.finalUrl}): ` +
+      res.body.replace(/\s+/g, ' ').trim().substring(0, 200)
+    );
+  }
+  return null;
 }
 
 /**
@@ -189,7 +200,8 @@ export class AnnamGourmetScraper extends BaseScraper {
     this.logger.info(`Opening ${entry} to select the store and establish a session...`);
     const outcome = await this.retryOnFailure(
       () => openPastCloudflare(this.page!, entry, envConfig.scraper.timeout),
-      'Open storefront'
+      'Open storefront',
+      isRetryableOpenError
     );
     this.logger.info(`Storefront open (${outcome})`);
     await this.waitForDynamicContent();

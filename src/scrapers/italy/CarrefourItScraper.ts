@@ -3,7 +3,7 @@ import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.
 import { extractQuantity } from '../../utils/normalizer';
 import { retry, sleep } from '../../utils/retry';
 import { config as envConfig } from '../../config/env';
-import { describeCloudflarePage, openPastCloudflare } from '../../utils/cloudflare';
+import { describeCloudflarePage, isRetryableOpenError, openPastCloudflare } from '../../utils/cloudflare';
 
 const ORIGIN = 'https://www.carrefour.it';
 /** Opened first so the API calls are same-origin fetches from a page Cloudflare let through. */
@@ -208,7 +208,8 @@ export class CarrefourItScraper extends BaseScraper {
 
     const outcome = await this.retryOnFailure(
       () => openPastCloudflare(this.page!, STOREFRONT_URL, envConfig.scraper.timeout),
-      'Open storefront'
+      'Open storefront',
+      isRetryableOpenError
     );
     this.logger.info(`Carrefour Italy scraper initialized (storefront open, ${outcome})`);
   }
