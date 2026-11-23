@@ -6,10 +6,10 @@ jest.mock('../../../utils/logger', () => {
 
 import { Page } from 'playwright';
 import { ScraperConfig } from '../../../types/scraper.types';
-import { AnnamGourmetScraper, annamGourmetConfig } from '../AnnamGourmetScraper';
+import { AnnamGourmetScraper, annamGourmetConfig, describeAjaxFailure } from '../AnnamGourmetScraper';
 
-const firstUrl = 'https://shop.annam-gourmet.com/hn-xd/fresh-food/cheese.html?ajax=1&product_list_limit=36&p=1';
-const secondUrl = 'https://shop.annam-gourmet.com/hn-xd/fresh-food/cheese.html?ajax=1&product_list_limit=36&p=2';
+const firstUrl = 'https://shop.annam-gourmet.com/fresh-food/cheese.html?ajax=1&product_list_limit=36&p=1';
+const secondUrl = 'https://shop.annam-gourmet.com/fresh-food/cheese.html?ajax=1&product_list_limit=36&p=2';
 const noProducts = "We can't find products matching the selection";
 const productHtml = `<li class="item product product-item">
   <a class="product-item-link" href="https://shop.annam-gourmet.com/cheddar.html">Cheddar 200g</a>
@@ -81,8 +81,8 @@ describe('Annam Gourmet AJAX request errors', () => {
       stack: expect.stringContaining('RequestFailure: HTTP 503'),
     })]);
     expect(urls).toEqual([firstUrl, firstUrl, secondUrl, secondUrl,
-      'https://shop.annam-gourmet.com/hn-xd/fresh-food/cheese.html?ajax=1&product_list_limit=36&p=3',
-      'https://shop.annam-gourmet.com/hn-xd/fresh-food/cheese.html?ajax=1&product_list_limit=36&p=3']);
+      'https://shop.annam-gourmet.com/fresh-food/cheese.html?ajax=1&product_list_limit=36&p=3',
+      'https://shop.annam-gourmet.com/fresh-food/cheese.html?ajax=1&product_list_limit=36&p=3']);
   });
 
   it('retains a failed later page as an error without losing already parsed products', async () => {
@@ -142,5 +142,42 @@ describe('Annam Gourmet AJAX request errors', () => {
     expect(scraper.getCategoryStats()).toEqual({ attempted: 1, failed: 1 });
     expect(scraper.getErrors()).toHaveLength(3);
     expect(scraper.getCategoryErrors()[0].message).toContain('empty or failed response after retry');
+  });
+});
+
+describe('describeAjaxFailure', () => {
+  const ok = { status: 200, finalUrl: firstUrl, contentType: 'application/json' };
+
+  it('accepts a JSON product-list payload', () => {
+    expect(describeAjaxFailure({ ...ok, body: JSON.stringify({ html: { products_list: productHtml } }) })).toBeNull();
+  });
+
+  it.each([
+    ['an error envelope', JSON.stringify({ success: false, message: 'Something went wrong' })],
+    ['no products_list', JSON.stringify({ success: true, html: {} })],
+    ['a non-string products_list', JSON.stringify({ html: { products_list: { items: [] } } })],
+    ['null', 'null'],
+  ])('reports a 2xx JSON payload with %s instead of passing it as a blank page', (_label, body) => {
+    expect(describeAjaxFailure({ ...ok, body })).toMatch(/Unexpected JSON payload without html\.products_list.*HTTP 200/);
+  });
+
+  it('names the redirect when the store path is gone and the homepage comes back (Daily Scrape 2026-11-22)', () => {
+    const failure = describeAjaxFailure({
+      status: 200,
+      finalUrl: 'https://shop.annam-gourmet.com/',
+      contentType: 'text/html; charset=UTF-8',
+      body: ' <!doctype html><html lang="en"><head ><title>Annam Gourmet</title></head></html>',
+    });
+    expect(failure).toMatch(/Non-JSON response.*text\/html.*final URL https:\/\/shop\.annam-gourmet\.com\//);
+  });
+
+  it('names a Cloudflare challenge instead of a JSON parse error', () => {
+    const failure = describeAjaxFailure({
+      status: 403,
+      finalUrl: firstUrl,
+      contentType: 'text/html',
+      body: '<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>',
+    });
+    expect(failure).toMatch(/Blocked by Cloudflare: HTTP 403.*challenge/);
   });
 });

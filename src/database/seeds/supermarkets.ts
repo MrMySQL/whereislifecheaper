@@ -214,7 +214,7 @@ export const supermarketsData: SupermarketSeedData[] = [
   {
     country_code: 'VN',
     name: 'Annam Gourmet',
-    website_url: 'https://shop.annam-gourmet.com/hn-xd',
+    website_url: 'https://shop.annam-gourmet.com',
     scraper_class: 'AnnamGourmetScraper',
     is_active: true,
   },

@@ -10,6 +10,8 @@ export interface RetryOptions {
   maxDelay: number;
   exponential: boolean;
   onRetry?: (attempt: number, error: Error) => void;
+  /** Return false for an error that another attempt cannot fix; it is rethrown at once. */
+  shouldRetry?: (error: Error) => boolean;
 }
 
 const defaultOptions: RetryOptions = {
@@ -37,6 +39,10 @@ export async function retry<T>(
       return await fn();
     } catch (error) {
       lastError = error as Error;
+
+      if (opts.shouldRetry && !opts.shouldRetry(lastError)) {
+        throw lastError;
+      }
 
       if (attempt > opts.maxRetries) {
         logger.error(`Failed after ${opts.maxRetries} retries:`, error);

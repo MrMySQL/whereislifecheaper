@@ -2,7 +2,25 @@ import { BaseScraper, RequestFailure } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { extractQuantity } from '../../utils/normalizer';
 import { retry, sleep } from '../../utils/retry';
-import https from 'https';
+import { config as envConfig } from '../../config/env';
+import { describeCloudflarePage, isRetryableOpenError, openPastCloudflare } from '../../utils/cloudflare';
+
+const ORIGIN = 'https://www.carrefour.it';
+/** Opened first so the API calls are same-origin fetches from a page Cloudflare let through. */
+const STOREFRONT_URL = `${ORIGIN}/spesa-online/`;
+const REQUEST_TIMEOUT_MS = 30000;
+const RESPONSE_SNIPPET_CHARS = 200;
+
+/** What an in-page fetch returns to Node. */
+export interface HttpResponse {
+  status: number;
+  contentType: string | null;
+  body: string;
+}
+
+function snippet(body: string): string {
+  return body.replace(/\s+/g, ' ').trim().substring(0, RESPONSE_SNIPPET_CHARS);
+}
 
 /**
  * Paging and filter query shared by the JSON product request and the HTML page
@@ -88,6 +106,38 @@ interface DemandwareSearchResponse {
 }
 
 /**
+ * Turn a raw Search-ShowAjax response into a validated page, or throw an error
+ * that says what actually came back: a Cloudflare page, a non-2xx status, a
+ * non-JSON body, or JSON of the wrong shape. Every page is validated here,
+ * while its exact URL is still available to the caller for error reporting.
+ */
+export function interpretSearchResponse(res: HttpResponse): DemandwareSearchResponse {
+  const cloudflare = describeCloudflarePage(res.body);
+  if (cloudflare) {
+    throw new Error(`Blocked by Cloudflare: HTTP ${res.status}, ${cloudflare}`);
+  }
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(`HTTP ${res.status}: ${snippet(res.body)}`);
+  }
+
+  let data: DemandwareSearchResponse;
+  try {
+    data = JSON.parse(res.body);
+  } catch {
+    throw new Error(
+      `Failed to parse response as JSON (content-type ${res.contentType ?? 'unknown'}): ${snippet(res.body)}`
+    );
+  }
+  if (!Array.isArray(data?.productIds)) {
+    throw new Error('Unexpected API response: productIds is not an array');
+  }
+  if (!Number.isInteger(data.countResult) || data.countResult < 0) {
+    throw new Error('Unexpected API response: countResult is not a non-negative integer');
+  }
+  return data;
+}
+
+/**
  * Carrefour Italy food categories (14 categories)
  */
 export const carrefourItCategories: CategoryConfig[] = [
@@ -134,7 +184,8 @@ export const carrefourItConfig: Partial<ScraperConfig> = {
 
 /**
  * API-based scraper for Carrefour Italy (carrefour.it)
- * Uses Demandware Search-ShowAjax JSON API - no browser needed.
+ * Uses the Demandware Search-ShowAjax JSON API, called from inside a browser
+ * page — see httpGet() for why.
  */
 export class CarrefourItScraper extends BaseScraper {
   private readonly PAGE_SIZE = 25;
@@ -145,12 +196,65 @@ export class CarrefourItScraper extends BaseScraper {
   }
 
   /**
-   * Initialize the scraper (no browser needed)
+   * Launch a browser and open the storefront, so that the API requests can be
+   * issued as same-origin fetches from a page Cloudflare has let through.
    */
   async initialize(): Promise<void> {
-    this.logger.info('Initializing Carrefour Italy scraper...');
+    this.logger.info('Initializing Carrefour Italy scraper (browser context)...');
     this.startTime = Date.now();
-    this.logger.info('Carrefour Italy scraper initialized (no browser required)');
+
+    await this.launchBrowser();
+    this.page = await this.createPage();
+
+    const outcome = await this.retryOnFailure(
+      () => openPastCloudflare(this.page!, STOREFRONT_URL, envConfig.scraper.timeout),
+      'Open storefront',
+      isRetryableOpenError
+    );
+    this.logger.info(`Carrefour Italy scraper initialized (storefront open, ${outcome})`);
+  }
+
+  /**
+   * GET a carrefour.it URL and return the raw HTTP response.
+   *
+   * The request is issued from inside the browser page (page.evaluate + fetch)
+   * rather than from Node. Between the Daily Scrapes of 2026-11-16 and
+   * 2026-11-19 carrefour.it started answering node https (the previous
+   * transport) and curl with Cloudflare's "Sorry, you have been blocked" page
+   * (HTTP 403) on every Search-ShowAjax call, while the same URL fetched from a
+   * headed Chromium page on the same IP returns JSON. Same precedent as
+   * AuchanUaGraphQLScraper.
+   *
+   * Overridden in tests to replace the network hop.
+   */
+  protected async httpGet(url: string, accept: string): Promise<HttpResponse> {
+    if (!this.page) {
+      throw new Error('Page not initialized: call initialize() before scraping');
+    }
+
+    return this.page.evaluate(
+      async ({ url, accept, timeoutMs }) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, {
+            credentials: 'include',
+            headers: { Accept: accept, 'X-Requested-With': 'XMLHttpRequest' },
+            signal: controller.signal,
+          });
+          return {
+            status: res.status,
+            contentType: res.headers.get('content-type'),
+            body: await res.text(),
+          };
+        } catch (e) {
+          throw new Error(controller.signal.aborted ? `Request timeout after ${timeoutMs}ms` : String(e));
+        } finally {
+          clearTimeout(timer);
+        }
+      },
+      { url, accept, timeoutMs: REQUEST_TIMEOUT_MS }
+    );
   }
 
   /**
@@ -253,60 +357,9 @@ export class CarrefourItScraper extends BaseScraper {
     start: number,
     sz: number
   ): Promise<DemandwareSearchResponse> {
-    const path = `/on/demandware.store/Sites-carrefour-IT-Site/it_IT/Search-ShowAjax?cgid=${encodeURIComponent(cgid)}&${pageQuery(start, sz)}`;
-    const url = `https://www.carrefour.it${path}`;
+    const url = `${ORIGIN}/on/demandware.store/Sites-carrefour-IT-Site/it_IT/Search-ShowAjax?cgid=${encodeURIComponent(cgid)}&${pageQuery(start, sz)}`;
     return retry(
-      async () => {
-        return new Promise<DemandwareSearchResponse>((resolve, reject) => {
-          const options = {
-            hostname: 'www.carrefour.it',
-            port: 443,
-            path,
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-              'User-Agent': this.config.userAgents?.[0] || 'Mozilla/5.0',
-              'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
-              'Referer': 'https://www.carrefour.it/spesa-online/',
-            },
-          };
-
-          const req = https.request(options, (res) => {
-            let body = '';
-            res.on('data', (chunk) => (body += chunk));
-            res.on('end', () => {
-              if (res.statusCode && res.statusCode >= 400) {
-                reject(new Error(`HTTP ${res.statusCode}: ${body.substring(0, 200)}`));
-                return;
-              }
-
-              try {
-                const data = JSON.parse(body);
-                // Validate every page before leaving the request boundary,
-                // while its exact URL is still available for error reporting.
-                if (!Array.isArray(data?.productIds)) {
-                  reject(new Error('Unexpected API response: productIds is not an array'));
-                  return;
-                }
-                if (!Number.isInteger(data.countResult) || data.countResult < 0) {
-                  reject(new Error('Unexpected API response: countResult is not a non-negative integer'));
-                  return;
-                }
-                resolve(data);
-              } catch (e) {
-                reject(new Error(`Failed to parse response: ${body.substring(0, 200)}`));
-              }
-            });
-          });
-
-          req.on('error', reject);
-          req.setTimeout(30000, () => {
-            req.destroy();
-            reject(new Error('Request timeout'));
-          });
-          req.end();
-        });
-      },
+      async () => interpretSearchResponse(await this.httpGet(url, 'application/json')),
       {
         maxRetries: this.config.maxRetries,
         initialDelay: 1000,
@@ -334,33 +387,8 @@ export class CarrefourItScraper extends BaseScraper {
     const imageMap = new Map<string, string>();
 
     try {
-      const html = await new Promise<string>((resolve, reject) => {
-        const path = `${categoryUrl}?${pageQuery(start, sz)}`;
-        const options = {
-          hostname: 'www.carrefour.it',
-          port: 443,
-          path,
-          method: 'GET',
-          headers: {
-            'Accept': 'text/html',
-            'User-Agent': this.config.userAgents?.[0] || 'Mozilla/5.0',
-            'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
-            'Referer': 'https://www.carrefour.it/spesa-online/',
-          },
-        };
-
-        const req = https.request(options, (res) => {
-          let body = '';
-          res.on('data', (chunk) => (body += chunk));
-          res.on('end', () => resolve(body));
-        });
-        req.on('error', reject);
-        req.setTimeout(30000, () => {
-          req.destroy();
-          reject(new Error('Request timeout'));
-        });
-        req.end();
-      });
+      const res = await this.httpGet(`${ORIGIN}${categoryUrl}?${pageQuery(start, sz)}`, 'text/html');
+      const html = res.status >= 200 && res.status < 300 ? res.body : '';
 
       for (const [pid, url] of parseTileImages(html)) imageMap.set(pid, url);
     } catch (error) {
@@ -444,10 +472,11 @@ export class CarrefourItScraper extends BaseScraper {
   }
 
   /**
-   * Cleanup resources (no browser to close)
+   * Cleanup resources
    */
   async cleanup(): Promise<void> {
     this.logger.info('Cleaning up Carrefour Italy scraper...');
+    await this.closeBrowser();
     const stats = this.getStats();
     this.logger.info('Carrefour Italy scraping completed:', stats);
   }

@@ -73,6 +73,7 @@ function fakeBrowser(response: GraphQLHttpResponse) {
     evaluate: jest.fn().mockResolvedValue(response),
     setExtraHTTPHeaders: jest.fn().mockResolvedValue(undefined),
     on: jest.fn(),
+    off: jest.fn(),
     context: () => ({ addCookies: jest.fn() }),
     close: jest.fn().mockResolvedValue(undefined),
   };

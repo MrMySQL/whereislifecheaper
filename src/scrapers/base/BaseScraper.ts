@@ -459,11 +459,13 @@ export abstract class BaseScraper {
    */
   protected async retryOnFailure<T>(
     fn: () => Promise<T>,
-    context: string
+    context: string,
+    shouldRetry?: (error: Error) => boolean
   ): Promise<T> {
     return retry(fn, {
       maxRetries: this.config.maxRetries,
       initialDelay: 1000,
+      shouldRetry,
       onRetry: (attempt, error) => {
         this.logger.warn(`${context} - Retry ${attempt}:`, error.message);
       },
