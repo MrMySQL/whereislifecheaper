@@ -4,8 +4,6 @@ jest.mock('../../../utils/logger', () => {
   return { logger: stub, scraperLogger: stub, createPrefixedLogger: () => stub };
 });
 
-import https from 'https';
-import { EventEmitter } from 'events';
 import { CarrefourItScraper, carrefourItConfig, parseTileImages } from '../CarrefourItScraper';
 import { ScraperConfig } from '../../../types/scraper.types';
 
@@ -70,23 +68,16 @@ describe('parseTileImages', () => {
 describe('Carrefour Italy image lookup', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  /** Only the HTTPS hop is stubbed. Records every request path. */
+  /** Only the in-page fetch (httpGet) is stubbed. Records every request path. */
   function stubHttps(reply: (path: string) => string): string[] {
     const paths: string[] = [];
-    jest.spyOn(https, 'request').mockImplementation(((options: https.RequestOptions, onResponse: (res: unknown) => void) => {
-      const req = Object.assign(new EventEmitter(), {
-        setTimeout: () => undefined,
-        destroy: () => undefined,
-        end: () => queueMicrotask(() => {
-          paths.push(String(options.path));
-          const res = Object.assign(new EventEmitter(), { statusCode: 200 });
-          onResponse(res);
-          res.emit('data', reply(String(options.path)));
-          res.emit('end');
-        }),
+    jest
+      .spyOn(CarrefourItScraper.prototype as unknown as { httpGet: (url: string) => Promise<unknown> }, 'httpGet')
+      .mockImplementation(async (url: string) => {
+        const { pathname, search } = new URL(url);
+        paths.push(pathname + search);
+        return { status: 200, contentType: null, body: reply(pathname + search) };
       });
-      return req;
-    }) as unknown as typeof https.request);
     return paths;
   }
 

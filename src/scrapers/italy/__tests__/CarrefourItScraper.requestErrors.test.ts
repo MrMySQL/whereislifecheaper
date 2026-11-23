@@ -8,9 +8,7 @@ jest.mock('../../../utils/retry', () => ({
   sleep: jest.fn().mockResolvedValue(undefined),
 }));
 
-import https from 'https';
-import { EventEmitter } from 'events';
-import { CarrefourItScraper, carrefourItConfig } from '../CarrefourItScraper';
+import { CarrefourItScraper, carrefourItConfig, HttpResponse } from '../CarrefourItScraper';
 import { ScraperConfig } from '../../../types/scraper.types';
 
 const firstUrl = 'https://www.carrefour.it/on/demandware.store/Sites-carrefour-IT-Site/it_IT/Search-ShowAjax?cgid=frutta&start=0&sz=25&pmin=0%2C01';
@@ -21,30 +19,28 @@ const product = {
 };
 const goodPage = JSON.stringify({ productIds: [product], countResult: 50, countResultLabel: '50 prodotti' });
 
-type Reply = { status?: number; body?: string; error?: string; timeout?: boolean };
+// The 403 body carrefour.it served to node https on 2026-11-19 and 2026-11-22.
+const blockPage = `<!DOCTYPE html>
+<!--[if lt IE 7]> <html class="no-js ie6 oldie" lang="en-US"> <![endif]-->
+<head><title>Attention Required! | Cloudflare</title></head>
+<body><div id="cf-wrapper"><h1 data-translate="block_headline">Sorry, you have been blocked</h1>
+<span>Cloudflare Ray ID: <strong class="font-semibold">9a1b2c3d4e5f6071</strong></span></div></body></html>`;
 
-/** Only the external HTTPS hop is replaced; parsing and category accounting run unchanged. */
-function stubHttps(replyFor: (url: string) => Reply): void {
-  jest.spyOn(https, 'request').mockImplementation(((options: https.RequestOptions, onResponse: (res: unknown) => void) => {
-    const req = new EventEmitter() as EventEmitter & {
-      setTimeout: (ms: number, callback: () => void) => void;
-      destroy: () => void;
-      end: () => void;
-    };
-    let timeout: () => void;
-    req.setTimeout = (_ms, callback) => { timeout = callback; };
-    req.destroy = () => undefined;
-    req.end = () => queueMicrotask(() => {
-      const reply = replyFor(`https://${options.hostname}${options.path}`);
-      if (reply.error) { req.emit('error', new Error(reply.error)); return; }
-      if (reply.timeout) { timeout(); return; }
-      const res = Object.assign(new EventEmitter(), { statusCode: reply.status ?? 200 });
-      onResponse(res);
-      res.emit('data', reply.body ?? '');
-      res.emit('end');
+type Reply = { status?: number; body?: string; error?: string };
+
+/**
+ * Only the in-page fetch (httpGet) is replaced; parsing, retries and category
+ * accounting run unchanged. A rejected httpGet is what page.evaluate produces
+ * when the browser-side fetch throws or times out.
+ */
+function stubHttp(replyFor: (url: string) => Reply): void {
+  jest
+    .spyOn(CarrefourItScraper.prototype as unknown as { httpGet: (url: string) => Promise<HttpResponse> }, 'httpGet')
+    .mockImplementation(async (url: string) => {
+      const reply = replyFor(url);
+      if (reply.error) throw new Error(reply.error);
+      return { status: reply.status ?? 200, contentType: null, body: reply.body ?? '' };
     });
-    return req;
-  }) as typeof https.request);
 }
 
 function scraper(): CarrefourItScraper {
@@ -59,8 +55,9 @@ function scraper(): CarrefourItScraper {
 const failures: Array<[string, Reply, RegExp]> = [
   ['HTTP failure', { status: 503, body: 'Service unavailable' }, /HTTP 503/],
   ['invalid JSON', { body: '<html>not JSON</html>' }, /parse|JSON/i],
-  ['network failure', { error: 'ECONNRESET' }, /ECONNRESET/],
-  ['request timeout', { timeout: true }, /timeout/i],
+  ['network failure', { error: 'TypeError: Failed to fetch' }, /Failed to fetch/],
+  ['request timeout', { error: 'Request timeout after 30000ms' }, /timeout/i],
+  ['Cloudflare block', { status: 403, body: blockPage }, /Blocked by Cloudflare: HTTP 403.*1020.*9a1b2c3d4e5f6071/],
   ['missing productIds', { body: JSON.stringify({ countResult: 50 }) }, /productIds/],
   ['non-array productIds', { body: JSON.stringify({ productIds: {}, countResult: 50 }) }, /productIds/],
   ['missing countResult', { body: JSON.stringify({ productIds: [] }) }, /countResult/],
@@ -72,7 +69,7 @@ afterEach(() => jest.restoreAllMocks());
 
 describe('Carrefour Italy Demandware request failures', () => {
   it.each(failures)('retains the first-page URL and cause for a lost category: %s', async (_label, reply, cause) => {
-    stubHttps(url => url === firstUrl ? reply : { body: '' });
+    stubHttp(url => url === firstUrl ? reply : { body: '' });
     const subject = scraper();
 
     expect(await subject.scrapeProductList()).toEqual([]);
@@ -85,7 +82,7 @@ describe('Carrefour Italy Demandware request failures', () => {
   });
 
   it.each(failures)('retains the later-page offset and cause without losing the category: %s', async (_label, reply, cause) => {
-    stubHttps(url => url === firstUrl ? { body: goodPage } : url === secondUrl ? reply : { body: '' });
+    stubHttp(url => url === firstUrl ? { body: goodPage } : url === secondUrl ? reply : { body: '' });
     const subject = scraper();
 
     expect((await subject.scrapeProductList()).map(p => p.name)).toEqual(['Mele 1 kg']);
@@ -98,7 +95,7 @@ describe('Carrefour Italy Demandware request failures', () => {
   });
 
   it('accepts an explicitly empty result as a clean empty category', async () => {
-    stubHttps(url => ({ body: url === firstUrl ? JSON.stringify({ productIds: [], countResult: 0 }) : '' }));
+    stubHttp(url => ({ body: url === firstUrl ? JSON.stringify({ productIds: [], countResult: 0 }) : '' }));
     const subject = scraper();
 
     expect(await subject.scrapeProductList()).toEqual([]);

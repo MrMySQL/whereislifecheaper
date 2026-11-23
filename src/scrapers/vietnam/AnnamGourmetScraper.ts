@@ -1,6 +1,20 @@
 import { BaseScraper, RequestFailure } from '../base/BaseScraper';
 import { ProductData, ScraperConfig, CategoryConfig } from '../../types/scraper.types';
 import { extractQuantity } from '../../utils/normalizer';
+import { config as envConfig } from '../../config/env';
+import { describeCloudflarePage, openPastCloudflare } from '../../utils/cloudflare';
+
+/**
+ * The Annam website (store) whose prices are scraped: Ha Noi - Xuan Dieu.
+ *
+ * Until 2026-11 each store lived under its own path (/hn-xd/...). The site now
+ * serves every store from the root and picks one with `?___website=<code>`,
+ * which sets the `agm_website` cookie; /hn-xd/... redirects to the homepage,
+ * and without the switch the default store is HCM - Estella, whose assortment
+ * differs.
+ */
+export const ANNAM_WEBSITE = 'hn-xd';
+const WEBSITE_COOKIE = 'agm_website';
 
 /**
  * Annam Gourmet subcategories - grocery store in Hanoi (Xuan Dieu location)
@@ -77,7 +91,7 @@ export const annamGourmetCategories: CategoryConfig[] = [
  */
 export const annamGourmetConfig: Partial<ScraperConfig> = {
   name: 'Annam Gourmet',
-  baseUrl: 'https://shop.annam-gourmet.com/hn-xd',
+  baseUrl: 'https://shop.annam-gourmet.com',
   categories: annamGourmetCategories,
   selectors: {
     productCard: '.product-item',
@@ -116,9 +130,38 @@ const NO_PRODUCTS_MARKER = "can't find products matching";
 /** Minimum HTML length that could contain a product — anything shorter is empty */
 const MIN_HTML_LENGTH = 200;
 
+/** What the in-page ajax fetch hands back to Node. */
+export interface AjaxResponse {
+  status: number;
+  finalUrl: string;
+  contentType: string | null;
+  body: string;
+}
+
+/**
+ * Say why an ajax=1 response is not a product-list payload, or return null if
+ * it is one. Names Cloudflare pages and redirects explicitly: on 2026-11-10 the
+ * old /hn-xd/ URLs started redirecting to the homepage, and the only symptom
+ * logged was "Unexpected token '<' ... is not valid JSON".
+ */
+export function describeAjaxFailure(res: AjaxResponse): string | null {
+  const cloudflare = describeCloudflarePage(res.body);
+  if (cloudflare) return `Blocked by Cloudflare: HTTP ${res.status}, ${cloudflare}`;
+  if (res.status < 200 || res.status >= 300) return `HTTP ${res.status}`;
+  try {
+    JSON.parse(res.body);
+    return null;
+  } catch {
+    return (
+      `Non-JSON response (HTTP ${res.status}, content-type ${res.contentType ?? 'unknown'}` +
+      `, final URL ${res.finalUrl})`
+    );
+  }
+}
+
 /**
  * Scraper for Annam Gourmet Vietnam (shop.annam-gourmet.com)
- * Hanoi location (hn-xd = Ha Noi - Xuan Dieu store)
+ * Hanoi location (hn-xd = Ha Noi - Xuan Dieu store, see ANNAM_WEBSITE)
  *
  * Uses Magento's ajax=1 endpoint to fetch product listing HTML via fetch()
  * (much faster than full page loads). Browser session is only needed to
@@ -142,12 +185,24 @@ export class AnnamGourmetScraper extends BaseScraper {
     await this.launchBrowser();
     this.page = await this.createPage();
 
-    this.logger.info('Navigating to Annam Gourmet homepage to establish session...');
-    await this.page.goto(this.config.baseUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000,
-    });
+    const entry = `${this.origin()}/?___website=${ANNAM_WEBSITE}`;
+    this.logger.info(`Opening ${entry} to select the store and establish a session...`);
+    const outcome = await this.retryOnFailure(
+      () => openPastCloudflare(this.page!, entry, envConfig.scraper.timeout),
+      'Open storefront'
+    );
+    this.logger.info(`Storefront open (${outcome})`);
     await this.waitForDynamicContent();
+
+    // Without the store cookie every category would silently list another
+    // store's products and prices.
+    const cookies = await this.page.context().cookies();
+    const website = cookies.find((c) => c.name === WEBSITE_COOKIE)?.value;
+    if (website !== ANNAM_WEBSITE) {
+      throw new Error(
+        `Store selection failed: expected ${WEBSITE_COOKIE}=${ANNAM_WEBSITE}, got ${website ?? 'no cookie'}`
+      );
+    }
 
     // Dismiss cookie consent if present
     try {
@@ -170,7 +225,7 @@ export class AnnamGourmetScraper extends BaseScraper {
     if (!this.page) throw new Error('Page not initialized');
 
     const allProducts: ProductData[] = [];
-    const baseUrl = `${this.config.baseUrl}/${category.url}.html`;
+    const baseUrl = `${this.origin()}/${category.url}.html`;
     let page = 1;
     let consecutiveEmpty = 0;
     let categoryFailure: { error: Error; url: string } | undefined;
@@ -308,6 +363,14 @@ export class AnnamGourmetScraper extends BaseScraper {
   }
 
   /**
+   * Scheme + host of the shop. Only the origin of the configured URL is used,
+   * so a stale per-store path (the old /hn-xd) in the database can't break it.
+   */
+  private origin(): string {
+    return new URL(this.config.baseUrl).origin;
+  }
+
+  /**
    * Fetch a category page via Magento's ajax=1 endpoint.
    * Uses page.evaluate(fetch) to run inside the browser context so that
    * session cookies are included automatically (page.request doesn't carry them).
@@ -321,19 +384,24 @@ export class AnnamGourmetScraper extends BaseScraper {
       const resp = await fetch(fetchUrl, {
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
       });
-      if (!resp.ok) return { error: resp.status };
-      const json = await resp.json();
-      return { html: json.html?.products_list || null };
+      const body = await resp.text();
+      return {
+        status: resp.status,
+        finalUrl: resp.url,
+        contentType: resp.headers.get('content-type'),
+        body,
+      };
     }, url);
 
-    if ('error' in result) {
+    const failure = describeAjaxFailure(result);
+    if (failure) {
       // Plain logger: the caller retries the page once and records it only
       // if the retry fails too.
-      this.logger.warn(`Ajax request failed: HTTP ${result.error} for ${url}`);
-      throw new RequestFailure(url, `HTTP ${result.error}`);
+      this.logger.warn(`Ajax request failed: ${failure} for ${url}`);
+      throw new RequestFailure(url, failure);
     }
 
-    return result.html;
+    return (JSON.parse(result.body) as { html?: { products_list?: string } }).html?.products_list || null;
   }
 
   /**
