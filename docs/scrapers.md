@@ -2,6 +2,8 @@
 
 This document describes the web scraping system used to collect grocery prices from supermarket websites.
 
+For rental websites, see the [Rental Scraper Handbook](rental-scraper-handbook.md). Rental scrapers use a separate function-based pipeline with their own registration, normalization, persistence and health checks.
+
 ## Overview
 
 The scraping system uses Playwright for browser automation to handle JavaScript-heavy websites, anti-bot measures, and dynamic content loading. All scrapers extend a common base class that provides:
